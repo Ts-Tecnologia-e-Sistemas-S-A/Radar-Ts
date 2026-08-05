@@ -381,7 +381,7 @@ export default function App() {
         />
 
         {/* Dynamic Main Workspace View */}
-        <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">
+        <main className="flex-1 p-2.5 sm:p-6 lg:p-8 overflow-y-auto min-w-0 max-w-full">
           
           {/* Active City 360º Commercial Context & Navigation Bar */}
           <SelectedCityBar

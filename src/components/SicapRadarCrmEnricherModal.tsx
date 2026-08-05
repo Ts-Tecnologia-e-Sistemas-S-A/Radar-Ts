@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Municipality } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
+import { auditAIDataIntegrity } from '../utils/aiAuditValidator';
 import { 
   Sparkles, 
   Building2, 
@@ -75,6 +76,21 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
       const json = await response.json();
       if (json.success && json.enrichedData) {
         const enriched = json.enrichedData;
+
+        // Audit sources & structure integrity
+        const audit = auditAIDataIntegrity({
+          name: currentMuni.name,
+          state: currentMuni.state,
+          population: enriched.population || currentMuni.population,
+          verifiedSources: enriched.verifiedSources,
+          sourceUsed: enriched.sourceUsed,
+          currentContractValue: enriched.contract?.contractedValue || currentMuni.currentContractValue,
+        });
+
+        enriched.dataVerificationStatus = audit.dataVerificationStatus;
+        enriched.verifiedSources = audit.verifiedSources;
+        enriched.auditSummary = audit.auditNotes;
+
         setEnrichmentResult(enriched);
 
         // Apply score calculator rule strictly
@@ -92,10 +108,12 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
 
         setAuditLog((prev) => [
           ...prev,
+          `🛡️ Auditoria de Veracidade: ${audit.dataVerificationStatus}`,
+          `✅ Fontes Oficiais Validadas: ${audit.verifiedSources.join(', ')}`,
           `✅ Fase mais avançada localizada: ${enriched.situation || 'Contrato em Execução'}`,
           `✅ Valor contratado verificado: R$ ${(enriched.contract?.contractedValue || currentMuni.currentContractValue).toLocaleString('pt-BR')}`,
           `✅ Score Comercial recalculado: ${scoreBreakdown.finalScore}/100 (${scoreBreakdown.classification})`,
-          `🎉 Enriquecimento concluído com 100% de integridade e auditoria de fontes oficiais!`,
+          `🎉 Enriquecimento auditado com sucesso!`,
         ]);
       } else {
         throw new Error('Falha no motor AI');
@@ -215,8 +233,8 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-3 sm:p-6 overflow-y-auto">
-      <div className="bg-slate-900 border border-purple-500/30 rounded-2xl shadow-2xl max-w-4xl w-full p-5 sm:p-7 space-y-5 my-auto text-white animate-in fade-in zoom-in-95">
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-6 overflow-y-auto">
+      <div className="bg-slate-900 border border-purple-500/30 rounded-2xl shadow-2xl max-w-4xl w-full p-4 sm:p-7 space-y-4 sm:space-y-5 my-auto text-white animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
         
         {/* Toast */}
         {toastMessage && (

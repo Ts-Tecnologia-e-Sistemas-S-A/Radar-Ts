@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Municipality } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
+import { auditAIDataIntegrity } from '../utils/aiAuditValidator';
 import { Button } from './atoms/Button';
 import { Input } from './atoms/Input';
 import { Badge } from './atoms/Badge';
@@ -91,18 +92,29 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
 
       const json = await res.json();
       if (json.success && json.municipality) {
-        const rawMuni: Municipality = json.municipality;
+        const rawMuni = json.municipality;
         
+        // Audit data integrity before updating state
+        const auditResult = auditAIDataIntegrity(rawMuni);
+
+        if (!auditResult.isValid || !auditResult.sanitizedData) {
+          throw new Error(`Inconformidade de Auditoria: ${auditResult.errors.join(' ')}`);
+        }
+
+        const auditedMuni = auditResult.sanitizedData;
+
         // Recalculate official score
-        const scoreBreakdown = calculateCommercialScore(rawMuni);
+        const scoreBreakdown = calculateCommercialScore(auditedMuni);
         const finalMuni: Municipality = {
-          ...rawMuni,
+          ...auditedMuni,
           ioScore: scoreBreakdown.finalScore,
         };
 
         setAnalyzedMuni(finalMuni);
         setAnalysisLogs((prev) => [
           ...prev,
+          `🛡️ Auditoria de Veracidade: ${auditResult.dataVerificationStatus}`,
+          `✅ Fontes validadas: ${auditResult.verifiedSources.join(', ')}`,
           `✅ Análise concluída com sucesso! Score IO: ${scoreBreakdown.finalScore}/100.`,
           `🎉 Tudo pronto para inserção no CRM, Funil e Roteiro Comercial!`,
         ]);
@@ -201,8 +213,8 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto animate-in fade-in">
-      <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-5 shadow-2xl border border-slate-200">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">
