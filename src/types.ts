@@ -86,6 +86,9 @@ export interface Municipality {
   latitude?: number;
   longitude?: number;
   notes?: string;
+  dataVerificationStatus?: string;
+  verifiedSources?: string[];
+  auditNotes?: string;
 }
 
 export interface TenderItem {

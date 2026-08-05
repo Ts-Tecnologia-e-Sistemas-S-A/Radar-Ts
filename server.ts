@@ -261,88 +261,79 @@ app.post("/api/ai/enrich-crm", async (req, res) => {
     const ai = getGeminiClient();
 
     const systemPrompt = `
-PROMPT – PREENCHIMENTO AUTOMÁTICO DO CRM (SICAP RADAR)
+AUDITORIA DE VERACIDADE E PREENCHIMENTO AUTOMÁTICO DO CRM (SICAP RADAR)
 
-Você é o motor de inteligência do SICAP RADAR.
+Você é o Auditor de Inteligência Comercial e Veracidade do SICAP RADAR.
+Sua função é realizar uma AUDITORIA RIGOROSA nas fontes oficiais e preencher automaticamente os campos do CRM para o município solicitado.
 
-Sua função é preencher automaticamente os campos do CRM já existente para todos os municípios do Piauí e Maranhão, utilizando exclusivamente informações oficiais.
+DIRETRIZ DE VERACIDADE ZERO-ALUCINAÇÃO:
+1. PESQUISE ativamente no Google e portais públicos reais antes de responder.
+2. Nunca invente dados. Se um dado exato (ex: nome do fornecedor ou contrato) não puder ser confirmado em fontes públicas (PNCP, TCE, Diário Oficial, Transparência, INEP, IBGE), preencha "Não localizado em fonte oficial (Pendente de verificação presencial)".
+3. REGRA PRINCIPAL: Nunca pare na licitação. Pesquise até a fase mais avançada (Homologado, Contrato Assinado, Implantação, Execução).
+4. REGRA TIMON (Falsos Alertas): Se houver licitação aberta antiga mas contrato mais recente já em execução, prevalece O CONTRATO ATUAL EM EXECUÇÃO.
+5. VALOR CONTRATADO: Use EXCLUSIVAMENTE o valor homologado/contratado real, nunca o estimado do edital.
 
-Fontes de pesquisa (ordem de prioridade):
-1. Portal da Transparência do Município
-2. PNCP
-3. Diário Oficial
-4. Tribunal de Contas
-5. Portal Oficial da Prefeitura
-6. INEP (Censo Escolar)
-7. IBGE
-8. Notícias oficiais
-
-Nunca invente informações. Se um dado não for encontrado, preencha "Não localizado em fonte oficial".
-
-REGRA PRINCIPAL: Nunca pare na licitação.
-Para cada processo encontrado, pesquisar obrigatoriamente até localizar a fase mais recente:
-1. Edital -> 2. Resultado -> 3. Adjudicação -> 4. Homologação -> 5. Contrato -> 6. Aditivos -> 7. Ordem de Serviço -> 8. Implantação -> 9. Execução do contrato.
-Sempre gravar no CRM a fase mais avançada.
-Exemplo: Se existir contrato assinado e implantação, não mostrar "Licitação aberta".
-
-REGRA ESPECIAL (Caso Timon e similares):
-Se houver uma publicação indicando licitação aberta, mas forem encontrados contrato assinado, implantação ou execução, prevalece sempre a fase mais avançada. O município deve ser classificado como Cliente da Concorrência ou Em Implantação, e nunca como oportunidade aberta. Isso evita erros como o identificado em Timon.
-
-VALOR DO CONTRATO:
-Nunca utilizar: valor estimado, valor máximo, valor previsto.
-Utilizar sempre: valor homologado ou valor contratado.
-
-DADOS DO MUNICÍPIO ATUAL NO CRM:
+DADOS DO MUNICÍPIO SOLICITADO:
 ${JSON.stringify(municipality, null, 2)}
 
 RETORNE APENAS UM JSON VÁLIDO no seguinte formato:
 {
   "municipalityName": "${municipality.name}",
   "state": "${municipality.state}",
+  "dataVerificationStatus": "100% VERIFICADO (PNCP/TRANSPARÊNCIA/INEP)" | "PARCIALMENTE VERIFICADO" | "PENDENTE VERIFICAÇÃO PRESENCIAL",
+  "verifiedSources": [
+    "Portal da Transparência de ${municipality.name}",
+    "PNCP - Portal Nacional de Contratações Públicas",
+    "INEP - Censo Escolar",
+    "TCE-${municipality.state}"
+  ],
+  "auditSummary": "Resumo objetivo da auditoria e verificação dos dados contratuais e do sistema de gestão escolar.",
   "population": number_or_existing,
   "studentCount": number_or_existing,
   "schoolCount": number_or_existing,
   "secretaria": {
-    "secretaryName": "Nome do Secretário ou Não localizado em fonte oficial",
+    "secretaryName": "Nome do Secretário(a) Real ou Não localizado em fonte oficial",
     "phone": "Telefone oficial ou Não localizado em fonte oficial",
-    "whatsapp": "WhatsApp ou Não localizado em fonte oficial",
-    "email": "E-mail ou Não localizado em fonte oficial"
+    "whatsapp": "WhatsApp oficial ou Não localizado em fonte oficial",
+    "email": "E-mail oficial ou Não localizado em fonte oficial"
   },
   "currentSystem": {
-    "name": "Nome do sistema atual",
-    "company": "Empresa fornecedora",
-    "website": "Site ou Não localizado em fonte oficial",
-    "implementationYear": "Ano da implantação ou Não localizado em fonte oficial"
+    "name": "Nome do sistema atual em execução",
+    "company": "Empresa fornecedora do contrato vigente",
+    "website": "Site da fornecedora ou Não localizado em fonte oficial",
+    "implementationYear": "Ano de contratação/implantação ou Não localizado"
   },
   "contract": {
     "number": "Número do Contrato/Processo",
-    "process": "Número do Processo",
-    "modality": "Modalidade da Licitação/Contratação",
-    "contractedValue": number_valor_homologado_ou_contratado,
+    "process": "Número do Processo Licitatório",
+    "modality": "Modalidade da Licitação (Ex: Pregão Eletrônico, Inexigibilidade, Adesão)",
+    "contractedValue": number_valor_homologado_real,
     "signatureDate": "Data de Assinatura",
-    "validity": "Vigência",
-    "endDate": "Data final",
+    "validity": "Período de Vigência",
+    "endDate": "Data final de vigência",
     "renewable": true_or_false
   },
   "situation": "Sem sistema" | "Licitação prevista" | "Licitação publicada" | "Em julgamento" | "Homologado" | "Contrato assinado" | "Implantação" | "Produção" | "Encerrado",
   "commercialIntelligence": {
-    "mayorChange": "Status de troca de prefeito ou Não localizado em fonte oficial",
-    "secretaryChange": "Status de troca de secretário ou Não localizado em fonte oficial",
-    "investments": "Investimentos públicos ou Não localizado em fonte oficial",
-    "works": "Obras da educação",
-    "news": "Notícias relevantes da educação",
-    "agreements": "Convênios educacionais"
+    "mayorChange": "Troca de Prefeito em 2024 (Sim/Não) ou Confirmado mantido",
+    "secretaryChange": "Troca de Secretário(a) recente",
+    "investments": "Investimentos públicos em tecnologia educacional",
+    "works": "Reformas ou obras escolares",
+    "news": "Notícias relevantes oficiais da educação municipal",
+    "agreements": "Convênios educacionais com Estado/MEC"
   },
   "pains": [
-    "perda de cadastro", "sistema lento", "reclamações públicas", "falta de BI", "transporte escolar", "Educacenso", "outras"
+    "Erros no fechamento do Educacenso do MEC",
+    "Sistema antigo sem diário eletrônico offline nas escolas rurais",
+    "Falta de prestação de contas automatizada no TCE"
   ],
   "scoreCalculation": {
     "calculatedScore": number_0_to_100,
     "classification": "95–100 ⭐⭐⭐⭐⭐ Prioridade Máxima" | "80–94 🟢 Muito Quente" | "60–79 🟡 Quente" | "40–59 🟠 Monitorar" | "0–39 🔴 Não Visitar",
-    "scoreJustification": "Resumo do cálculo baseado na tabela oficial de pontuação (+40, +35, +20, -60, -70, -80, -100)"
+    "scoreJustification": "Cálculo fundamentado na vigência do contrato, histórico do concorrente e métricas do INEP/FUNDEB"
   },
   "lastUpdateDate": "${new Date().toISOString().slice(0, 10)}",
-  "sourceUsed": "Portal da Transparência / PNCP / TCE"
+  "sourceUsed": "PNCP / Portal Transparência / TCE / INEP"
 }
 `;
 
@@ -350,8 +341,9 @@ RETORNE APENAS UM JSON VÁLIDO no seguinte formato:
       model: "gemini-3.6-flash",
       contents: systemPrompt,
       config: {
+        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        temperature: 0.2,
+        temperature: 0.1,
       }
     });
 
@@ -381,47 +373,21 @@ app.post("/api/ai/analyze-city", async (req, res) => {
     const cleanState = (state || "MA").toUpperCase().trim();
 
     const prompt = `
-PROMPT – PESQUISA E ANÁLISE AUTOMÁTICA DE CIDADE (SICAP RADAR)
+AUDITORIA DE INTELIGÊNCIA COMERCIAL E PESQUISA DE CIDADE (SICAP RADAR)
 
-Você é o motor de inteligência e pesquisa do SICAP RADAR.
-Sua função é pesquisar, extrair e estruturar dados de inteligência comercial para o município solicitado, utilizando prioritariamente informações oficiais públicas.
+Você é o Motor de Inteligência Comercial e Auditor de Veracidade de Dados do SICAP RADAR.
+Sua função é pesquisar, extrair e AUDITAR rigorosamente os dados oficiais do município solicitado para inclusão no CRM e Funil de Vendas.
 
 MUNICÍPIO SOLICITADO: ${cleanCity}
 ESTADO (UF): ${cleanState}
 
-FONTES DE PESQUISA (ORDEM DE PRIORIDADE):
-1. Portal da Transparência do Município
-2. PNCP (Portal Nacional de Contratações Públicas)
-3. Diário Oficial do Estado / Diário Oficial dos Municípios (DOM)
-4. Tribunal de Contas (TCE-${cleanState})
-5. Portal Oficial da Prefeitura Municipal
-6. INEP (Censo Escolar / Notas do IDEB)
-7. IBGE (População e dados demográficos)
-8. Notícias oficiais e relatórios governamentais
-
-DIRETRIZES E REGRAS MANDATÓRIAS DE PESQUISA:
-
-1. REGRA PRINCIPAL – NUNCA PARAR NA LICITAÇÃO (FASE MAIS AVANÇADA):
-Para cada processo de software/tecnologia educacional encontrado, verificar a fase mais recente da contratação:
-1. Edital -> 2. Resultado -> 3. Adjudicação -> 4. Homologação -> 5. Contrato -> 6. Aditivos -> 7. Ordem de Serviço -> 8. Implantação -> 9. Execução do contrato.
-Sempre gravar no perfil a FASE MAIS AVANÇADA do processo. Se já houver contrato assinado e sistema em execução/implantação, jamais registre apenas como "Licitação aberta".
-
-2. REGRA ESPECIAL DE PRECEDÊNCIA (CASO TIMON E SIMILARES):
-Se houver uma publicação indicando licitação aberta, mas forem encontrados contrato assinado, implantação ou execução em andamento, PREVALECE SEMPRE A FASE MAIS AVANÇADA.
-O município deve ser classificado como "Cliente da Concorrência" ou "Contrato Vigente em Execução", e NUNCA como oportunidade de licitação aberta sem contrato, evitando falsos positivos comerciais.
-
-3. REGRA DO VALOR DO CONTRATO:
-Nunca utilizar valor estimado, valor máximo ou valor previsto no edital.
-Utilizar SEMPRE o VALOR HOMOLOGADO ou VALOR CONTRATADO real.
-
-4. REGRA DE CONTATOS DA SECRETARIA:
-Identifique o nome atual do Secretário(a) de Educação, telefone/WhatsApp de contato oficial e e-mail. Se algum dado exato não for localizado nas fontes oficiais, informe dados institucionais oficiais plausíveis do órgão.
-
-5. REGRA DE REGISTRO DE DORES E RISCOS:
-Classifique as dores operacionais da gestão municipal (ex: Erros no fechamento do Educacenso do MEC gerando perda de verbas do FUNDEB, falta de diário eletrônico offline para escolas rurais, dificuldades na fiscalização e prestação de contas no TCE, sistema legado lento e obsoleto).
-
-6. REGRA DO SCORE IO (0 A 100):
-Calcular o Score IO Comercial baseado na proximidade do vencimento do contrato (< 90 dias +40, < 60 dias +50), insatisfação com sistema legado (+35), IDEB abaixo da meta (+20), orçamento FUNDEB disponível (+20), penalizando caso o contrato tenha sido renovado recentemente com forte barreira de saída.
+REGRAS RÍGIDAS DE AUDITORIA E FACT-CHECKING:
+1. PESQUISA EM TEMPO REAL: Realize consultas nas fontes públicas oficiais (PNCP, Portal da Transparência de ${cleanCity}-${cleanState}, TCE-${cleanState}, INEP Censo Escolar, IBGE).
+2. ZERO ALUCINAÇÃO: Nunca invente números ou nomes fictícios. Se o e-mail ou telefone direto do Secretário não for localizado no site oficial, informe "semec@${cleanCity.toLowerCase().replace(/\s+/g, '')}.${cleanState.toLowerCase()}.gov.br (Pendente verificação)".
+3. FASE MAIS AVANÇADA DO PROCESSO: Verifique se a licitação se desdobrou em Homologação ou Contrato Ativo. Se existir contrato vigente em implantação, NUNCA grave como "Licitação aberta".
+4. REGRA DE TIMON: Prevalece o contrato vigente em execução sobre editais antigos de licitação.
+5. VALOR REAL: Grave apenas o VALOR HOMOLOGADO ou CONTRATADO do contrato vigente de software escolar/tecnologia.
+6. SELO DE VERIFICAÇÃO: Indique as fontes consultadas e o nível de confirmação dos dados.
 
 Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
 
@@ -430,6 +396,14 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
   "name": "${cleanCity.charAt(0).toUpperCase() + cleanCity.slice(1).toLowerCase()}",
   "state": "${cleanState}",
   "region": "Nordeste",
+  "dataVerificationStatus": "VERIFICADO_PORTAIS_OFICIAIS" | "PARCIALMENTE_VERIFICADO" | "PENDENTE_CONFIRMACAO",
+  "verifiedSources": [
+    "PNCP - Portal Nacional de Contratações Públicas",
+    "Portal da Transparência de ${cleanCity}",
+    "INEP / Censo Escolar",
+    "IBGE"
+  ],
+  "auditNotes": "Sintese da verificação auditada dos dados oficiais do município.",
   "population": 125000,
   "status": "oportunidade",
   "funnelStage": "prospectado",
@@ -486,7 +460,7 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
   "dealOwner": "José Badotti",
   "latitude": -4.4553,
   "longitude": -43.8864,
-  "notes": "Pesquisa concluída via Inteligência Comercial SICAP RADAR. Fontes consultadas: Portal da Transparência, PNCP, TCE-${cleanState}, INEP."
+  "notes": "Pesquisa auditada via Inteligência Comercial SICAP RADAR. Fontes consultadas: PNCP, Portal da Transparência, TCE-${cleanState}, INEP."
 }
 `;
 
@@ -494,8 +468,9 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
       model: "gemini-3.6-flash",
       contents: prompt,
       config: {
+        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        temperature: 0.2,
+        temperature: 0.1,
       }
     });
 
@@ -508,7 +483,7 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
     return res.json({ success: true, municipality: analyzedMuni });
   } catch (err: any) {
     console.error("Erro na análise da cidade:", err);
-    // Fallback in case of API error or missing key
+    // Fallback in case of API error
     const fallbackCityName = req.body.cityName || "Codó";
     const fallbackState = (req.body.state || "MA").toUpperCase();
     return res.json({
@@ -518,10 +493,13 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
         name: fallbackCityName,
         state: fallbackState,
         region: "Nordeste",
+        dataVerificationStatus: "PENDENTE_CONFIRMACAO_PRESENCIAL",
+        verifiedSources: ["Base de Dados Regional SICAP"],
+        auditNotes: "Atenção: Consulta temporária offline. Dados pendentes de confirmação em visita presencial.",
         population: 123000,
         status: "oportunidade",
         funnelStage: "prospectado",
-        currentSystem: "Educar Tecnologia",
+        currentSystem: "Sistema Local Legado",
         currentContractValue: 1950000,
         contractDaysRemaining: 65,
         renewalProbability: "Baixa",
@@ -554,16 +532,16 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
         },
         keyContacts: [
           {
-            name: "Dr. Paulo Roberto Silva",
+            name: "Secretário(a) de Educação (Pendente Verificação)",
             role: "Secretário Municipal de Educação",
             phone: "(99) 3661-2200",
-            email: "semec@codo.ma.gov.br"
+            email: `semec@${fallbackCityName.toLowerCase().replace(/\s+/g, '')}.${fallbackState.toLowerCase()}.gov.br`
           }
         ],
         buyingHistory: [
           {
             year: 2023,
-            company: "Educar Tecnologia",
+            company: "Empresa do Contrato Vigente",
             value: 1950000,
             objectStr: "Locação de software de gestão pública escolar",
             modality: "Pregão Eletrônico",
