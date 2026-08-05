@@ -1,0 +1,158 @@
+import React from 'react';
+import { Radar, Search, Sparkles, FileText, Bell, ShieldCheck, TrendingUp } from 'lucide-react';
+import { Municipality, TenderNotice, CommercialAlert } from '../types';
+
+interface NavbarProps {
+  municipalities: Municipality[];
+  tenders: TenderNotice[];
+  alerts: CommercialAlert[];
+  searchQuery: string;
+  onSearchChange: (q: string) => void;
+  onOpenGlobalReport: () => void;
+  onOpenAlertsModal: () => void;
+  onOpenRadarEnricher: () => void;
+  onOpenCitySearch?: () => void;
+}
+
+export const Navbar: React.FC<NavbarProps> = ({
+  municipalities,
+  tenders,
+  alerts,
+  searchQuery,
+  onSearchChange,
+  onOpenGlobalReport,
+  onOpenAlertsModal,
+  onOpenRadarEnricher,
+  onOpenCitySearch,
+}) => {
+  // Calculate top bar pipeline KPIs
+  const totalPipeline = municipalities.reduce((acc, m) => acc + m.estimatedNewContractValue, 0);
+  const unreadAlerts = alerts.filter((a) => !a.isRead).length;
+  const highIoCount = municipalities.filter((m) => m.ioScore >= 80).length;
+  const openTendersCount = tenders.filter((t) => t.status === 'Aberto' || t.status === 'Em Análise').length;
+
+  return (
+    <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
+      <div className="max-w-[1700px] mx-auto px-4 sm:px-6 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          
+          {/* Logo & Brand Title */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-gradient-to-tr from-blue-600 via-indigo-600 to-cyan-400 rounded-xl flex items-center justify-center shadow-lg shadow-blue-500/20 ring-1 ring-white/20">
+              <Radar className="w-6 h-6 text-white animate-spin-slow" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-black text-xl tracking-tight bg-gradient-to-r from-white via-slate-100 to-slate-300 bg-clip-text text-transparent">
+                  SICAP
+                </span>
+                <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider">
+                  RADAR COMERCIAL v3.6
+                </span>
+              </div>
+              <p className="text-xs text-slate-400 font-medium">
+                Inteligência Licitatória & Mercado Educacional
+              </p>
+            </div>
+          </div>
+
+          {/* Quick Stats Ticker Badges */}
+          <div className="hidden lg:flex items-center gap-4 bg-slate-800/80 border border-slate-700/60 px-4 py-1.5 rounded-xl text-xs">
+            <div className="flex items-center gap-2 border-r border-slate-700/80 pr-4">
+              <TrendingUp className="w-4 h-4 text-emerald-400" />
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Pipeline Mapeado</span>
+                <span className="font-bold text-emerald-400 text-sm">
+                  R$ {(totalPipeline / 1000000).toFixed(1)}M
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2 border-r border-slate-700/80 pr-4">
+              <div className="w-2 h-2 rounded-full bg-orange-400 animate-ping" />
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Prioridade Máxima (IO &gt; 80)</span>
+                <span className="font-bold text-orange-300 text-sm">{highIoCount} prefeituras</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-400" />
+              <div>
+                <span className="text-slate-400 block text-[10px] uppercase font-semibold">Editais Abertos (PNCP)</span>
+                <span className="font-bold text-blue-300 text-sm">{openTendersCount} licitações</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Search & Actions */}
+          <div className="flex items-center gap-3">
+            {/* Live Search Input */}
+            <div className="relative w-48 sm:w-64">
+              <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Buscar prefeitura, edital, concorrente..."
+                value={searchQuery}
+                onChange={(e) => onSearchChange(e.target.value)}
+                className="w-full bg-slate-800/90 border border-slate-700 rounded-lg pl-9 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* AI Status Badge */}
+            <div className="hidden sm:flex items-center gap-1.5 bg-gradient-to-r from-indigo-900/60 to-purple-900/60 border border-indigo-500/30 px-2.5 py-1.5 rounded-lg text-xs font-medium text-indigo-200">
+              <Sparkles className="w-3.5 h-3.5 text-indigo-400 animate-pulse" />
+              <span className="text-[11px]">IA Gemini Ativa</span>
+            </div>
+
+            {/* Alerts Trigger Button */}
+            <button
+              onClick={onOpenAlertsModal}
+              className="relative p-2 bg-slate-800 hover:bg-slate-700 border border-slate-700 rounded-lg text-slate-300 hover:text-white transition-colors"
+              title="Alertas Comerciais"
+            >
+              <Bell className="w-4 h-4" />
+              {unreadAlerts > 0 && (
+                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-black w-4 h-4 rounded-full flex items-center justify-center animate-bounce">
+                  {unreadAlerts}
+                </span>
+              )}
+            </button>
+
+            {/* Analyze & Add City Button */}
+            {onOpenCitySearch && (
+              <button
+                onClick={onOpenCitySearch}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs px-3 py-1.5 rounded-lg shadow-sm transition-all active:scale-95 cursor-pointer"
+                title="Analisar e Lançar Qualquer Cidade com IA no CRM"
+              >
+                <Sparkles className="w-4 h-4 text-purple-900" />
+                <span className="hidden sm:inline">+ Lançar Cidade (IA)</span>
+              </button>
+            )}
+
+            {/* SICAP RADAR CRM Auto-Enricher Button */}
+            <button
+              onClick={onOpenRadarEnricher}
+              className="flex items-center gap-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm border border-purple-400/30 transition-all active:scale-95"
+              title="Preenchimento Automático do CRM (Fontes Oficiais PI & MA)"
+            >
+              <Sparkles className="w-4 h-4 text-purple-200 animate-pulse" />
+              <span className="hidden sm:inline">Preencher CRM (IA)</span>
+            </button>
+
+            {/* Download Report Button */}
+            <button
+              onClick={onOpenGlobalReport}
+              className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold px-3 py-1.5 rounded-lg shadow-sm transition-all active:scale-95"
+            >
+              <FileText className="w-4 h-4" />
+              <span className="hidden sm:inline">Dossiê Estratégico</span>
+            </button>
+          </div>
+
+        </div>
+      </div>
+    </header>
+  );
+};

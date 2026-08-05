@@ -1,0 +1,6 @@
+{
+  "name": "SICAP - Radar de Oportunidades Comerciais",
+  "description": "Plataforma de inteligência comercial, monitoramento de licitações públicas, gestão de funil municipal, índice de oportunidade (IO) e gerador de estratégias com IA para o SICAP.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
