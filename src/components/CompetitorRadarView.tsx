@@ -1,16 +1,37 @@
 import React, { useState } from 'react';
-import { CompetitorItem } from '../types';
-import { Swords, ShieldAlert, TrendingDown, Award, Search, Plus, Building2, ExternalLink, CheckCircle2 } from 'lucide-react';
+import { CompetitorItem, Municipality } from '../types';
+import { Swords, ShieldAlert, TrendingDown, Award, Search, Plus, Building2, ExternalLink, CheckCircle2, Sparkles } from 'lucide-react';
 
 interface CompetitorRadarViewProps {
   competitors: CompetitorItem[];
+  selectedMunicipality?: Municipality | null;
 }
 
 export const CompetitorRadarView: React.FC<CompetitorRadarViewProps> = ({
   competitors: initialCompetitors,
+  selectedMunicipality,
 }) => {
   const [competitorsList, setCompetitorsList] = useState<CompetitorItem[]>(initialCompetitors);
-  const [selectedCompetitor, setSelectedCompetitor] = useState<CompetitorItem>(initialCompetitors[0]);
+  const [selectedCompetitor, setSelectedCompetitor] = useState<CompetitorItem>(() => {
+    if (selectedMunicipality) {
+      const match = initialCompetitors.find((c) =>
+        selectedMunicipality.currentSystem.toLowerCase().includes(c.name.toLowerCase()) ||
+        c.name.toLowerCase().includes(selectedMunicipality.currentSystem.toLowerCase())
+      );
+      if (match) return match;
+    }
+    return initialCompetitors[0];
+  });
+
+  React.useEffect(() => {
+    if (selectedMunicipality) {
+      const match = competitorsList.find((c) =>
+        selectedMunicipality.currentSystem.toLowerCase().includes(c.name.toLowerCase()) ||
+        c.name.toLowerCase().includes(selectedMunicipality.currentSystem.toLowerCase())
+      );
+      if (match) setSelectedCompetitor(match);
+    }
+  }, [selectedMunicipality]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
 

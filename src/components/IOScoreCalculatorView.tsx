@@ -6,17 +6,25 @@ import { Calculator, Sparkles, Clock, ShieldAlert, CheckCircle2, ArrowRight, Fil
 interface IOScoreCalculatorViewProps {
   municipalities: Municipality[];
   onSelectMunicipality: (m: Municipality) => void;
+  selectedMunicipality?: Municipality | null;
 }
 
 export const IOScoreCalculatorView: React.FC<IOScoreCalculatorViewProps> = ({
   municipalities,
   onSelectMunicipality,
+  selectedMunicipality,
 }) => {
   const [selectedState, setSelectedState] = useState<string>('ALL');
   const [daysOffset, setDaysOffset] = useState<number>(0);
   const [selectedMuniId, setSelectedMuniId] = useState<string>(
-    municipalities.find((m) => m.state === 'PI' || m.state === 'MA')?.id || municipalities[0]?.id || ''
+    selectedMunicipality?.id || municipalities[0]?.id || ''
   );
+
+  React.useEffect(() => {
+    if (selectedMunicipality) {
+      setSelectedMuniId(selectedMunicipality.id);
+    }
+  }, [selectedMunicipality]);
 
   // Filter municipalities by selected state
   const filteredMunicipalities = municipalities.filter((m) => {

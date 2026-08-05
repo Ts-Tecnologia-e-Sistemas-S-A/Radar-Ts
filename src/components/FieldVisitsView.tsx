@@ -44,6 +44,7 @@ interface FieldVisitsViewProps {
   onSelectMunicipality: (m: Municipality) => void;
   onNavigateTab: (tab: string) => void;
   onAddMunicipality: (newMuni: Municipality) => void;
+  selectedMunicipality?: Municipality | null;
 }
 
 export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
@@ -54,10 +55,11 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
   onSelectMunicipality,
   onNavigateTab,
   onAddMunicipality,
+  selectedMunicipality,
 }) => {
-  // 1. Current State Filter (default to first available or 'PI')
+  // 1. Current State Filter (default to selected state or first available)
   const availableStates = Array.from(new Set(municipalities.map((m) => m.state))).sort();
-  const [selectedState, setSelectedState] = useState<string>('PI');
+  const [selectedState, setSelectedState] = useState<string>(selectedMunicipality?.state || 'MA');
 
   // AI City Search Modal State
   const [isAiSearchModalOpen, setIsAiSearchModalOpen] = useState(false);
@@ -69,7 +71,17 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
   const [isItineraryModalOpen, setIsItineraryModalOpen] = useState(false);
 
   // 3. Active City in Focus for "Cheguei na Cidade" Workflow
-  const [activeCityId, setActiveCityId] = useState<string | null>(null);
+  const [activeCityId, setActiveCityId] = useState<string | null>(selectedMunicipality?.id || null);
+
+  React.useEffect(() => {
+    if (selectedMunicipality) {
+      setActiveCityId(selectedMunicipality.id);
+      setSelectedState(selectedMunicipality.state);
+    } else if (municipalities.length > 0 && !activeCityId) {
+      setActiveCityId(municipalities[0].id);
+      setSelectedState(municipalities[0].state);
+    }
+  }, [selectedMunicipality, municipalities]);
 
   // 4. Filters & Search
   const [searchTerm, setSearchTerm] = useState('');
@@ -502,7 +514,10 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                         ? 'border-emerald-400 bg-emerald-50/20'
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
-                    onClick={() => setActiveCityId(m.id)}
+                    onClick={() => {
+                      setActiveCityId(m.id);
+                      onSelectMunicipality(m);
+                    }}
                   >
                     {/* Top Header: Checkbox + Name + Temperature Badge */}
                     <div className="flex items-start justify-between gap-3">
@@ -578,6 +593,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveCityId(m.id);
+                          onSelectMunicipality(m);
                         }}
                         className="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1"
                       >

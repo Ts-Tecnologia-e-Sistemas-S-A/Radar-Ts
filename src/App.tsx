@@ -23,6 +23,7 @@ import { FieldVisitsView } from './components/FieldVisitsView';
 import { DossierExportModal } from './components/DossierExportModal';
 import { SicapRadarCrmEnricherModal } from './components/SicapRadarCrmEnricherModal';
 import { AICitySearchModal } from './components/AICitySearchModal';
+import { SelectedCityBar } from './components/SelectedCityBar';
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('field_visits');
@@ -187,6 +188,17 @@ export default function App() {
         {/* Dynamic Main Workspace View */}
         <main className="flex-1 p-4 sm:p-6 lg:p-8 overflow-y-auto min-w-0">
           
+          {/* Active City 360º Commercial Context & Navigation Bar */}
+          <SelectedCityBar
+            municipalities={municipalities}
+            selectedMunicipality={selectedMunicipality}
+            onSelectMunicipality={handleSelectMunicipality}
+            activeTab={activeTab}
+            onNavigateTab={setActiveTab}
+            onOpenExportModal={() => setShowExportModal(true)}
+            onOpenEnricherModal={() => setShowRadarEnricherModal(true)}
+          />
+
           {activeTab === 'field_visits' && (
             <FieldVisitsView
               municipalities={municipalities}
@@ -196,6 +208,7 @@ export default function App() {
               onSelectMunicipality={handleSelectMunicipality}
               onNavigateTab={(tab) => setActiveTab(tab as any)}
               onAddMunicipality={handleAddMunicipality}
+              selectedMunicipality={selectedMunicipality}
             />
           )}
 
@@ -301,12 +314,14 @@ export default function App() {
           {activeTab === 'competitors' && (
             <CompetitorRadarView
               competitors={MOCK_COMPETITORS}
+              selectedMunicipality={selectedMunicipality}
             />
           )}
 
           {activeTab === 'io_score' && (
             <IOScoreCalculatorView
               municipalities={municipalities}
+              selectedMunicipality={selectedMunicipality}
               onSelectMunicipality={(m) => {
                 setSelectedMunicipality(m);
                 setActiveTab('intelligence');

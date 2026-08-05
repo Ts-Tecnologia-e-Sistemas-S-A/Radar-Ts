@@ -74,6 +74,12 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
   const [priorityFilter, setPriorityFilter] = useState<string>('');
   const [muniFilter, setMuniFilter] = useState<string>(selectedMunicipality?.id || '');
   const [activeCrmTab, setActiveCrmTab] = useState<'prioridades_visita' | 'historico_interacoes'>('prioridades_visita');
+
+  React.useEffect(() => {
+    if (selectedMunicipality) {
+      setMuniFilter(selectedMunicipality.id);
+    }
+  }, [selectedMunicipality]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingInteraction, setEditingInteraction] = useState<CRMInteraction | null>(null);
