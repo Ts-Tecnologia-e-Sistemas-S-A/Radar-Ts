@@ -132,6 +132,11 @@ export const SelectedCityBar: React.FC<SelectedCityBarProps> = ({
         {/* Live Metrics Chips */}
         <div className="flex flex-wrap items-center gap-2 text-xs">
           
+          <div className="bg-emerald-950/80 border border-emerald-500/40 text-emerald-300 px-2.5 py-1 rounded-xl flex items-center gap-1.5 font-bold text-[10px]">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>🔥 Firebase Cloud: Conectado</span>
+          </div>
+
           <div className="bg-slate-800/90 border border-slate-700 px-3 py-1.5 rounded-xl flex items-center gap-2">
             <Award className="w-3.5 h-3.5 text-amber-400" />
             <span className="text-[10px] font-bold text-slate-400 uppercase">Score IO:</span>

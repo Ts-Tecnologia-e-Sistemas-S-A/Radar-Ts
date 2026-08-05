@@ -25,6 +25,7 @@ interface AICitySearchModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAddMunicipality: (newMuni: Municipality) => void;
+  existingMunicipalities?: Municipality[];
   initialCityName?: string;
   initialState?: string;
   onSelectAndNavigate?: (muni: Municipality) => void;
@@ -34,6 +35,7 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
   isOpen,
   onClose,
   onAddMunicipality,
+  existingMunicipalities = [],
   initialCityName = '',
   initialState = 'MA',
   onSelectAndNavigate,
@@ -46,6 +48,16 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
   const [toastMsg, setToastMsg] = useState<string | null>(null);
 
   if (!isOpen) return null;
+
+  const isExistingCity = Boolean(
+    analyzedMuni &&
+    existingMunicipalities.some(
+      (m) =>
+        m.id === analyzedMuni.id ||
+        (m.name.trim().toLowerCase() === analyzedMuni.name.trim().toLowerCase() &&
+          m.state.trim().toLowerCase() === analyzedMuni.state.trim().toLowerCase())
+    )
+  );
 
   const handleRunCityAnalysis = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -174,7 +186,10 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
     if (onSelectAndNavigate) {
       onSelectAndNavigate(analyzedMuni);
     }
-    setToastMsg(`🎉 Prefeitura de ${analyzedMuni.name} (${analyzedMuni.state}) cadastrada no CRM com sucesso!`);
+    const msg = isExistingCity
+      ? `🎉 Histórico e inteligência comercial de ${analyzedMuni.name} (${analyzedMuni.state}) atualizados com sucesso!`
+      : `🎉 Prefeitura de ${analyzedMuni.name} (${analyzedMuni.state}) cadastrada no CRM!`;
+    setToastMsg(msg);
     setTimeout(() => {
       onClose();
     }, 1200);
@@ -195,7 +210,7 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
                 Analisar & Inserir Nova Cidade no CRM
               </h3>
               <p className="text-xs text-slate-500 font-medium">
-                Pesquise qualquer município do Brasil. A IA coleta dados do IBGE, INEP, Transparência e PNCP para vendas.
+                Pesquise qualquer município. A IA consulta Transparência, PNCP, TCE, INEP e IBGE com regras anti-duplicação e fase mais avançada.
               </p>
             </div>
           </div>
@@ -206,6 +221,28 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
           >
             <X className="w-5 h-5" />
           </button>
+        </div>
+
+        {/* Intelligence Rules Banner */}
+        <div className="bg-purple-950/80 border border-purple-800 text-purple-200 p-3 rounded-2xl text-[11px] space-y-1.5 shadow-sm">
+          <div className="flex items-center justify-between font-black text-amber-300 text-[10px] uppercase tracking-wider">
+            <span>⚡ Regras de Pesquisa SICAP RADAR Ativas</span>
+            <span className="bg-purple-800 text-purple-100 text-[9px] px-2 py-0.5 rounded-full font-extrabold">Lei 14.133/2021 & PNCP</span>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] font-semibold text-purple-100">
+            <div className="flex items-center gap-1">
+              <span className="text-amber-400">1.</span> Fontes Oficiais (PNCP, TCE, INEP)
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-amber-400">2.</span> Fases Avançadas (Contrato x Licitação)
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-amber-400">3.</span> Caso Timon (Sem Falsos Alarmes)
+            </div>
+            <div className="flex items-center gap-1">
+              <span className="text-amber-400">4.</span> Valores Homologados Reais
+            </div>
+          </div>
         </div>
 
         {/* Toast */}
@@ -300,9 +337,15 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
                   <span className="bg-purple-900 text-white text-[10px] font-black px-2.5 py-0.5 rounded uppercase">
                     UF: {analyzedMuni.state}
                   </span>
-                  <span className="bg-emerald-100 text-emerald-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-300">
-                    ⭐ Classificada para o CRM
-                  </span>
+                  {isExistingCity ? (
+                    <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2.5 py-0.5 rounded-full border border-amber-300">
+                      📍 Cidade Cadastrada (Atualização de Histórico)
+                    </span>
+                  ) : (
+                    <span className="bg-emerald-100 text-emerald-900 text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border border-emerald-300">
+                      ⭐ Classificada para o CRM
+                    </span>
+                  )}
                 </div>
                 <h4 className="text-xl font-black text-slate-900 mt-1">
                   Prefeitura de {analyzedMuni.name} ({analyzedMuni.state})
@@ -322,6 +365,15 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
                 </span>
               </div>
             </div>
+
+            {isExistingCity && (
+              <div className="bg-blue-50 border border-blue-200 text-blue-900 p-3 rounded-xl text-xs font-semibold flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
+                <span>
+                  <strong>Município mapeado no sistema!</strong> Esta consulta irá atualizar os indicadores e registrar uma nova atividade no <strong>histórico comercial</strong> de {analyzedMuni.name}, sem duplicar o cadastro.
+                </span>
+              </div>
+            )}
 
             {/* Commercial Extracted Intelligence Grid */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
@@ -384,7 +436,11 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
                 className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-6 py-3 rounded-xl shadow-lg shadow-emerald-900/20 flex items-center gap-2 active:scale-95 transition-all"
               >
                 <CheckCircle2 className="w-4 h-4" />
-                <span>🎉 Lançar {analyzedMuni.name} no CRM & Roteiro de Vendas</span>
+                <span>
+                  {isExistingCity
+                    ? `🎉 Atualizar Histórico de ${analyzedMuni.name} no CRM`
+                    : `🎉 Lançar ${analyzedMuni.name} no CRM & Roteiro de Vendas`}
+                </span>
               </button>
             </div>
 

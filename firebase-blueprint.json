@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "municipalities": {
+      "title": "Municipalities",
+      "description": "Lista de municípios no Radar Comercial SICAP",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "state": { "type": "string" },
+        "region": { "type": "string" },
+        "population": { "type": "number" },
+        "status": { "type": "string" },
+        "funnelStage": { "type": "string" },
+        "currentSystem": { "type": "string" },
+        "currentContractValue": { "type": "number" },
+        "contractDaysRemaining": { "type": "number" },
+        "renewalProbability": { "type": "string" },
+        "tenderProbability": { "type": "number" },
+        "estimatedNewContractValue": { "type": "number" },
+        "probableModality": { "type": "string" },
+        "ioScore": { "type": "number" },
+        "lastActivityDate": { "type": "string" },
+        "dealOwner": { "type": "string" },
+        "latitude": { "type": "number" },
+        "longitude": { "type": "number" },
+        "notes": { "type": "string" }
+      },
+      "required": ["id", "name", "state"]
+    },
+    "crm_interactions": {
+      "title": "CRM Interactions",
+      "description": "Histórico de interações comerciais, visitas, ligações e análises IA",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "municipalityId": { "type": "string" },
+        "municipalityName": { "type": "string" },
+        "state": { "type": "string" },
+        "date": { "type": "string" },
+        "type": { "type": "string" },
+        "contactName": { "type": "string" },
+        "contactRole": { "type": "string" },
+        "summary": { "type": "string" },
+        "description": { "type": "string" },
+        "outcome": { "type": "string" },
+        "nextStep": { "type": "string" },
+        "dealOwner": { "type": "string" }
+      },
+      "required": ["id", "municipalityId", "summary"]
+    },
+    "field_checkins": {
+      "title": "Field Checkins",
+      "description": "Registros de visitas presenciais do recurso 'Cheguei na Cidade'",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "municipalityId": { "type": "string" },
+        "municipalityName": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "visitedLocation": { "type": "string" },
+        "contactMet": { "type": "string" },
+        "notes": { "type": "string" },
+        "gpsCoords": { "type": "string" }
+      }
+    }
+  }
+}

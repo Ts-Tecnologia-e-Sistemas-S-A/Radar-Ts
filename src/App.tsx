@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
   MOCK_MUNICIPALITIES, 
   MOCK_TENDERS, 
@@ -24,17 +24,50 @@ import { DossierExportModal } from './components/DossierExportModal';
 import { SicapRadarCrmEnricherModal } from './components/SicapRadarCrmEnricherModal';
 import { AICitySearchModal } from './components/AICitySearchModal';
 import { SelectedCityBar } from './components/SelectedCityBar';
+import { 
+  subscribeToMunicipalities, 
+  subscribeToInteractions, 
+  saveMunicipalityToFirebase, 
+  saveInteractionToFirebase 
+} from './services/firebaseService';
+
+function deduplicateMunicipalities(list: Municipality[]): Municipality[] {
+  const map = new Map<string, Municipality>();
+  const nameStateSet = new Set<string>();
+  list.forEach((m) => {
+    if (m && m.id && m.name && m.state) {
+      const nameKey = `${m.name.trim().toLowerCase()}-${m.state.trim().toLowerCase()}`;
+      if (!map.has(m.id) && !nameStateSet.has(nameKey)) {
+        map.set(m.id, m);
+        nameStateSet.add(nameKey);
+      }
+    }
+  });
+  return Array.from(map.values());
+}
+
+function deduplicateInteractions(list: CRMInteraction[]): CRMInteraction[] {
+  const map = new Map<string, CRMInteraction>();
+  list.forEach((item) => {
+    if (item && item.id) {
+      map.set(item.id, item);
+    }
+  });
+  return Array.from(map.values());
+}
 
 export default function App() {
   const [activeTab, setActiveTab] = useState<ActiveTab>('field_visits');
+  const [firebaseStatus, setFirebaseStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   
-  // App persistent state with localStorage synchronization
+  // App persistent state with Firebase Cloud & LocalStorage fallback
   const [municipalities, setMunicipalities] = useState<Municipality[]>(() => {
     try {
       const saved = localStorage.getItem('sicap_municipalities_v2');
-      return saved ? JSON.parse(saved) : MOCK_MUNICIPALITIES;
+      const raw = saved ? JSON.parse(saved) : MOCK_MUNICIPALITIES;
+      return deduplicateMunicipalities(raw);
     } catch (e) {
-      return MOCK_MUNICIPALITIES;
+      return deduplicateMunicipalities(MOCK_MUNICIPALITIES);
     }
   });
 
@@ -59,11 +92,40 @@ export default function App() {
   const [crmInteractions, setCrmInteractions] = useState<CRMInteraction[]>(() => {
     try {
       const saved = localStorage.getItem('sicap_crm_interactions_v2');
-      return saved ? JSON.parse(saved) : MOCK_CRM_INTERACTIONS;
+      const raw = saved ? JSON.parse(saved) : MOCK_CRM_INTERACTIONS;
+      return deduplicateInteractions(raw);
     } catch (e) {
-      return MOCK_CRM_INTERACTIONS;
+      return deduplicateInteractions(MOCK_CRM_INTERACTIONS);
     }
   });
+
+  // Real-time synchronization with Firebase Cloud Firestore
+  useEffect(() => {
+    const unsubMunicipalities = subscribeToMunicipalities(
+      (data) => {
+        if (data && data.length > 0) {
+          setMunicipalities(deduplicateMunicipalities(data));
+          setFirebaseStatus('connected');
+        }
+      },
+      () => setFirebaseStatus('error')
+    );
+
+    const unsubInteractions = subscribeToInteractions(
+      (data) => {
+        if (data && data.length > 0) {
+          setCrmInteractions(deduplicateInteractions(data));
+          setFirebaseStatus('connected');
+        }
+      },
+      () => setFirebaseStatus('error')
+    );
+
+    return () => {
+      unsubMunicipalities();
+      unsubInteractions();
+    };
+  }, []);
 
   // Automatic state persistence to localStorage
   React.useEffect(() => {
@@ -99,6 +161,17 @@ export default function App() {
   }, [alerts]);
 
   const [selectedMunicipality, setSelectedMunicipality] = useState<Municipality | null>(municipalities[0] || null);
+
+  // Keep selectedMunicipality in sync when municipalities list updates
+  useEffect(() => {
+    if (selectedMunicipality) {
+      const updatedMatch = municipalities.find((m) => m.id === selectedMunicipality.id);
+      if (updatedMatch) setSelectedMunicipality(updatedMatch);
+    } else if (municipalities.length > 0) {
+      setSelectedMunicipality(municipalities[0]);
+    }
+  }, [municipalities]);
+
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
@@ -106,7 +179,6 @@ export default function App() {
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showRadarEnricherModal, setShowRadarEnricherModal] = useState<boolean>(false);
   const [showCitySearchModal, setShowCitySearchModal] = useState<boolean>(false);
-  const [selectedTenderDetail, setSelectedTenderDetail] = useState<TenderNotice | null>(null);
 
   const handleUpdateMunicipality = (updated: Municipality) => {
     setMunicipalities((prev) =>
@@ -115,6 +187,8 @@ export default function App() {
     if (selectedMunicipality?.id === updated.id) {
       setSelectedMunicipality(updated);
     }
+    // Save to Firebase Cloud
+    saveMunicipalityToFirebase(updated);
   };
 
   // Handlers
@@ -123,9 +197,11 @@ export default function App() {
   };
 
   const handleUpdateFunnelStage = (municipalityId: string, newStage: FunnelStage) => {
-    setMunicipalities((prev) =>
-      prev.map((m) => (m.id === municipalityId ? { ...m, funnelStage: newStage } : m))
-    );
+    const muni = municipalities.find((m) => m.id === municipalityId);
+    if (muni) {
+      const updatedMuni = { ...muni, funnelStage: newStage };
+      handleUpdateMunicipality(updatedMuni);
+    }
   };
 
   const handleOpenAIForMuni = (m: Municipality) => {
@@ -135,12 +211,16 @@ export default function App() {
 
   const handleAddCRMInteraction = (newInteraction: CRMInteraction) => {
     setCrmInteractions((prev) => [newInteraction, ...prev]);
+    // Save to Firebase Cloud
+    saveInteractionToFirebase(newInteraction);
   };
 
   const handleEditCRMInteraction = (updatedInteraction: CRMInteraction) => {
     setCrmInteractions((prev) =>
       prev.map((item) => (item.id === updatedInteraction.id ? updatedInteraction : item))
     );
+    // Save to Firebase Cloud
+    saveInteractionToFirebase(updatedInteraction);
   };
 
   const handleDeleteCRMInteraction = (id: string) => {
@@ -148,8 +228,123 @@ export default function App() {
   };
 
   const handleAddMunicipality = (newMuni: Municipality) => {
-    setMunicipalities((prev) => [newMuni, ...prev]);
-    setSelectedMunicipality(newMuni);
+    const normNewName = newMuni.name.trim().toLowerCase();
+    const normNewState = newMuni.state.trim().toLowerCase();
+
+    // Check if city already exists in current dataset (by ID or normalized name+state)
+    const existingIndex = municipalities.findIndex(
+      (m) =>
+        m.id === newMuni.id ||
+        (m.name.trim().toLowerCase() === normNewName &&
+          m.state.trim().toLowerCase() === normNewState)
+    );
+
+    let finalMuniToSave: Municipality;
+
+    if (existingIndex >= 0) {
+      const existing = municipalities[existingIndex];
+
+      // Combine buyingHistory without duplicate entries
+      const combinedHistory = [...(existing.buyingHistory || [])];
+      if (newMuni.buyingHistory) {
+        newMuni.buyingHistory.forEach((bh) => {
+          const isDupBH = combinedHistory.some(
+            (item) => item.year === bh.year && item.company === bh.company
+          );
+          if (!isDupBH) {
+            combinedHistory.push(bh);
+          }
+        });
+      }
+
+      // Combine keyContacts without duplicate names
+      const combinedContacts = [...(existing.keyContacts || [])];
+      if (newMuni.keyContacts) {
+        newMuni.keyContacts.forEach((kc) => {
+          const isDupKC = combinedContacts.some(
+            (c) => c.name.trim().toLowerCase() === kc.name.trim().toLowerCase()
+          );
+          if (!isDupKC) {
+            combinedContacts.push(kc);
+          }
+        });
+      }
+
+      // Append IA query note to existing notes with date
+      const todayStr = new Date().toLocaleDateString('pt-BR');
+      const updateNote = `\n[Consulta/Atualização IA em ${todayStr}]: Score IO ${newMuni.ioScore}/100. Sistema: ${newMuni.currentSystem}. Valor: R$ ${(newMuni.currentContractValue || 0).toLocaleString('pt-BR')}.`;
+      const updatedNotes = existing.notes
+        ? existing.notes.includes(updateNote.trim()) ? existing.notes : `${existing.notes}${updateNote}`
+        : newMuni.notes || `Consulta IA realizada em ${todayStr}`;
+
+      finalMuniToSave = {
+        ...existing, // Preserves canonical ID, funnelStage, dealOwner
+        population: newMuni.population || existing.population,
+        currentSystem: newMuni.currentSystem || existing.currentSystem,
+        currentContractValue: newMuni.currentContractValue || existing.currentContractValue,
+        contractDaysRemaining: newMuni.contractDaysRemaining || existing.contractDaysRemaining,
+        renewalProbability: newMuni.renewalProbability || existing.renewalProbability,
+        tenderProbability: newMuni.tenderProbability || existing.tenderProbability,
+        estimatedNewContractValue: newMuni.estimatedNewContractValue || existing.estimatedNewContractValue,
+        probableModality: newMuni.probableModality || existing.probableModality,
+        ioScore: newMuni.ioScore || existing.ioScore,
+        ioFactors: newMuni.ioFactors || existing.ioFactors,
+        educationalMetrics: {
+          ...existing.educationalMetrics,
+          ...newMuni.educationalMetrics,
+          mainPains: Array.from(
+            new Set([
+              ...(existing.educationalMetrics?.mainPains || []),
+              ...(newMuni.educationalMetrics?.mainPains || []),
+            ])
+          ),
+        },
+        keyContacts: combinedContacts,
+        buyingHistory: combinedHistory,
+        lastActivityDate: new Date().toISOString().slice(0, 10),
+        notes: updatedNotes,
+      };
+
+      setMunicipalities((prev) => {
+        const copy = [...prev];
+        copy[existingIndex] = finalMuniToSave;
+        return deduplicateMunicipalities(copy);
+      });
+    } else {
+      // Clean normalized ID for brand new city
+      const cleanId = `mun-${normNewName.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, '-')}-${normNewState}`;
+      finalMuniToSave = {
+        ...newMuni,
+        id: newMuni.id || cleanId,
+      };
+
+      setMunicipalities((prev) => deduplicateMunicipalities([finalMuniToSave, ...prev]));
+    }
+
+    setSelectedMunicipality(finalMuniToSave);
+
+    // Save to Firebase Cloud
+    saveMunicipalityToFirebase(finalMuniToSave);
+
+    // Create an automatic CRM Interaction to increment the historical activity log!
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const consultationInteraction: CRMInteraction = {
+      id: `int-ia-${finalMuniToSave.id}-${Date.now()}`,
+      municipalityId: finalMuniToSave.id,
+      municipalityName: finalMuniToSave.name,
+      state: finalMuniToSave.state,
+      date: todayIso,
+      type: 'analise_estrategica_ia',
+      contactName: finalMuniToSave.keyContacts?.[0]?.name || 'Secretaria de Educação',
+      contactRole: finalMuniToSave.keyContacts?.[0]?.role || 'Gestão Escolar',
+      summary: `Consulta de Inteligência Comercial IA (${new Date().toLocaleDateString('pt-BR')})`,
+      description: `Consulta/Diagnóstico de inteligência comercial realizado via Radar SICAP. Score IO: ${finalMuniToSave.ioScore}/100. Sistema concorrente: ${finalMuniToSave.currentSystem}. Valor estimado: R$ ${(finalMuniToSave.currentContractValue || 0).toLocaleString('pt-BR')}. Dores mapeadas: ${finalMuniToSave.educationalMetrics?.mainPains?.join('; ') || 'Geral'}.`,
+      outcome: 'positivo',
+      nextStep: 'Analisar plano de abordagem com Secretário(a) e equipe pedagógica',
+      dealOwner: finalMuniToSave.dealOwner || 'José Badotti',
+    };
+
+    handleAddCRMInteraction(consultationInteraction);
   };
 
   const handleOpenCRMForMuni = (m: Municipality) => {
@@ -362,9 +557,9 @@ export default function App() {
       <AICitySearchModal
         isOpen={showCitySearchModal}
         onClose={() => setShowCitySearchModal(false)}
+        existingMunicipalities={municipalities}
         onAddMunicipality={(newMuni) => {
           handleAddMunicipality(newMuni);
-          setSelectedMunicipality(newMuni);
           setActiveTab('field_visits');
         }}
         initialCityName={searchQuery || 'Codó'}

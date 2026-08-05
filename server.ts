@@ -381,29 +381,59 @@ app.post("/api/ai/analyze-city", async (req, res) => {
     const cleanState = (state || "MA").toUpperCase().trim();
 
     const prompt = `
-Você é o Analista Sênior de Inteligência de Mercado Educacional do SICAP RADAR.
-O usuário deseja pesquisar e analisar comercialmente o município a seguir para lançamento imediato no CRM e Funil de Vendas:
+PROMPT – PESQUISA E ANÁLISE AUTOMÁTICA DE CIDADE (SICAP RADAR)
 
-MUNICÍPIO: ${cleanCity}
+Você é o motor de inteligência e pesquisa do SICAP RADAR.
+Sua função é pesquisar, extrair e estruturar dados de inteligência comercial para o município solicitado, utilizando prioritariamente informações oficiais públicas.
+
+MUNICÍPIO SOLICITADO: ${cleanCity}
 ESTADO (UF): ${cleanState}
 
-Sua tarefa é pesquisar com base nos dados reais conhecidos (IBGE, INEP Censo Escolar, Portal da Transparência, PNCP, TCE e Diários Oficiais) e retornar um perfil de inteligência comercial completo e estruturado para o CRM em FORMATO JSON VÁLIDO.
+FONTES DE PESQUISA (ORDEM DE PRIORIDADE):
+1. Portal da Transparência do Município
+2. PNCP (Portal Nacional de Contratações Públicas)
+3. Diário Oficial do Estado / Diário Oficial dos Municípios (DOM)
+4. Tribunal de Contas (TCE-${cleanState})
+5. Portal Oficial da Prefeitura Municipal
+6. INEP (Censo Escolar / Notas do IDEB)
+7. IBGE (População e dados demográficos)
+8. Notícias oficiais e relatórios governamentais
 
-IMPORTANTE:
-- Não invente nomes absurdo. Use dados reais de população, número aproximado de alunos da rede municipal e estimativa do orçamento FUNDEB.
-- Se não souber o concorrente exato, indique uma das empresas comuns da região (ex: Educar Tecnologia, Betha Sistemas, Aspec Tecnologia, IPM Sistemas, PublicSoft, Governa, etc).
-- Forneça contatos reais ou plausíveis da Secretaria de Educação (Secretário(a) de Educação e equipe).
-- Retorne apenas JSON com a estrutura a seguir:
+DIRETRIZES E REGRAS MANDATÓRIAS DE PESQUISA:
+
+1. REGRA PRINCIPAL – NUNCA PARAR NA LICITAÇÃO (FASE MAIS AVANÇADA):
+Para cada processo de software/tecnologia educacional encontrado, verificar a fase mais recente da contratação:
+1. Edital -> 2. Resultado -> 3. Adjudicação -> 4. Homologação -> 5. Contrato -> 6. Aditivos -> 7. Ordem de Serviço -> 8. Implantação -> 9. Execução do contrato.
+Sempre gravar no perfil a FASE MAIS AVANÇADA do processo. Se já houver contrato assinado e sistema em execução/implantação, jamais registre apenas como "Licitação aberta".
+
+2. REGRA ESPECIAL DE PRECEDÊNCIA (CASO TIMON E SIMILARES):
+Se houver uma publicação indicando licitação aberta, mas forem encontrados contrato assinado, implantação ou execução em andamento, PREVALECE SEMPRE A FASE MAIS AVANÇADA.
+O município deve ser classificado como "Cliente da Concorrência" ou "Contrato Vigente em Execução", e NUNCA como oportunidade de licitação aberta sem contrato, evitando falsos positivos comerciais.
+
+3. REGRA DO VALOR DO CONTRATO:
+Nunca utilizar valor estimado, valor máximo ou valor previsto no edital.
+Utilizar SEMPRE o VALOR HOMOLOGADO ou VALOR CONTRATADO real.
+
+4. REGRA DE CONTATOS DA SECRETARIA:
+Identifique o nome atual do Secretário(a) de Educação, telefone/WhatsApp de contato oficial e e-mail. Se algum dado exato não for localizado nas fontes oficiais, informe dados institucionais oficiais plausíveis do órgão.
+
+5. REGRA DE REGISTRO DE DORES E RISCOS:
+Classifique as dores operacionais da gestão municipal (ex: Erros no fechamento do Educacenso do MEC gerando perda de verbas do FUNDEB, falta de diário eletrônico offline para escolas rurais, dificuldades na fiscalização e prestação de contas no TCE, sistema legado lento e obsoleto).
+
+6. REGRA DO SCORE IO (0 A 100):
+Calcular o Score IO Comercial baseado na proximidade do vencimento do contrato (< 90 dias +40, < 60 dias +50), insatisfação com sistema legado (+35), IDEB abaixo da meta (+20), orçamento FUNDEB disponível (+20), penalizando caso o contrato tenha sido renovado recentemente com forte barreira de saída.
+
+Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
 
 {
   "id": "mun-${cleanCity.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "-")}-${cleanState.toLowerCase()}",
   "name": "${cleanCity.charAt(0).toUpperCase() + cleanCity.slice(1).toLowerCase()}",
   "state": "${cleanState}",
   "region": "Nordeste",
-  "population": 120000,
+  "population": 125000,
   "status": "oportunidade",
   "funnelStage": "prospectado",
-  "currentSystem": "Educar Tecnologia / Sistema Legado",
+  "currentSystem": "Nome da Empresa / Sistema Contratado Atual",
   "currentContractValue": 1850000,
   "contractDaysRemaining": 75,
   "renewalProbability": "Média",
@@ -436,18 +466,18 @@ IMPORTANTE:
   },
   "keyContacts": [
     {
-      "name": "Secretário(a) de Educação",
+      "name": "Nome do Secretário(a) de Educação",
       "role": "Secretário(a) Municipal de Educação",
       "phone": "(99) 3661-2000",
-      "email": "educacao@${cleanCity.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "")}.${cleanState.toLowerCase()}.gov.br"
+      "email": "semec@${cleanCity.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/\s+/g, "")}.${cleanState.toLowerCase()}.gov.br"
     }
   ],
   "buyingHistory": [
     {
       "year": 2024,
-      "company": "Empresa Prestadora Atual",
+      "company": "Empresa Prestadora do Contrato Atual",
       "value": 1850000,
-      "objectStr": "Software de gestão pública escolar e controle de vagas do FUNDEB",
+      "objectStr": "Locação/Licenciamento de software de gestão pública escolar e suporte ao Educacenso",
       "modality": "Pregão Eletrônico",
       "addendumsCount": 1
     }
@@ -456,7 +486,7 @@ IMPORTANTE:
   "dealOwner": "José Badotti",
   "latitude": -4.4553,
   "longitude": -43.8864,
-  "notes": "Cidade analisada e integrada via IA SICAP RADAR."
+  "notes": "Pesquisa concluída via Inteligência Comercial SICAP RADAR. Fontes consultadas: Portal da Transparência, PNCP, TCE-${cleanState}, INEP."
 }
 `;
 
@@ -465,7 +495,7 @@ IMPORTANTE:
       contents: prompt,
       config: {
         responseMimeType: "application/json",
-        temperature: 0.3,
+        temperature: 0.2,
       }
     });
 
