@@ -1,5 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Municipality, KeyContact, CRMInteraction } from '../types';
+import { EducationalCockpitBridge } from './EducationalCockpitBridge';
+import { IOScoreCalculatorView } from './IOScoreCalculatorView';
+import { CompetitorRadarView } from './CompetitorRadarView';
+import { MOCK_COMPETITORS } from '../data/mockData';
 import { 
   Building2, 
   Users, 
@@ -19,37 +23,85 @@ import {
   Clock,
   PhoneCall,
   MapPin,
-  Scale
+  Scale,
+  Pencil,
+  Swords,
+  X
 } from 'lucide-react';
 
 interface MunicipalityIntelligenceViewProps {
   municipalities: Municipality[];
   selectedMunicipality: Municipality | null;
   onSelectMunicipality: (m: Municipality) => void;
+  onUpdateMunicipality?: (updated: Municipality) => void;
   onGenerateAIStrategy: (m: Municipality) => void;
   crmInteractions?: CRMInteraction[];
   onOpenCRM?: (m: Municipality) => void;
+  initialSubTab?: string;
 }
 
 export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceViewProps> = ({
   municipalities,
   selectedMunicipality,
   onSelectMunicipality,
+  onUpdateMunicipality,
   onGenerateAIStrategy,
   crmInteractions = [],
   onOpenCRM,
+  initialSubTab,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeTab, setActiveTab] = useState<'geral' | 'equipe' | 'historico' | 'educacional' | 'crm'>('geral');
+  const [activeTab, setActiveTab] = useState<'geral' | 'equipe' | 'historico' | 'educacional' | 'io_score' | 'competitors' | 'crm'>('geral');
+
+  useEffect(() => {
+    if (initialSubTab) {
+      if (initialSubTab === 'cockpit' || initialSubTab === 'educacional') setActiveTab('educacional');
+      else if (initialSubTab === 'io_score') setActiveTab('io_score');
+      else if (initialSubTab === 'competitors') setActiveTab('competitors');
+      else if (initialSubTab === 'crm') setActiveTab('crm');
+      else if (initialSubTab === 'equipe') setActiveTab('equipe');
+      else setActiveTab('geral');
+    }
+  }, [initialSubTab]);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [cityNameInput, setCityNameInput] = useState('');
+  const [cityStateInput, setCityStateInput] = useState('');
+  const [citySystemInput, setCitySystemInput] = useState('');
 
   const filteredMunis = municipalities.filter(
     (m) =>
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.state.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.currentSystem.toLowerCase().includes(searchTerm.toLowerCase())
+      (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.state || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.currentSystem || '').toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   const activeMuni = selectedMunicipality || filteredMunis[0] || municipalities[0];
+
+  const handleOpenEdit = () => {
+    if (!activeMuni) return;
+    setCityNameInput(activeMuni.name);
+    setCityStateInput(activeMuni.state);
+    setCitySystemInput(activeMuni.currentSystem || '');
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveCityEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeMuni || !cityNameInput.trim()) return;
+
+    const updated: Municipality = {
+      ...activeMuni,
+      name: cityNameInput.trim(),
+      state: cityStateInput.trim().toUpperCase(),
+      currentSystem: citySystemInput.trim() || activeMuni.currentSystem,
+    };
+
+    if (onUpdateMunicipality) {
+      onUpdateMunicipality(updated);
+    }
+    onSelectMunicipality(updated);
+    setIsEditModalOpen(false);
+  };
 
   return (
     <div className="space-y-6">
@@ -134,10 +186,19 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
             {/* Dossier Top Bar */}
             <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-2xl font-black text-slate-900">
                     Prefeitura Municipal de {activeMuni.name} - {activeMuni.state}
                   </h3>
+                  <button
+                    type="button"
+                    onClick={handleOpenEdit}
+                    className="bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-extrabold px-2.5 py-1 rounded-xl border border-amber-300 transition-all flex items-center gap-1 active:scale-95 cursor-pointer shadow-sm"
+                    title="Editar nome e dados desta prefeitura"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-amber-800" />
+                    <span>Editar Nome</span>
+                  </button>
                   <span className="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-1 rounded-full">
                     Índice IO: {activeMuni.ioScore}/100
                   </span>
@@ -191,13 +252,14 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
 
             </div>
 
-            {/* Sub Tabs */}
-            <div className="flex border-b border-slate-200 text-xs font-bold gap-6">
+            {/* Sub Tabs Bar */}
+            <div className="flex border-b border-slate-200 text-xs font-bold gap-4 sm:gap-6 overflow-x-auto no-scrollbar">
               <button
+                type="button"
                 onClick={() => setActiveTab('geral')}
-                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'geral'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-blue-600 text-blue-600 font-extrabold'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
@@ -206,51 +268,81 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
               </button>
 
               <button
+                type="button"
                 onClick={() => setActiveTab('equipe')}
-                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'equipe'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-blue-600 text-blue-600 font-extrabold'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <Users className="w-4 h-4" />
-                <span>Pessoas-Chave ({activeMuni.keyContacts.length})</span>
+                <span>Pessoas-Chave ({(activeMuni.keyContacts || []).length})</span>
               </button>
 
               <button
-                onClick={() => setActiveTab('historico')}
-                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
-                  activeTab === 'historico'
-                    ? 'border-blue-600 text-blue-600'
-                    : 'border-transparent text-slate-500 hover:text-slate-800'
-                }`}
-              >
-                <History className="w-4 h-4" />
-                <span>Histórico de Compras</span>
-              </button>
-
-              <button
+                type="button"
                 onClick={() => setActiveTab('educacional')}
-                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'educacional'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-blue-600 text-blue-600 font-extrabold'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <GraduationCap className="w-4 h-4" />
-                <span>Indicadores Educacionais</span>
+                <span>MEC & IDEB</span>
               </button>
 
               <button
+                type="button"
+                onClick={() => setActiveTab('io_score')}
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'io_score'
+                    ? 'border-emerald-600 text-emerald-600 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Calculator className="w-4 h-4 text-emerald-600" />
+                <span>Calculadora IO</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('competitors')}
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'competitors'
+                    ? 'border-indigo-600 text-indigo-600 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <Swords className="w-4 h-4 text-indigo-600" />
+                <span>Concorrentes</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('historico')}
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
+                  activeTab === 'historico'
+                    ? 'border-blue-600 text-blue-600 font-extrabold'
+                    : 'border-transparent text-slate-500 hover:text-slate-800'
+                }`}
+              >
+                <History className="w-4 h-4" />
+                <span>Compras Anteriores</span>
+              </button>
+
+              <button
+                type="button"
                 onClick={() => setActiveTab('crm')}
-                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 ${
+                className={`pb-2.5 border-b-2 transition-all flex items-center gap-1.5 shrink-0 cursor-pointer ${
                   activeTab === 'crm'
-                    ? 'border-blue-600 text-blue-600'
+                    ? 'border-blue-600 text-blue-600 font-extrabold'
                     : 'border-transparent text-slate-500 hover:text-slate-800'
                 }`}
               >
                 <MessageSquare className="w-4 h-4" />
-                <span>Interações CRM ({crmInteractions.filter(i => i.municipalityId === activeMuni.id).length})</span>
+                <span>Linha CRM ({crmInteractions.filter(i => i.municipalityId === activeMuni.id).length})</span>
               </button>
             </div>
 
@@ -271,7 +363,7 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
                   <div className="border border-slate-200 rounded-xl p-4 space-y-2">
                     <h4 className="font-bold text-slate-800">Principais Dores da Secretaria</h4>
                     <ul className="space-y-1.5 text-slate-600 list-disc list-inside">
-                      {activeMuni.educationalMetrics.mainPains.map((p, idx) => (
+                      {(activeMuni.educationalMetrics?.mainPains || []).map((p, idx) => (
                         <li key={idx}>{p}</li>
                       ))}
                     </ul>
@@ -280,10 +372,10 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
                   <div className="border border-slate-200 rounded-xl p-4 space-y-2">
                     <h4 className="font-bold text-slate-800">Recursos Orcamentários & Fundeb</h4>
                     <div className="space-y-1 text-slate-700">
-                      <p><strong>Orçamento Fundeb:</strong> R$ {activeMuni.educationalMetrics.fundebBudget.toLocaleString('pt-BR')}</p>
-                      <p><strong>Escolas atendidas:</strong> {activeMuni.educationalMetrics.schoolsCount} unidades</p>
-                      <p><strong>Alunos matriculados:</strong> {activeMuni.educationalMetrics.studentsCount.toLocaleString('pt-BR')}</p>
-                      <p><strong>Professores da rede:</strong> {activeMuni.educationalMetrics.teachersCount}</p>
+                      <p><strong>Orçamento Fundeb:</strong> R$ {(activeMuni.educationalMetrics?.fundebBudget || 0).toLocaleString('pt-BR')}</p>
+                      <p><strong>Escolas atendidas:</strong> {activeMuni.educationalMetrics?.schoolsCount || 0} unidades</p>
+                      <p><strong>Alunos matriculados:</strong> {(activeMuni.educationalMetrics?.studentsCount || 0).toLocaleString('pt-BR')}</p>
+                      <p><strong>Professores da rede:</strong> {activeMuni.educationalMetrics?.teachersCount || 0}</p>
                     </div>
                   </div>
                 </div>
@@ -293,7 +385,7 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
             {activeTab === 'equipe' && (
               <div className="space-y-3">
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                  {activeMuni.keyContacts.map((contact, idx) => (
+                  {(activeMuni.keyContacts || []).map((contact, idx) => (
                     <div key={idx} className="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-2 text-xs">
                       <span className="font-bold text-slate-900 text-sm block">{contact.name}</span>
                       <span className="bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded text-[10px] inline-block">
@@ -325,7 +417,7 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
             {activeTab === 'historico' && (
               <div className="space-y-3">
                 <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-100 text-xs">
-                  {activeMuni.buyingHistory.map((item, idx) => (
+                  {(activeMuni.buyingHistory || []).map((item, idx) => (
                     <div key={idx} className="p-3 bg-slate-50/50 flex flex-wrap items-center justify-between gap-2">
                       <div>
                         <div className="flex items-center gap-2">
@@ -339,7 +431,7 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
 
                       <div className="text-right">
                         <span className="font-black text-emerald-600 text-sm block">
-                          R$ {item.value.toLocaleString('pt-BR')}
+                          R$ {(item.value || 0).toLocaleString('pt-BR')}
                         </span>
                         <span className="text-[10px] text-slate-500">{item.modality}</span>
                       </div>
@@ -350,35 +442,27 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
             )}
 
             {activeTab === 'educacional' && (
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
-                <div className="bg-blue-50 border border-blue-200 p-4 rounded-xl text-center">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">IDEB Atual</span>
-                  <span className="text-2xl font-black text-blue-700">{activeMuni.educationalMetrics.ideb}</span>
-                  <span className="text-[10px] text-slate-400 block mt-1">Meta: {activeMuni.educationalMetrics.idebTarget}</span>
-                </div>
+              <EducationalCockpitBridge
+                municipalities={municipalities}
+                selectedMunicipality={activeMuni}
+                onSelectMunicipality={onSelectMunicipality}
+                onGenerateAIStrategy={onGenerateAIStrategy}
+              />
+            )}
 
-                <div className="bg-red-50 border border-red-200 p-4 rounded-xl text-center">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Taxa de Abandono</span>
-                  <span className="text-2xl font-black text-red-600">{activeMuni.educationalMetrics.dropoutRate}%</span>
-                  <span className="text-[10px] text-slate-400 block mt-1">Abandono escolar</span>
-                </div>
+            {activeTab === 'io_score' && (
+              <IOScoreCalculatorView
+                municipalities={municipalities}
+                selectedMunicipality={activeMuni}
+                onSelectMunicipality={onSelectMunicipality}
+              />
+            )}
 
-                <div className="bg-emerald-50 border border-emerald-200 p-4 rounded-xl text-center">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Verba Fundeb</span>
-                  <span className="text-lg font-black text-emerald-700">
-                    R$ {(activeMuni.educationalMetrics.fundebBudget / 1000000).toFixed(1)}M
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-1">Anual</span>
-                </div>
-
-                <div className="bg-indigo-50 border border-indigo-200 p-4 rounded-xl text-center">
-                  <span className="text-slate-500 block text-[10px] uppercase font-bold">Alunos / Escolas</span>
-                  <span className="text-lg font-black text-indigo-700">
-                    {activeMuni.educationalMetrics.studentsCount} / {activeMuni.educationalMetrics.schoolsCount}
-                  </span>
-                  <span className="text-[10px] text-slate-400 block mt-1">Total da rede</span>
-                </div>
-              </div>
+            {activeTab === 'competitors' && (
+              <CompetitorRadarView
+                competitors={MOCK_COMPETITORS}
+                selectedMunicipality={activeMuni}
+              />
             )}
 
             {activeTab === 'crm' && (
@@ -431,7 +515,7 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
                           <div className="text-[11px] text-slate-500 flex items-center gap-2">
                             <span>Contato: <strong>{item.contactName}</strong> ({item.contactRole || 'N/I'})</span>
                             <span>•</span>
-                            <span>{new Date(item.date).toLocaleDateString('pt-BR')}</span>
+                            <span>{item.date}</span>
                           </div>
                           <p className="text-slate-700 bg-white p-2.5 rounded border border-slate-200 text-xs">
                             {item.description}
@@ -453,6 +537,92 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
         )}
 
       </div>
+
+      {/* Modal para Editar Dados da Cidade no Dossiê */}
+      {isEditModalOpen && activeMuni && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl border border-amber-300 shadow-2xl max-w-md w-full p-6 space-y-4 my-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 rounded-xl text-amber-900 font-bold">
+                  <Pencil className="w-5 h-5 text-amber-800" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Editar Dados da Cidade</h3>
+                  <p className="text-xs text-slate-500">Altere o nome oficial da prefeitura, estado e sistema concorrente</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCityEdit} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nome Oficial da Prefeitura <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={cityNameInput}
+                  onChange={(e) => setCityNameInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Ex: Codó"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Estado (UF) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  maxLength={2}
+                  value={cityStateInput}
+                  onChange={(e) => setCityStateInput(e.target.value.toUpperCase())}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold text-sm uppercase focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="MA"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Sistema Concorrente Atual
+                </label>
+                <input
+                  type="text"
+                  value={citySystemInput}
+                  onChange={(e) => setCitySystemInput(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Ex: Educar / Betha / Sem Sistema"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditModalOpen(false)}
+                  className="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-black px-5 py-2 rounded-xl shadow transition-all cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
 
     </div>
   );

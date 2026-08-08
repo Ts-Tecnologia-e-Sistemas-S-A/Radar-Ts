@@ -187,6 +187,14 @@ export default function App() {
     if (selectedMunicipality?.id === updated.id) {
       setSelectedMunicipality(updated);
     }
+    // Update municipalityName and state on all CRM interactions linked to this municipality ID
+    setCrmInteractions((prev) =>
+      prev.map((i) =>
+        i.municipalityId === updated.id
+          ? { ...i, municipalityName: updated.name, state: updated.state }
+          : i
+      )
+    );
     // Save to Firebase Cloud
     saveMunicipalityToFirebase(updated);
   };
@@ -219,6 +227,31 @@ export default function App() {
     setCrmInteractions((prev) =>
       prev.map((item) => (item.id === updatedInteraction.id ? updatedInteraction : item))
     );
+
+    // If municipalityId exists, update the corresponding municipality's name and state as well
+    if (updatedInteraction.municipalityId) {
+      setMunicipalities((prev) =>
+        prev.map((m) =>
+          m.id === updatedInteraction.municipalityId
+            ? { ...m, name: updatedInteraction.municipalityName, state: updatedInteraction.state }
+            : m
+        )
+      );
+      if (selectedMunicipality?.id === updatedInteraction.municipalityId) {
+        setSelectedMunicipality((prev) =>
+          prev ? { ...prev, name: updatedInteraction.municipalityName, state: updatedInteraction.state } : null
+        );
+      }
+      // Update all other interactions for this municipality
+      setCrmInteractions((prev) =>
+        prev.map((i) =>
+          i.municipalityId === updatedInteraction.municipalityId
+            ? { ...i, municipalityName: updatedInteraction.municipalityName, state: updatedInteraction.state }
+            : i
+        )
+      );
+    }
+
     // Save to Firebase Cloud
     saveInteractionToFirebase(updatedInteraction);
   };
@@ -355,7 +388,7 @@ export default function App() {
   const unreadAlertsCount = alerts.filter((a) => !a.isRead).length;
 
   return (
-    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800 antialiased selection:bg-blue-500 selection:text-white">
+    <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800 antialiased selection:bg-blue-500 selection:text-white overflow-x-hidden w-full">
       
       {/* Top Main Navigation Header */}
       <Navbar
@@ -370,8 +403,8 @@ export default function App() {
         onOpenCitySearch={() => setShowCitySearchModal(true)}
       />
 
-      {/* Main Full Height Layout: Left Sidebar + Right Content Area */}
-      <div className="flex-1 flex flex-col lg:flex-row max-w-[1700px] w-full mx-auto">
+      {/* Main Layout: Left Sidebar + Right Content Area */}
+      <div className="flex-1 flex flex-col lg:flex-row max-w-[1700px] w-full mx-auto min-w-0">
         
         {/* Module Sidebar Nav */}
         <Sidebar
@@ -380,14 +413,16 @@ export default function App() {
           unreadAlertsCount={unreadAlertsCount}
         />
 
-        {/* Dynamic Main Workspace View */}
-        <main className="flex-1 p-2.5 sm:p-6 lg:p-8 overflow-y-auto min-w-0 max-w-full">
+        {/* Dynamic Main Workspace View - Single Scroll Container */}
+        <main className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 min-w-0 max-w-full w-full">
           
           {/* Active City 360º Commercial Context & Navigation Bar */}
           <SelectedCityBar
             municipalities={municipalities}
+            crmInteractions={crmInteractions}
             selectedMunicipality={selectedMunicipality}
             onSelectMunicipality={handleSelectMunicipality}
+            onUpdateMunicipality={handleUpdateMunicipality}
             activeTab={activeTab}
             onNavigateTab={setActiveTab}
             onOpenExportModal={() => setShowExportModal(true)}
@@ -399,7 +434,10 @@ export default function App() {
               municipalities={municipalities}
               crmInteractions={crmInteractions}
               onAddCRMInteraction={handleAddCRMInteraction}
+              onEditCRMInteraction={handleEditCRMInteraction}
+              onDeleteCRMInteraction={handleDeleteCRMInteraction}
               onUpdateFunnelStage={handleUpdateFunnelStage}
+              onUpdateMunicipality={handleUpdateMunicipality}
               onSelectMunicipality={handleSelectMunicipality}
               onNavigateTab={(tab) => setActiveTab(tab as any)}
               onAddMunicipality={handleAddMunicipality}
@@ -421,9 +459,19 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'tenders' && (
+          {(activeTab === 'tenders' || activeTab === 'alerts') && (
             <TenderRadarView
               tenders={tenders}
+              alerts={alerts}
+              municipalities={municipalities}
+              initialSubTab={activeTab === 'alerts' ? 'alerts' : 'tenders'}
+              onSelectMunicipality={handleSelectMunicipality}
+              onOpenAIStrategy={handleOpenAIForMuni}
+              onMarkAsReadAlert={(alertId) => {
+                setAlerts((prev) =>
+                  prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a))
+                );
+              }}
               onOpenTenderDetail={(tender) => {
                 const m = municipalities.find((item) => item.id === tender.municipalityId);
                 if (m) setSelectedMunicipality(m);
@@ -437,31 +485,16 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'intelligence' && (
+          {(activeTab === 'intelligence' || activeTab === 'cockpit' || activeTab === 'io_score' || activeTab === 'competitors') && (
             <MunicipalityIntelligenceView
               municipalities={municipalities}
               selectedMunicipality={selectedMunicipality}
               onSelectMunicipality={handleSelectMunicipality}
+              onUpdateMunicipality={handleUpdateMunicipality}
               onGenerateAIStrategy={handleOpenAIForMuni}
               crmInteractions={crmInteractions}
               onOpenCRM={handleOpenCRMForMuni}
-            />
-          )}
-
-          {activeTab === 'alerts' && (
-            <AlertsView
-              alerts={alerts}
-              municipalities={municipalities}
-              onSelectMunicipality={(m) => {
-                setSelectedMunicipality(m);
-                setActiveTab('intelligence');
-              }}
-              onOpenAIStrategy={handleOpenAIForMuni}
-              onMarkAsRead={(alertId) => {
-                setAlerts((prev) =>
-                  prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a))
-                );
-              }}
+              initialSubTab={activeTab}
             />
           )}
 
@@ -475,10 +508,11 @@ export default function App() {
             />
           )}
 
-          {activeTab === 'funnel' && (
+          {(activeTab === 'funnel' || activeTab === 'crm') && (
             <SalesFunnelView
               municipalities={municipalities}
               crmInteractions={crmInteractions}
+              initialSubTab={activeTab === 'crm' ? 'crm' : 'kanban'}
               onUpdateFunnelStage={handleUpdateFunnelStage}
               onSelectMunicipality={(m) => {
                 setSelectedMunicipality(m);
@@ -487,49 +521,11 @@ export default function App() {
               onAddCRMInteraction={handleAddCRMInteraction}
               onEditCRMInteraction={handleEditCRMInteraction}
               onDeleteCRMInteraction={handleDeleteCRMInteraction}
+              onAddMunicipality={handleAddMunicipality}
+              onUpdateMunicipality={handleUpdateMunicipality}
+              selectedMunicipality={selectedMunicipality}
               onNavigateTab={setActiveTab}
               onOpenAIForMuni={handleOpenAIForMuni}
-            />
-          )}
-
-          {activeTab === 'crm' && (
-            <CRMInteractionsView
-              interactions={crmInteractions}
-              municipalities={municipalities}
-              onAddInteraction={handleAddCRMInteraction}
-              onEditInteraction={handleEditCRMInteraction}
-              onDeleteInteraction={handleDeleteCRMInteraction}
-              onAddMunicipality={handleAddMunicipality}
-              selectedMunicipality={selectedMunicipality}
-              onSelectMunicipality={handleSelectMunicipality}
-              onNavigateTab={(tab) => setActiveTab(tab as any)}
-            />
-          )}
-
-          {activeTab === 'competitors' && (
-            <CompetitorRadarView
-              competitors={MOCK_COMPETITORS}
-              selectedMunicipality={selectedMunicipality}
-            />
-          )}
-
-          {activeTab === 'io_score' && (
-            <IOScoreCalculatorView
-              municipalities={municipalities}
-              selectedMunicipality={selectedMunicipality}
-              onSelectMunicipality={(m) => {
-                setSelectedMunicipality(m);
-                setActiveTab('intelligence');
-              }}
-            />
-          )}
-
-          {activeTab === 'cockpit' && (
-            <EducationalCockpitBridge
-              municipalities={municipalities}
-              selectedMunicipality={selectedMunicipality}
-              onSelectMunicipality={handleSelectMunicipality}
-              onGenerateAIStrategy={handleOpenAIForMuni}
             />
           )}
 

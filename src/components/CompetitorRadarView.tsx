@@ -11,27 +11,35 @@ export const CompetitorRadarView: React.FC<CompetitorRadarViewProps> = ({
   competitors: initialCompetitors,
   selectedMunicipality,
 }) => {
-  const [competitorsList, setCompetitorsList] = useState<CompetitorItem[]>(initialCompetitors);
+  const [competitorsList, setCompetitorsList] = useState<CompetitorItem[]>(initialCompetitors || []);
   const [selectedCompetitor, setSelectedCompetitor] = useState<CompetitorItem>(() => {
-    if (selectedMunicipality) {
-      const match = initialCompetitors.find((c) =>
-        selectedMunicipality.currentSystem.toLowerCase().includes(c.name.toLowerCase()) ||
-        c.name.toLowerCase().includes(selectedMunicipality.currentSystem.toLowerCase())
+    if (selectedMunicipality && selectedMunicipality.currentSystem) {
+      const currentSys = (selectedMunicipality.currentSystem || '').toLowerCase();
+      const match = (initialCompetitors || []).find((c) =>
+        c && c.name && (currentSys.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(currentSys))
       );
       if (match) return match;
     }
-    return initialCompetitors[0];
+    return (initialCompetitors && initialCompetitors[0]) || {
+      name: 'Sem Concorrente',
+      marketShareState: '0%',
+      avgContractPrice: 'R$ 0',
+      strengths: [],
+      weaknesses: [],
+      vulnerabilitiesForSICAP: [],
+      recentWins: []
+    };
   });
 
   React.useEffect(() => {
-    if (selectedMunicipality) {
-      const match = competitorsList.find((c) =>
-        selectedMunicipality.currentSystem.toLowerCase().includes(c.name.toLowerCase()) ||
-        c.name.toLowerCase().includes(selectedMunicipality.currentSystem.toLowerCase())
+    if (selectedMunicipality && selectedMunicipality.currentSystem) {
+      const currentSys = (selectedMunicipality.currentSystem || '').toLowerCase();
+      const match = (competitorsList || []).find((c) =>
+        c && c.name && (currentSys.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(currentSys))
       );
       if (match) setSelectedCompetitor(match);
     }
-  }, [selectedMunicipality]);
+  }, [selectedMunicipality, competitorsList]);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [showAddModal, setShowAddModal] = useState<boolean>(false);
 

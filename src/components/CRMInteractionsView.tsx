@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { CRMInteraction, Municipality } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
+import { openGoogleCalendar, formatCardDetailsForCalendar } from '../utils/googleCalendar';
+import { GoogleCalendarHubModal } from './GoogleCalendarHubModal';
+import { BusinessCardFormatterModal } from './BusinessCardFormatterModal';
 import { 
   PhoneCall, 
   MapPin, 
@@ -36,6 +39,7 @@ import {
   Swords,
   Copy,
   Check,
+  CreditCard,
   TrendingUp,
   Award,
   Navigation,
@@ -51,6 +55,7 @@ interface CRMInteractionsViewProps {
   onEditInteraction?: (updatedInteraction: CRMInteraction) => void;
   onDeleteInteraction?: (id: string) => void;
   onAddMunicipality?: (newMuni: Municipality) => void;
+  onUpdateMunicipality?: (updated: Municipality) => void;
   selectedMunicipality?: Municipality | null;
   onSelectMunicipality?: (m: Municipality) => void;
   onNavigateTab?: (tab: string) => void;
@@ -63,6 +68,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
   onEditInteraction,
   onDeleteInteraction,
   onAddMunicipality,
+  onUpdateMunicipality,
   selectedMunicipality,
   onSelectMunicipality,
   onNavigateTab,
@@ -82,6 +88,8 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
   }, [selectedMunicipality]);
   
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCalendarHubOpen, setIsCalendarHubOpen] = useState(false);
+  const [isFormatterModalOpen, setIsFormatterModalOpen] = useState(false);
   const [editingInteraction, setEditingInteraction] = useState<CRMInteraction | null>(null);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
@@ -146,6 +154,8 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
   const [newMuniEmail, setNewMuniEmail] = useState('');
 
   const [formType, setFormType] = useState<CRMInteraction['type']>('ligacao');
+  const [formMuniName, setFormMuniName] = useState('');
+  const [formState, setFormState] = useState('MA');
   const [formContactName, setFormContactName] = useState('');
   const [formContactRole, setFormContactRole] = useState('Secretária de Educação');
   const [formSummary, setFormSummary] = useState('');
@@ -450,25 +460,32 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
       const matchesPriority = !priorityFilter || priorityLevel === priorityFilter;
       const matchesSearch =
         !searchTerm ||
-        m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.currentSystem.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        m.state.toLowerCase().includes(searchTerm.toLowerCase());
+        (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (m.currentSystem || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (m.state || '').toLowerCase().includes(searchTerm.toLowerCase());
 
       return matchesState && matchesMuni && matchesPriority && matchesSearch;
     })
-    .sort((a, b) => b.scoreBreakdown.finalScore - a.scoreBreakdown.finalScore);
+    .sort((a, b) => (b?.scoreBreakdown?.finalScore || 0) - (a?.scoreBreakdown?.finalScore || 0));
+
+  const selectedMuniObj = municipalities.find((m) => m.id === muniFilter);
 
   // Filtered timeline of interactions
   const filteredInteractions = interactions.filter((item) => {
+    if (!item) return false;
     const matchesSearch =
       !searchTerm ||
-      item.municipalityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.summary.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.contactName.toLowerCase().includes(searchTerm.toLowerCase());
+      (item.municipalityName || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.summary || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.description || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (item.contactName || '').toLowerCase().includes(searchTerm.toLowerCase());
 
     const matchesState = !stateFilter || item.state === stateFilter;
-    const matchesMuni = !muniFilter || item.municipalityId === muniFilter;
+    const matchesMuni =
+      !muniFilter ||
+      item.municipalityId === muniFilter ||
+      (item.municipalityId && item.municipalityId.toLowerCase() === muniFilter.toLowerCase()) ||
+      (selectedMuniObj && item.municipalityName && selectedMuniObj.name && item.municipalityName.toLowerCase().trim() === selectedMuniObj.name.toLowerCase().trim());
     const matchesType = !typeFilter || item.type === typeFilter;
     const matchesOutcome = !outcomeFilter || item.outcome === outcomeFilter;
 
@@ -534,6 +551,8 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
   const handleOpenEdit = (item: CRMInteraction) => {
     setEditingInteraction(item);
     setFormMuniId(item.municipalityId);
+    setFormMuniName(item.municipalityName);
+    setFormState(item.state || 'MA');
     setFormType(item.type);
     setFormContactName(item.contactName);
     setFormContactRole(item.contactRole || 'Secretária de Educação');
@@ -560,11 +579,11 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
     if (editingInteraction) {
       // EDIT MODE
       let targetMuniId = formMuniId;
-      let targetMuniName = editingInteraction.municipalityName;
-      let targetState = editingInteraction.state;
+      let targetMuniName = formMuniName.trim() || editingInteraction.municipalityName;
+      let targetState = formState.trim().toUpperCase() || editingInteraction.state;
 
       const matchedMuni = municipalities.find((m) => m.id === formMuniId);
-      if (matchedMuni) {
+      if (matchedMuni && formMuniName.trim() === matchedMuni.name) {
         targetMuniName = matchedMuni.name;
         targetState = matchedMuni.state;
       }
@@ -591,6 +610,16 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
       if (onEditInteraction) {
         onEditInteraction(updatedObj);
       }
+
+      const targetMuni = matchedMuni || municipalities.find((m) => m.id === targetMuniId);
+      if (targetMuni && onUpdateMunicipality) {
+        onUpdateMunicipality({
+          ...targetMuni,
+          name: targetMuniName,
+          state: targetState,
+        });
+      }
+
       setIsModalOpen(false);
       setEditingInteraction(null);
       return;
@@ -747,13 +776,36 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={handleOpenCreateNew}
-          className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Registrar Nova Interação</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => setIsFormatterModalOpen(true)}
+            className="flex items-center gap-2 bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-amber-500/20 active:scale-95 cursor-pointer border border-amber-500/30"
+            title="Formatador Automático de Cartões de Visita, Contratos, Vencimentos e Empresa Ganhadora"
+          >
+            <CreditCard className="w-4 h-4 text-amber-200" />
+            <span>💳 Formatador de Cartões de Visita</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCalendarHubOpen(true)}
+            className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-indigo-500/20 active:scale-95 cursor-pointer"
+            title="Abrir Central de Agenda Google Calendar e compromissos"
+          >
+            <Calendar className="w-4 h-4 text-indigo-200" />
+            <span>📅 Agenda Google Calendar ({pendingNextStepsCount})</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleOpenCreateNew}
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-md shadow-blue-500/20 active:scale-95 cursor-pointer"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Registrar Nova Interação</span>
+          </button>
+        </div>
       </div>
 
       {/* KPI Metrics Cards */}
@@ -1258,14 +1310,14 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
                       <div>
                         <span className="block text-[10px] font-extrabold text-slate-500 uppercase">Oportunidade Estimada</span>
                         <span className="font-extrabold text-emerald-700">
-                          R$ {(m.estimatedNewContractValue / 1000).toFixed(0)}k
+                          R$ {((m.estimatedNewContractValue || 0) / 1000).toFixed(0)}k
                         </span>
                       </div>
 
                       <div>
                         <span className="block text-[10px] font-extrabold text-slate-500 uppercase">Estágio no Funil</span>
                         <span className="font-extrabold text-slate-800 capitalize">
-                          {m.funnelStage.replace(/_/g, ' ')}
+                          {(m.funnelStage || 'prospectado').replace(/_/g, ' ')}
                         </span>
                       </div>
 
@@ -1286,7 +1338,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
                         </span>
                         {lastInteraction && (
                           <span className="text-[11px] text-amber-800">
-                            {new Date(lastInteraction.date).toLocaleDateString('pt-BR')}
+                            {lastInteraction.date}
                           </span>
                         )}
                       </div>
@@ -1443,7 +1495,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
                         <span>•</span>
                         <span className="flex items-center gap-1">
                           <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                          <span>{new Date(item.date).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}</span>
+                          <span>{item.date}</span>
                         </span>
                       </div>
                     </div>
@@ -1512,7 +1564,33 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
                     ID: {item.id}
                   </span>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        openGoogleCalendar(item);
+                        showToast(`📅 Abrindo Google Agenda com a cópia do cartão de ${item.municipalityName}!`);
+                      }}
+                      className="text-xs bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-3 py-1.5 rounded-lg border border-indigo-700 shadow-sm transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                      title="Salvar e agendar compromisso no Google Agenda com a cópia completa do cartão"
+                    >
+                      <Calendar className="w-3.5 h-3.5 text-indigo-200" />
+                      <span>Google Agenda</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const text = formatCardDetailsForCalendar(item);
+                        navigator.clipboard.writeText(text);
+                        showToast(`📋 Cópia do cartão de ${item.municipalityName} copiada!`);
+                      }}
+                      className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold px-2.5 py-1.5 rounded-lg border border-slate-200 transition-colors flex items-center gap-1 active:scale-95 cursor-pointer"
+                      title="Copiar dados do cartão"
+                    >
+                      <span>📋 Copiar</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => handleOpenInteractionAi(item)}
@@ -1579,42 +1657,88 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
 
             <form onSubmit={handleSubmitForm} className="space-y-4 text-xs">
               
-              {/* Municipality Select */}
-              <div>
-                <div className="flex items-center justify-between mb-1">
+              {/* Municipality Select & Direct Edit */}
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2">
+                <div className="flex items-center justify-between">
                   <label className="block font-bold text-slate-800">
-                    Selecione a Prefeitura <span className="text-red-500">*</span>
+                    Prefeitura / Município do Cartão <span className="text-red-500">*</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => setFormMuniId('NEW_MUNI')}
-                    className="text-[11px] font-extrabold text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 transition-colors flex items-center gap-1"
+                    className="text-[11px] font-extrabold text-blue-600 hover:text-blue-800 bg-blue-100/80 px-2 py-0.5 rounded border border-blue-200 transition-colors flex items-center gap-1"
                   >
                     <Plus className="w-3 h-3" />
                     <span>+ Cadastrar Nova Prefeitura</span>
                   </button>
                 </div>
-                <select
-                  value={formMuniId}
-                  onChange={(e) => handleFormMuniChange(e.target.value)}
-                  required
-                  className={`w-full border rounded-lg p-2.5 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                    formMuniId === 'NEW_MUNI'
-                      ? 'bg-blue-50 border-blue-400 text-blue-900'
-                      : 'bg-slate-50 border-slate-200 text-slate-800'
-                  }`}
-                >
-                  <option value="NEW_MUNI" className="font-extrabold text-blue-700">
-                    ➕ [ CADASTRAR NOVA PREFEITURA NÃO LISTADA ]
-                  </option>
-                  <optgroup label="Prefeituras Mapeadas no Radar">
-                    {municipalities.map((m) => (
-                      <option key={m.id} value={m.id}>
-                        Prefeitura de {m.name} ({m.state}) — Estágio: {m.funnelStage}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
+
+                {/* Direct city name and state text edit inputs */}
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-500 uppercase">Nome da Cidade / Município *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Teresina, Esperantina..."
+                      value={formMuniName}
+                      onChange={(e) => setFormMuniName(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-500 uppercase">Estado (UF) *</label>
+                    <select
+                      value={formState}
+                      onChange={(e) => setFormState(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-lg p-2 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="PI">PI</option>
+                      <option value="MA">MA</option>
+                      <option value="CE">CE</option>
+                      <option value="PB">PB</option>
+                      <option value="RN">RN</option>
+                      <option value="PE">PE</option>
+                      <option value="BA">BA</option>
+                      <option value="TO">TO</option>
+                      <option value="PA">PA</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <label className="block text-[10px] font-bold text-slate-500">Vincular a uma prefeitura existente:</label>
+                  <select
+                    value={formMuniId}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      handleFormMuniChange(val);
+                      const matched = municipalities.find(m => m.id === val);
+                      if (matched) {
+                        setFormMuniName(matched.name);
+                        setFormState(matched.state);
+                      }
+                    }}
+                    required
+                    className={`w-full border rounded-lg p-2 font-bold focus:outline-none focus:ring-2 focus:ring-blue-500 text-xs ${
+                      formMuniId === 'NEW_MUNI'
+                        ? 'bg-blue-50 border-blue-400 text-blue-900'
+                        : 'bg-white border-slate-200 text-slate-800'
+                    }`}
+                  >
+                    <option value="NEW_MUNI" className="font-extrabold text-blue-700">
+                      ➕ [ CADASTRAR NOVA PREFEITURA NÃO LISTADA ]
+                    </option>
+                    <optgroup label="Prefeituras Mapeadas no Radar">
+                      {municipalities.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          Prefeitura de {m.name} ({m.state}) — Estágio: {m.funnelStage}
+                        </option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
               </div>
 
               {/* Sub-form when registering a BRAND NEW Municipality */}
@@ -1887,7 +2011,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
               </div>
 
               {/* Action Buttons */}
-              <div className="pt-2 border-t border-slate-100 flex items-center justify-end gap-3">
+              <div className="pt-2 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -1896,10 +2020,55 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
                   Cancelar
                 </button>
                 <button
-                  type="submit"
-                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-md shadow-blue-500/20"
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (!formMuniId) {
+                      showToast('⚠️ Selecione uma prefeitura.');
+                      return;
+                    }
+                    const selectedMuni = municipalities.find(m => m.id === formMuniId);
+                    const muniName = formMuniId === 'NEW_MUNI' ? newMuniName : (selectedMuni?.name || newMuniName);
+                    const state = formMuniId === 'NEW_MUNI' ? newMuniState : (selectedMuni?.state || newMuniState);
+
+                    const tempInteraction: CRMInteraction = {
+                      id: editingInteraction ? editingInteraction.id : `crm-card-${Date.now()}`,
+                      municipalityId: formMuniId === 'NEW_MUNI' ? 'custom_muni' : formMuniId,
+                      municipalityName: muniName || 'Prefeitura',
+                      state: state?.toUpperCase() || 'PI',
+                      date: formDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+                      type: formType,
+                      contactName: formContactName.trim() || 'Não informado',
+                      contactRole: formContactRole.trim() || '',
+                      summary: formSummary.trim() || 'Registro de interação comercial',
+                      description: formDescription.trim(),
+                      outcome: formOutcome,
+                      nextStep: formNextStep.trim() || undefined,
+                      nextStepDueDate: formNextStepDueDate || undefined,
+                      dealOwner: formDealOwner.trim() || 'José Badotti',
+                    };
+
+                    if (editingInteraction && onEditInteraction) {
+                      onEditInteraction(tempInteraction);
+                    } else {
+                      onAddInteraction(tempInteraction);
+                    }
+
+                    setIsModalOpen(false);
+                    openGoogleCalendar(tempInteraction);
+                    showToast(`📅 Interação salva e aberta no Google Agenda com a cópia do cartão!`);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold px-4 py-2 rounded-xl shadow-md transition-all active:scale-95 flex items-center gap-1.5 cursor-pointer text-xs"
+                  title="Salvar cartão no CRM e abrir no Google Agenda com a cópia completa do registro"
                 >
-                  {editingInteraction ? 'Salvar Alterações no CRM' : 'Salvar Interação no CRM'}
+                  <Calendar className="w-4 h-4 text-indigo-200" />
+                  <span>📅 Salvar + Agendar no Google Agenda</span>
+                </button>
+                <button
+                  type="submit"
+                  className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-5 py-2 rounded-xl transition-all shadow-md shadow-blue-500/20 text-xs"
+                >
+                  {editingInteraction ? 'Salvar Alterações' : 'Salvar Apenas no CRM'}
                 </button>
               </div>
 
@@ -2092,6 +2261,24 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Google Calendar Hub Modal */}
+      <GoogleCalendarHubModal
+        isOpen={isCalendarHubOpen}
+        onClose={() => setIsCalendarHubOpen(false)}
+        interactions={interactions}
+        onShowToast={(msg) => showToast(msg)}
+      />
+
+      {/* Business Card Formatter Modal */}
+      <BusinessCardFormatterModal
+        isOpen={isFormatterModalOpen}
+        onClose={() => setIsFormatterModalOpen(false)}
+        municipalities={municipalities}
+        onSaveInteraction={(newInter) => onAddInteraction(newInter)}
+        onShowToast={(msg) => showToast(msg)}
+        initialMunicipalityId={muniFilter || selectedMunicipality?.id}
+      />
 
     </div>
   );

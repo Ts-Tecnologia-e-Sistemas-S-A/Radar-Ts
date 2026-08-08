@@ -19,6 +19,19 @@ export function calculateCommercialScore(
   m: Municipality,
   daysOffset: number = 0
 ): ScoreBreakdown {
+  if (!m) {
+    return {
+      finalScore: 0,
+      classification: '🔴 Não Visitar',
+      badgeColor: 'bg-red-100 text-red-800 border-red-300',
+      stars: '⭐',
+      additionPoints: [],
+      subtractionPoints: [],
+      effectiveDaysRemaining: 0,
+      projectedStage: 'primeiro_contato',
+    };
+  }
+
   let score = 0;
   const additionPoints: { label: string; points: number }[] = [];
   const subtractionPoints: { label: string; points: number }[] = [];

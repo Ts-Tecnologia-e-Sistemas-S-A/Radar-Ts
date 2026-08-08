@@ -218,25 +218,25 @@ export const BrazilMap: React.FC<BrazilMapProps> = ({
               <span className="font-bold text-sm text-amber-300">
                 {activeHover.name} - {activeHover.state}
               </span>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_COLOR_MAP[activeHover.status].bg} text-white`}>
-                {STATUS_COLOR_MAP[activeHover.status].label}
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${STATUS_COLOR_MAP[activeHover.status]?.bg || 'bg-slate-500'} text-white`}>
+                {STATUS_COLOR_MAP[activeHover.status]?.label || 'Desconhecido'}
               </span>
             </div>
             <div className="space-y-1 text-slate-300">
               <p>
-                <strong className="text-slate-400">Sistema Atual:</strong> {activeHover.currentSystem}
+                <strong className="text-slate-400">Sistema Atual:</strong> {activeHover.currentSystem || 'N/I'}
               </p>
               <p>
                 <strong className="text-slate-400">Vencimento:</strong>{' '}
-                <span className={activeHover.contractDaysRemaining <= 60 ? 'text-red-400 font-bold' : 'text-slate-200'}>
-                  {activeHover.contractDaysRemaining < 0
-                    ? `Encerrado há ${Math.abs(activeHover.contractDaysRemaining)} dias`
-                    : `${activeHover.contractDaysRemaining} dias restantes`}
+                <span className={(activeHover.contractDaysRemaining ?? 0) <= 60 ? 'text-red-400 font-bold' : 'text-slate-200'}>
+                  {(activeHover.contractDaysRemaining ?? 0) < 0
+                    ? `Encerrado há ${Math.abs(activeHover.contractDaysRemaining ?? 0)} dias`
+                    : `${activeHover.contractDaysRemaining ?? 0} dias restantes`}
                 </span>
               </p>
               <p>
                 <strong className="text-slate-400">Valor Estimado:</strong> R${' '}
-                {activeHover.estimatedNewContractValue.toLocaleString('pt-BR')}
+                {(activeHover.estimatedNewContractValue || 0).toLocaleString('pt-BR')}
               </p>
               <div className="flex items-center justify-between pt-1 text-[11px]">
                 <span>Índice Oportunidade (IO):</span>

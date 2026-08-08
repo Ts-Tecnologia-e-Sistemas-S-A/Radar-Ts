@@ -66,95 +66,123 @@ export const Sidebar: React.FC<SidebarProps> = ({
     });
   };
 
-  const menuItems = [
+  const menuSections = [
     {
-      id: 'field_visits' as ActiveTab,
-      label: 'Roteiro de Campo & Vendas',
-      icon: Compass,
-      badge: 'Campo',
-      badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
-      desc: 'Seleção UF, Faixa Temp. & Cartão'
+      title: 'SISTEMA 1: BUSCA DE PREFEITURAS & EDITAIS',
+      systemId: 'system_radar',
+      items: [
+        {
+          id: 'tenders' as ActiveTab,
+          label: 'Monitor de Editais PNCP',
+          icon: SearchCheck,
+          badge: 'Cidade Ativa',
+          badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
+          desc: 'Rastreamento de licitações públicas abertas e prefeituras ativas',
+        },
+        {
+          id: 'alerts' as ActiveTab,
+          label: 'Alertas Comerciais Críticos',
+          icon: BellRing,
+          badge: unreadAlertsCount > 0 ? `${unreadAlertsCount} Alertas` : null,
+          badgeColor: 'bg-red-500 text-white font-bold',
+          desc: 'Contratos vincendos, prazos e impugnações',
+        },
+      ],
     },
     {
-      id: 'dashboard' as ActiveTab,
-      label: 'Dashboard & Mapa',
-      icon: LayoutDashboard,
-      badge: null,
-      desc: 'Visão Geral & Cobertura Brasil'
+      title: 'SISTEMA 2: ROTEIRO DE CAMPO & PROBABILIDADE',
+      systemId: 'system_field',
+      items: [
+        {
+          id: 'field_visits' as ActiveTab,
+          label: 'Roteiros de Campo & Visitas',
+          icon: Compass,
+          badge: 'Operação',
+          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
+          desc: 'Planejamento de rotas, reuniões e atas presenciais',
+        },
+        {
+          id: 'io_score' as ActiveTab,
+          label: 'Calculadora IO & Probabilidade',
+          icon: Calculator,
+          badge: 'Score IO',
+          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
+          desc: 'Algoritmo de viabilidade de fechamento comercial',
+        },
+        {
+          id: 'cockpit' as ActiveTab,
+          label: 'Indicadores Educacionais MEC',
+          icon: GraduationCap,
+          badge: 'IDEB / INEP',
+          badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
+          desc: 'Dados do censo escolar, Fundeb e dores pedagógicas',
+        },
+      ],
     },
     {
-      id: 'tenders' as ActiveTab,
-      label: 'Radar de Licitações',
-      icon: SearchCheck,
-      badge: 'PNCP Live',
-      badgeColor: 'bg-blue-100 text-blue-800',
-      desc: '1. Monitoramento Nacional'
+      title: 'SISTEMA 3: MÓDULO DE FORMULÁRIO & CRM DE VENDAS',
+      systemId: 'system_crm',
+      items: [
+        {
+          id: 'crm' as ActiveTab,
+          label: 'Formulário & Registro CRM',
+          icon: MessageSquare,
+          badge: 'Formulários',
+          badgeColor: 'bg-blue-100 text-blue-800 font-bold',
+          desc: 'Formulário de cadastro de reuniões, e-mails, atas e ligações',
+        },
+        {
+          id: 'funnel' as ActiveTab,
+          label: 'Funil Kanban de Contratos',
+          icon: Kanban,
+          badge: '9 Etapas',
+          badgeColor: 'bg-amber-100 text-amber-800 font-bold',
+          desc: 'Gestão visual da negociação e estágios de proposta',
+        },
+        {
+          id: 'intelligence' as ActiveTab,
+          label: 'Dossiê 360º da Prefeitura',
+          icon: Building2,
+          badge: 'Ficha 360º',
+          badgeColor: 'bg-blue-100 text-blue-800 font-bold',
+          desc: 'Secretários, fornecedores atuais e verbas municipais',
+        },
+        {
+          id: 'competitors' as ActiveTab,
+          label: 'Radar de Concorrentes',
+          icon: Swords,
+          badge: 'Battlecards',
+          badgeColor: 'bg-slate-200 text-slate-800 font-bold',
+          desc: 'Mapeamento de sistemas rivais e pontos fracos',
+        },
+      ],
     },
     {
-      id: 'intelligence' as ActiveTab,
-      label: 'Inteligência Municipal',
-      icon: Building2,
-      badge: null,
-      desc: '2. Contratos & Equipe Técnica'
-    },
-    {
-      id: 'alerts' as ActiveTab,
-      label: 'Alertas Comerciais',
-      icon: BellRing,
-      badge: unreadAlertsCount > 0 ? `${unreadAlertsCount}` : null,
-      badgeColor: 'bg-red-500 text-white font-bold',
-      desc: '3. Notificações & Oportunidades'
-    },
-    {
-      id: 'ai_agent' as ActiveTab,
-      label: 'IA Comercial',
-      icon: Sparkles,
-      badge: 'IA Gemini',
-      badgeColor: 'bg-purple-100 text-purple-800 font-bold',
-      desc: '4. Estratégias & Argumentos'
-    },
-    {
-      id: 'funnel' as ActiveTab,
-      label: 'Funil Comercial',
-      icon: Kanban,
-      badge: '9 Etapas',
-      badgeColor: 'bg-amber-100 text-amber-800',
-      desc: '5. Pipeline CRM em Tempo Real'
-    },
-    {
-      id: 'crm' as ActiveTab,
-      label: 'Interações CRM',
-      icon: MessageSquare,
-      badge: 'Ligaç./Visita',
-      badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
-      desc: '6. Registro de Reuniões & Impugnações'
-    },
-    {
-      id: 'competitors' as ActiveTab,
-      label: 'Radar Concorrentes',
-      icon: Swords,
-      badge: null,
-      desc: '7. Inteligência Competitiva'
-    },
-    {
-      id: 'io_score' as ActiveTab,
-      label: 'Índice Oportunidade (IO)',
-      icon: Calculator,
-      badge: 'Formula SICAP',
-      badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
-      desc: '8. Indicador de Prioridade 0-100'
-    },
-    {
-      id: 'cockpit' as ActiveTab,
-      label: 'Cockpit Educacional',
-      icon: GraduationCap,
-      badge: 'Hub Vendas',
-      badgeColor: 'bg-indigo-100 text-indigo-800',
-      desc: 'Integração Pedagógica & Dores'
+      title: 'SISTEMA 4: COPILOTO IA & PAINEL',
+      systemId: 'system_ai',
+      items: [
+        {
+          id: 'ai_agent' as ActiveTab,
+          label: 'Copiloto Comercial IA',
+          icon: Sparkles,
+          badge: 'IA Gemini',
+          badgeColor: 'bg-purple-100 text-purple-800 font-bold',
+          desc: 'Gerador de pitches, propostas e respostas de editais',
+        },
+        {
+          id: 'dashboard' as ActiveTab,
+          label: 'Dashboard & Mapa Geral',
+          icon: LayoutDashboard,
+          badge: 'Visão Macro',
+          badgeColor: 'bg-slate-100 text-slate-700 font-bold',
+          desc: 'Visão executiva das metas e cobertura geográfica',
+        },
+      ],
     },
   ];
 
-  const currentItem = menuItems.find((item) => item.id === activeTab) || menuItems[0];
+  const allItems = menuSections.flatMap((s) => s.items);
+  const currentItem = allItems.find((item) => item.id === activeTab) || allItems[0];
   const CurrentIcon = currentItem.icon;
 
   const handleSelectTab = (tab: ActiveTab) => {
@@ -165,112 +193,135 @@ export const Sidebar: React.FC<SidebarProps> = ({
   return (
     <>
       {/* Mobile Header Bar Toggle (< lg) */}
-      <div className="lg:hidden bg-slate-900 border-b border-slate-800 text-white px-4 py-2.5 flex items-center justify-between sticky top-[61px] z-30 shadow-md">
-        <div className="flex items-center gap-2.5 min-w-0">
-          <span className="p-1.5 bg-blue-600 rounded-lg text-white shrink-0">
-            <CurrentIcon className="w-4 h-4" />
-          </span>
-          <div className="min-w-0">
-            <span className="text-[10px] uppercase font-extrabold text-blue-400 block tracking-wider">
+      <div className="lg:hidden bg-slate-900 border-b border-slate-800 text-white px-3.5 py-2 flex items-center justify-between sticky top-[57px] z-30 shadow-md">
+        <div className="flex items-center gap-2 min-w-0">
+          <button
+            onClick={() => setIsMobileOpen(true)}
+            className="p-1.5 bg-blue-600 hover:bg-blue-500 rounded-xl text-white shrink-0 active:scale-95 transition-transform flex items-center gap-1.5 px-2.5 font-bold text-xs"
+            title="Abrir Menu de Módulos"
+          >
+            <Menu className="w-4 h-4 text-amber-300" />
+            <span>Menu</span>
+          </button>
+
+          <div className="min-w-0 border-l border-slate-800 pl-2">
+            <span className="text-[9px] uppercase font-extrabold text-blue-400 block tracking-wider leading-none">
               Módulo Ativo:
             </span>
-            <span className="text-xs font-black truncate block text-slate-100">
+            <span className="text-xs font-black truncate block text-slate-100 mt-0.5">
               {currentItem.label}
             </span>
           </div>
         </div>
 
         <button
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-          className="flex items-center gap-1.5 bg-slate-800 hover:bg-slate-700 text-blue-300 border border-slate-700 text-xs font-extrabold px-3 py-1.5 rounded-xl transition-all active:scale-95 shrink-0"
+          onClick={() => setIsMobileOpen(true)}
+          className="flex items-center gap-1 bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-[11px] font-bold px-2.5 py-1 rounded-lg transition-all active:scale-95 shrink-0"
         >
-          {isMobileOpen ? (
-            <>
-              <X className="w-4 h-4 text-amber-400" />
-              <span>Fechar</span>
-            </>
-          ) : (
-            <>
-              <Menu className="w-4 h-4 text-amber-400" />
-              <span>Módulos ({menuItems.length})</span>
-              <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
-            </>
-          )}
+          <span>{allItems.length} Módulos</span>
+          <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
         </button>
       </div>
 
-      {/* Mobile Navigation Drawer Overlay (< lg) */}
+      {/* Mobile Off-Canvas Left Drawer Overlay (< lg) */}
       {isMobileOpen && (
-        <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex flex-col justify-end animate-in fade-in duration-200">
-          <div className="bg-white rounded-t-3xl max-h-[85vh] flex flex-col shadow-2xl border-t border-slate-200 overflow-hidden">
+        <div className="lg:hidden fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-sm flex justify-start animate-in fade-in duration-200">
+          {/* Backdrop Dismiss Area */}
+          <div
+            className="absolute inset-0"
+            onClick={() => setIsMobileOpen(false)}
+          />
+
+          {/* Left Slide-in Drawer Container */}
+          <div className="relative z-10 w-[82vw] max-w-xs h-full bg-slate-900 text-white flex flex-col shadow-2xl border-r border-slate-800 animate-in slide-in-from-left duration-300">
             
             {/* Drawer Header */}
-            <div className="p-4 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
-              <div>
-                <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider block">
-                  MÓDULOS DE INTELIGÊNCIA COMERCIAL
+            <div className="p-4 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-2.5">
+                <span className="p-2 bg-gradient-to-tr from-blue-600 to-indigo-600 rounded-xl text-white shrink-0 shadow-sm">
+                  <CurrentIcon className="w-5 h-5 text-amber-300" />
                 </span>
-                <h3 className="text-sm font-extrabold">Selecione uma Tela do SICAP RADAR</h3>
+                <div>
+                  <span className="text-[10px] font-black text-amber-400 uppercase tracking-wider block">
+                    SICAP RADAR v3.6
+                  </span>
+                  <h3 className="text-xs font-extrabold text-slate-100">Módulos do Sistema</h3>
+                </div>
               </div>
+
               <button
                 onClick={() => setIsMobileOpen(false)}
-                className="p-2 text-slate-400 hover:text-white bg-slate-800 rounded-full"
+                className="p-2 text-slate-400 hover:text-white bg-slate-800 hover:bg-slate-700 rounded-xl transition-colors"
+                aria-label="Fechar Menu"
               >
-                <X className="w-5 h-5" />
+                <X className="w-5 h-5 text-amber-400" />
               </button>
             </div>
 
-            {/* Scrollable Items */}
-            <div className="p-3 overflow-y-auto space-y-1.5 flex-1">
-              {menuItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeTab === item.id;
+            {/* Scrollable Categories & Items */}
+            <div className="p-3 overflow-y-auto space-y-4 flex-1">
+              {menuSections.map((section, idx) => (
+                <div key={idx} className="space-y-1.5">
+                  <div className="px-2 py-0.5">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      {section.title}
+                    </span>
+                  </div>
+                  {section.items.map((item) => {
+                    const Icon = item.icon;
+                    const isActive = activeTab === item.id;
 
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => handleSelectTab(item.id)}
-                    className={`w-full text-left px-3.5 py-3 rounded-2xl transition-all flex items-center justify-between group ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold'
-                        : 'text-slate-800 hover:bg-slate-100 bg-slate-50 border border-slate-100'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 min-w-0">
-                      <span
-                        className={`p-2 rounded-xl shrink-0 ${
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => handleSelectTab(item.id)}
+                        className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between group ${
                           isActive
-                            ? 'bg-white/20 text-white'
-                            : 'bg-white text-slate-700 border border-slate-200'
+                            ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 font-bold ring-1 ring-blue-400/30'
+                            : 'text-slate-300 hover:bg-slate-800/80 bg-slate-800/40 border border-slate-800/60'
                         }`}
                       >
-                        <Icon className="w-5 h-5" />
-                      </span>
-                      <div className="min-w-0">
-                        <span className="text-xs font-black block truncate">{item.label}</span>
-                        <span className={`text-[11px] block truncate ${isActive ? 'text-blue-100' : 'text-slate-500'}`}>
-                          {item.desc}
-                        </span>
-                      </div>
-                    </div>
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span
+                            className={`p-2 rounded-lg shrink-0 ${
+                              isActive
+                                ? 'bg-white/20 text-white'
+                                : 'bg-slate-800 text-slate-400 border border-slate-700'
+                            }`}
+                          >
+                            <Icon className="w-4 h-4" />
+                          </span>
+                          <div className="min-w-0">
+                            <span className="text-xs font-bold block truncate">{item.label}</span>
+                            <span className={`text-[10px] block truncate ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+                              {item.desc}
+                            </span>
+                          </div>
+                        </div>
 
-                    {item.badge && (
-                      <span
-                        className={`text-[10px] px-2.5 py-1 rounded-full shrink-0 font-extrabold ${
-                          item.badgeColor || 'bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                        {item.badge && (
+                          <span
+                            className={`text-[9px] px-2 py-0.5 rounded-full shrink-0 font-extrabold ${
+                              item.badgeColor || 'bg-slate-800 text-slate-300'
+                            }`}
+                          >
+                            {item.badge}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
             </div>
 
-            {/* Footer */}
-            <div className="p-3 bg-slate-50 border-t border-slate-100 text-center text-xs text-slate-500 font-medium">
-              SICAP RADAR v3.6 — Otimizado para Dispositivos Móveis
+            {/* Drawer Footer */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between text-xs text-slate-400">
+              <span className="text-[11px] font-medium text-slate-400">SICAP Radar Comercial</span>
+              <span className="flex items-center gap-1.5 text-[10px] text-emerald-400 font-bold bg-emerald-950/80 border border-emerald-500/30 px-2 py-0.5 rounded-full">
+                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                Online
+              </span>
             </div>
 
           </div>
@@ -309,81 +360,92 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </button>
           </div>
 
-          <nav className="space-y-1">
-            {menuItems.map((item) => {
-              const Icon = item.icon;
-              const isActive = activeTab === item.id;
-
-              if (isCollapsed) {
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => onTabChange(item.id)}
-                    title={`${item.label} — ${item.desc}`}
-                    className={`w-full p-2.5 rounded-xl transition-all flex flex-col items-center justify-center relative group ${
-                      isActive
-                        ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
-                        : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
-                    }`}
-                  >
-                    <Icon className="w-5 h-5" />
-                    
-                    {/* Tiny Indicator Dot if badge or unread alerts */}
-                    {item.id === 'alerts' && unreadAlertsCount ? (
-                      <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse border border-white" />
-                    ) : item.badge ? (
-                      <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border border-white" />
-                    ) : null}
-
-                    {/* Tooltip on hover */}
-                    <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 flex flex-col">
-                      <span>{item.label}</span>
-                      <span className="text-[10px] font-normal text-slate-300">{item.desc}</span>
-                    </div>
-                  </button>
-                );
-              }
-
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => onTabChange(item.id)}
-                  className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between group ${
-                    isActive
-                      ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 font-semibold'
-                      : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
-                  }`}
-                >
-                  <div className="flex items-center gap-3 min-w-0">
-                    <span
-                      className={`p-2 rounded-lg transition-colors ${
-                        isActive
-                          ? 'bg-white/20 text-white'
-                          : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200 group-hover:text-slate-800'
-                      }`}
-                    >
-                      <Icon className="w-4 h-4" />
+          <nav className="space-y-3 overflow-y-auto max-h-[calc(100vh-140px)] pr-1">
+            {menuSections.map((section, idx) => (
+              <div key={idx} className="space-y-1">
+                {!isCollapsed && (
+                  <div className="px-3 pt-2 pb-1">
+                    <span className="text-[9px] font-black uppercase tracking-wider text-slate-400 block">
+                      {section.title}
                     </span>
-                    <div className="min-w-0">
-                      <span className="text-xs font-semibold block truncate">{item.label}</span>
-                      <span className={`text-[10px] block truncate ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
-                        {item.desc}
-                      </span>
-                    </div>
                   </div>
+                )}
+                {section.items.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeTab === item.id;
 
-                  {item.badge && (
-                    <span
-                      className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 font-medium ${
-                        item.badgeColor || 'bg-slate-100 text-slate-600'
+                  if (isCollapsed) {
+                    return (
+                      <button
+                        key={item.id}
+                        onClick={() => onTabChange(item.id)}
+                        title={`${item.label} — ${item.desc}`}
+                        className={`w-full p-2.5 rounded-xl transition-all flex flex-col items-center justify-center relative group ${
+                          isActive
+                            ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20'
+                            : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900'
+                        }`}
+                      >
+                        <Icon className="w-5 h-5" />
+                        
+                        {/* Indicator Dot */}
+                        {item.id === 'alerts' && unreadAlertsCount ? (
+                          <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse border border-white" />
+                        ) : item.badge ? (
+                          <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border border-white" />
+                        ) : null}
+
+                        {/* Tooltip on hover */}
+                        <div className="absolute left-full ml-3 px-3 py-1.5 bg-slate-900 text-white text-xs font-bold rounded-xl shadow-xl whitespace-nowrap opacity-0 group-hover:opacity-100 pointer-events-none transition-all z-50 flex flex-col">
+                          <span>{item.label}</span>
+                          <span className="text-[10px] font-normal text-slate-300">{item.desc}</span>
+                        </div>
+                      </button>
+                    );
+                  }
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => onTabChange(item.id)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl transition-all flex items-center justify-between group ${
+                        isActive
+                          ? 'bg-blue-600 text-white shadow-md shadow-blue-500/20 font-semibold'
+                          : 'text-slate-700 hover:bg-slate-100 hover:text-slate-900'
                       }`}
                     >
-                      {item.badge}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span
+                          className={`p-2 rounded-lg transition-colors ${
+                            isActive
+                              ? 'bg-white/20 text-white'
+                              : 'bg-slate-100 text-slate-600 group-hover:bg-slate-200 group-hover:text-slate-800'
+                          }`}
+                        >
+                          <Icon className="w-4 h-4" />
+                        </span>
+                        <div className="min-w-0">
+                          <span className="text-xs font-semibold block truncate">{item.label}</span>
+                          <span className={`text-[10px] block truncate ${isActive ? 'text-blue-100' : 'text-slate-400'}`}>
+                            {item.desc}
+                          </span>
+                        </div>
+                      </div>
+
+                      {item.badge && (
+                        <span
+                          className={`text-[10px] px-2 py-0.5 rounded-full shrink-0 font-medium ${
+                            item.badgeColor || 'bg-slate-100 text-slate-600'
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
           </nav>
         </div>
 

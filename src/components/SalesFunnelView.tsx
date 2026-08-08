@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Municipality, FunnelStage, CRMInteraction } from '../types';
+import { CRMInteractionsView } from './CRMInteractionsView';
 import { 
   Kanban, 
   Building2, 
@@ -26,7 +27,8 @@ import {
   Bot,
   ExternalLink,
   Pencil,
-  Trash2
+  Trash2,
+  MessageSquare
 } from 'lucide-react';
 
 interface SalesFunnelViewProps {
@@ -37,8 +39,12 @@ interface SalesFunnelViewProps {
   onAddCRMInteraction?: (newInteraction: CRMInteraction) => void;
   onEditCRMInteraction?: (updatedInteraction: CRMInteraction) => void;
   onDeleteCRMInteraction?: (id: string) => void;
+  onAddMunicipality?: (newMuni: Municipality) => void;
+  onUpdateMunicipality?: (updated: Municipality) => void;
+  selectedMunicipality?: Municipality | null;
   onNavigateTab?: (tab: any) => void;
   onOpenAIForMuni?: (m: Municipality) => void;
+  initialSubTab?: 'kanban' | 'crm';
 }
 
 const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
@@ -61,9 +67,21 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   onAddCRMInteraction,
   onEditCRMInteraction,
   onDeleteCRMInteraction,
+  onAddMunicipality,
+  onUpdateMunicipality,
+  selectedMunicipality,
   onNavigateTab,
   onOpenAIForMuni,
+  initialSubTab = 'kanban'
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'kanban' | 'crm'>(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState('');
   
@@ -84,8 +102,8 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   // Filtering
   const filtered = municipalities.filter((m) => {
     const matchesSearch =
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.currentSystem.toLowerCase().includes(searchTerm.toLowerCase());
+      (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+      (m.currentSystem || '').toLowerCase().includes(searchTerm.toLowerCase());
     const matchesState = !selectedState || m.state === selectedState;
     return matchesSearch && matchesState;
   });
@@ -145,52 +163,106 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   return (
     <div className="space-y-6">
       
-      {/* Header */}
-      <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-amber-600 font-bold text-xs uppercase tracking-wider">
-            <Kanban className="w-4 h-4" />
-            <span>Módulo 6: Funil Comercial em Tempo Real (CRM)</span>
+      {/* Header & Sub-tab Navigation */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-amber-600 font-bold text-xs uppercase tracking-wider">
+              <Kanban className="w-4 h-4 text-amber-600" />
+              <span>Pipeline & CRM de Vendas Licitatório</span>
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mt-1">
+              Gestão Unificada de Oportunidades & Relacionamento
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Alterne entre a visão Kanban por estágios de negociação e o registro completo de interações comerciais com os municípios.
+            </p>
           </div>
-          <h2 className="text-xl font-extrabold text-slate-900 mt-1">
-            Pipeline Comercial Licitatório (9 Etapas)
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Acompanhamento de ponta a ponta desde a prospecção inicial até a implantação das soluções SICAP nos municípios.
-          </p>
+
+          {/* Sub-tab Navigation Switcher */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-inner shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('kanban')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'kanban'
+                  ? 'bg-amber-500 text-slate-950 shadow-md ring-1 ring-amber-400'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Kanban className="w-4 h-4" />
+              <span>Funil Kanban (9 Etapas)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('crm')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'crm'
+                  ? 'bg-blue-600 text-white shadow-md ring-1 ring-blue-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Histórico de Ações CRM ({crmInteractions.length})</span>
+            </button>
+          </div>
         </div>
 
-        {/* Filters */}
-        <div className="flex items-center gap-3">
-          <select
-            value={selectedState}
-            onChange={(e) => setSelectedState(e.target.value)}
-            className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
-          >
-            <option value="">Todos os Estados (UF)</option>
-            {Array.from(new Set(municipalities.map((m) => m.state)))
-              .sort()
-              .map((st) => (
-                <option key={st} value={st}>
-                  {st === 'PI' ? 'Piauí (PI)' : st === 'MA' ? 'Maranhão (MA)' : st === 'CE' ? 'Ceará (CE)' : st}
-                </option>
-              ))}
-          </select>
+        {/* Filters only for Kanban view */}
+        {activeSubTab === 'kanban' && (
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100 gap-3 flex-wrap">
+            <div className="text-xs text-slate-500 font-semibold">
+              Mostrando <strong className="text-slate-900">{filtered.length}</strong> município(s) no funil
+            </div>
 
-          <div className="relative">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
-            <input
-              type="text"
-              placeholder="Buscar cidade ou concorrente..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500 w-52"
-            />
+            <div className="flex items-center gap-3">
+              <select
+                value={selectedState}
+                onChange={(e) => setSelectedState(e.target.value)}
+                className="bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                <option value="">Todos os Estados (UF)</option>
+                {Array.from(new Set(municipalities.map((m) => m.state)))
+                  .sort()
+                  .map((st) => (
+                    <option key={st} value={st}>
+                      {st === 'PI' ? 'Piauí (PI)' : st === 'MA' ? 'Maranhão (MA)' : st === 'CE' ? 'Ceará (CE)' : st}
+                    </option>
+                  ))}
+              </select>
+
+              <div className="relative">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Buscar prefeitura ou sistema..."
+                  className="bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-1.5 text-xs text-slate-800 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500 w-48 sm:w-64"
+                />
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Kanban Board Container */}
+      {activeSubTab === 'crm' ? (
+        <CRMInteractionsView
+          interactions={crmInteractions}
+          municipalities={municipalities}
+          onAddInteraction={onAddCRMInteraction}
+          onEditInteraction={onEditCRMInteraction}
+          onDeleteInteraction={onDeleteCRMInteraction}
+          onAddMunicipality={onAddMunicipality}
+          onUpdateMunicipality={onUpdateMunicipality}
+          selectedMunicipality={selectedMunicipality}
+          onSelectMunicipality={onSelectMunicipality}
+          onNavigateTab={onNavigateTab}
+        />
+      ) : (
+        <>
+          {/* Kanban Board Container */}
       <div className="flex gap-4 overflow-x-auto pb-6 pt-2">
         {FUNNEL_STAGES_CONFIG.map((stageCfg) => {
           const stageMunis = filtered.filter((m) => m.funnelStage === stageCfg.id);
@@ -598,6 +670,8 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
 
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>

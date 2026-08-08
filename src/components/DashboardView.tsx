@@ -36,13 +36,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateTab,
   onOpenAISystem,
 }) => {
-  const highIoMunicipalities = [...municipalities].sort((a, b) => b.ioScore - a.ioScore);
-  const criticalAlerts = alerts.filter((a) => a.severity === 'critico');
+  const highIoMunicipalities = [...(municipalities || [])].sort((a, b) => ((b && b.ioScore) || 0) - ((a && a.ioScore) || 0));
+  const criticalAlerts = (alerts || []).filter((a) => a && a.severity === 'critico');
 
   // Stats
-  const totalValue = municipalities.reduce((acc, m) => acc + m.estimatedNewContractValue, 0);
-  const totalClients = municipalities.filter((m) => m.status === 'cliente').length;
-  const totalUpcoming = municipalities.filter((m) => m.status === 'licitacao_proxima' || m.status === 'edital_publicado').length;
+  const totalValue = (municipalities || []).reduce((acc, m) => acc + ((m && m.estimatedNewContractValue) || 0), 0);
+  const totalClients = (municipalities || []).filter((m) => m && m.status === 'cliente').length;
+  const totalUpcoming = (municipalities || []).filter((m) => m && (m.status === 'licitacao_proxima' || m.status === 'edital_publicado')).length;
   const avgIo = Math.round(municipalities.reduce((acc, m) => acc + m.ioScore, 0) / (municipalities.length || 1));
 
   return (
@@ -207,34 +207,34 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             : 'bg-yellow-500'
                         }`}
                       >
-                        {m.status.replace('_', ' ').toUpperCase()}
+                        {(m.status || 'sem_status').replace(/_/g, ' ').toUpperCase()}
                       </span>
                     </div>
 
                     <div className="flex items-center gap-1 text-xs font-black text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-lg border border-emerald-200">
                       <span>IO:</span>
-                      <span>{m.ioScore}</span>
+                      <span>{m.ioScore ?? 0}</span>
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-2 mt-2 text-xs text-slate-600">
                     <div>
                       <span className="text-slate-400 block text-[10px]">Concorrente Atual:</span>
-                      <span className="font-medium text-slate-800 truncate block">{m.currentSystem}</span>
+                      <span className="font-medium text-slate-800 truncate block">{m.currentSystem || 'N/I'}</span>
                     </div>
                     <div>
                       <span className="text-slate-400 block text-[10px]">Vencimento / Status:</span>
                       <span className="font-bold text-slate-900">
-                        {m.contractDaysRemaining < 0
-                          ? `Encerrado há ${Math.abs(m.contractDaysRemaining)} dias`
-                          : `${m.contractDaysRemaining} dias restantes`}
+                        {(m.contractDaysRemaining ?? 0) < 0
+                          ? `Encerrado há ${Math.abs(m.contractDaysRemaining ?? 0)} dias`
+                          : `${m.contractDaysRemaining ?? 0} dias restantes`}
                       </span>
                     </div>
                   </div>
 
                   <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/60">
                     <span className="text-xs font-semibold text-blue-700">
-                      R$ {m.estimatedNewContractValue.toLocaleString('pt-BR')}
+                      R$ {(m.estimatedNewContractValue || 0).toLocaleString('pt-BR')}
                     </span>
 
                     <button
@@ -277,7 +277,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {selectedMunicipality.name} - {selectedMunicipality.state}
                 </h3>
                 <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-xs font-bold px-2.5 py-0.5 rounded-full">
-                  População: {selectedMunicipality.population.toLocaleString('pt-BR')} hab
+                  População: {(selectedMunicipality.population || 0).toLocaleString('pt-BR')} hab
                 </span>
               </div>
               <p className="text-xs text-slate-400 mt-1">
@@ -318,7 +318,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">
               <span className="text-slate-400 block">Valor Estimado:</span>
               <span className="text-lg font-black text-emerald-400">
-                R$ {selectedMunicipality.estimatedNewContractValue.toLocaleString('pt-BR')}
+                R$ {(selectedMunicipality.estimatedNewContractValue || 0).toLocaleString('pt-BR')}
               </span>
             </div>
             <div className="bg-slate-800/60 p-3 rounded-xl border border-slate-700/60">

@@ -68,7 +68,7 @@ export const AICommercialAgentView: React.FC<AICommercialAgentViewProps> = ({
       contactName: 'IA Comercial (Playbook Automático)',
       contactRole: 'Gerador de Inteligência de Mercado',
       summary: `Plano Estratégico de Abordagem IA — ${activeMuni.name} (${activeMuni.state})`,
-      description: `🎯 ESTRATÉGIA DE ABORDAGEM:\n${strategy.approachStrategy}\n\n⚔️ ARGUMENTOS CONTRA CONCORRENTE (${activeMuni.currentSystem}):\n${strategy.counterArguments.map((a, i) => `${i + 1}. ${a}`).join('\n')}\n\n🗓️ CRONOGRAMA DE 6 SEMANAS:\n${strategy.commercialTimeline.map((t) => `- ${t.phase} (${t.duration}): ${t.action}`).join('\n')}\n\n📄 MINUTA DE INEXIGIBILIDADE GERADA COM SUCESSO.`,
+      description: `🎯 ESTRATÉGIA DE ABORDAGEM:\n${strategy.approachStrategy}\n\n⚔️ ARGUMENTOS CONTRA CONCORRENTE (${activeMuni.currentSystem || 'Atual'}):\n${(strategy.counterArguments || []).map((a, i) => `${i + 1}. ${a}`).join('\n')}\n\n🗓️ CRONOGRAMA DE 6 SEMANAS:\n${(strategy.commercialTimeline || []).map((t) => `- ${t.phase} (${t.duration}): ${t.action}`).join('\n')}\n\n📄 MINUTA DE INEXIGIBILIDADE GERADA COM SUCESSO.`,
       outcome: 'positivo',
       nextStep: 'Executar plano comercial de 6 semanas e iniciar contatos',
       nextStepDueDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10),
@@ -387,7 +387,7 @@ export const AICommercialAgentView: React.FC<AICommercialAgentViewProps> = ({
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              {aiResult.counterArguments.map((arg, idx) => (
+              {(aiResult.counterArguments || []).map((arg, idx) => (
                 <div key={idx} className="bg-red-50/60 border border-red-100 p-3.5 rounded-xl text-xs space-y-1">
                   <span className="font-extrabold text-red-900 block text-[11px]">PONTO DE ATAQUE #{idx + 1}</span>
                   <p className="text-red-800 leading-relaxed">{arg}</p>
@@ -424,7 +424,7 @@ export const AICommercialAgentView: React.FC<AICommercialAgentViewProps> = ({
             </div>
 
             <div className="space-y-2">
-              {aiResult.commercialTimeline.map((step, idx) => (
+              {(aiResult.commercialTimeline || []).map((step, idx) => (
                 <div key={idx} className="p-3 bg-slate-50 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-xs">
                   <div className="flex items-center gap-3">
                     <span className="w-6 h-6 rounded-full bg-blue-600 text-white font-bold text-[11px] flex items-center justify-center shrink-0">
@@ -454,7 +454,7 @@ export const AICommercialAgentView: React.FC<AICommercialAgentViewProps> = ({
               </div>
 
               <div className="space-y-2">
-                {aiResult.decisionMakers.map((dm, idx) => (
+                {(aiResult.decisionMakers || []).map((dm, idx) => (
                   <div key={idx} className="p-3 bg-indigo-50/50 rounded-xl border border-indigo-100 text-xs">
                     <span className="font-extrabold text-indigo-900 block">{dm.role}</span>
                     <p className="text-indigo-800 mt-0.5">{dm.strategy}</p>
@@ -471,7 +471,7 @@ export const AICommercialAgentView: React.FC<AICommercialAgentViewProps> = ({
               </div>
 
               <div className="space-y-2">
-                {aiResult.risksAndMitigation.map((rm, idx) => (
+                {(aiResult.risksAndMitigation || []).map((rm, idx) => (
                   <div key={idx} className="p-3 bg-orange-50/50 rounded-xl border border-orange-100 text-xs space-y-1">
                     <span className="font-bold text-orange-900 block">Risco: {rm.risk}</span>
                     <p className="text-orange-800"><strong className="text-slate-900">Mitigação:</strong> {rm.mitigation}</p>

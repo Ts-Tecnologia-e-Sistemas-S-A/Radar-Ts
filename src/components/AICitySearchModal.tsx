@@ -60,8 +60,8 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
     existingMunicipalities.some(
       (m) =>
         m.id === analyzedMuni.id ||
-        (m.name.trim().toLowerCase() === analyzedMuni.name.trim().toLowerCase() &&
-          m.state.trim().toLowerCase() === analyzedMuni.state.trim().toLowerCase())
+        ((m.name || '').trim().toLowerCase() === (analyzedMuni.name || '').trim().toLowerCase() &&
+          (m.state || '').trim().toLowerCase() === (analyzedMuni.state || '').trim().toLowerCase())
     )
   );
 

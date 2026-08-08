@@ -48,7 +48,7 @@ export const EducationalCockpitBridge: React.FC<EducationalCockpitBridgeProps> =
           >
             {municipalities.map((m) => (
               <option key={m.id} value={m.id}>
-                {m.name} ({m.state}) - IDEB: {m.educationalMetrics.ideb}
+                {m.name} ({m.state}) - IDEB: {m.educationalMetrics?.ideb || 0}
               </option>
             ))}
           </select>
@@ -73,7 +73,7 @@ export const EducationalCockpitBridge: React.FC<EducationalCockpitBridgeProps> =
               </div>
             </div>
             <span className="bg-indigo-100 text-indigo-800 font-bold text-[10px] px-2.5 py-1 rounded-full">
-              IDEB: {activeMuni.educationalMetrics.ideb} / Meta {activeMuni.educationalMetrics.idebTarget}
+              IDEB: {activeMuni?.educationalMetrics?.ideb || 0} / Meta {activeMuni?.educationalMetrics?.idebTarget || 0}
             </span>
           </div>
 
@@ -81,7 +81,7 @@ export const EducationalCockpitBridge: React.FC<EducationalCockpitBridgeProps> =
             <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
               <span className="font-bold text-slate-800 block text-[11px]">Gargalos Pedagógicos Identificados:</span>
               <ul className="space-y-1 text-slate-600 list-disc list-inside">
-                {activeMuni.educationalMetrics.mainPains.map((p, i) => (
+                {(activeMuni?.educationalMetrics?.mainPains || []).map((p, i) => (
                   <li key={i}>{p}</li>
                 ))}
               </ul>
@@ -90,12 +90,12 @@ export const EducationalCockpitBridge: React.FC<EducationalCockpitBridgeProps> =
             <div className="grid grid-cols-2 gap-3">
               <div className="p-3 bg-red-50 border border-red-200 rounded-xl">
                 <span className="text-red-700 font-bold block text-[10px] uppercase">Taxa de Evasão</span>
-                <span className="text-lg font-black text-red-900">{activeMuni.educationalMetrics.dropoutRate}%</span>
+                <span className="text-lg font-black text-red-900">{activeMuni?.educationalMetrics?.dropoutRate || 0}%</span>
               </div>
               <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
                 <span className="text-emerald-700 font-bold block text-[10px] uppercase">Orçamento Fundeb</span>
                 <span className="text-lg font-black text-emerald-900">
-                  R$ {(activeMuni.educationalMetrics.fundebBudget / 1000000).toFixed(1)}M
+                  R$ {(((activeMuni?.educationalMetrics?.fundebBudget || 0)) / 1000000).toFixed(1)}M
                 </span>
               </div>
             </div>
@@ -117,7 +117,7 @@ export const EducationalCockpitBridge: React.FC<EducationalCockpitBridgeProps> =
               </div>
             </div>
             <span className="bg-emerald-100 text-emerald-800 font-bold text-[10px] px-2.5 py-1 rounded-full">
-              IO SICAP: {activeMuni.ioScore}/100
+              IO SICAP: {activeMuni?.ioScore || 0}/100
             </span>
           </div>
 
@@ -125,16 +125,16 @@ export const EducationalCockpitBridge: React.FC<EducationalCockpitBridgeProps> =
             <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl space-y-1">
               <span className="font-bold text-amber-900 block text-[11px]">Timing da Abordagem Licitatória:</span>
               <p className="text-amber-800 leading-relaxed">
-                Contrato atual da <strong>{activeMuni.currentSystem}</strong> expira em{' '}
-                <strong>{activeMuni.contractDaysRemaining} dias</strong>. Probabilidade de nova licitação é de{' '}
-                <strong>{activeMuni.tenderProbability}%</strong>.
+                Contrato atual da <strong>{activeMuni?.currentSystem || 'Empresa Concorrente'}</strong> expira em{' '}
+                <strong>{activeMuni?.contractDaysRemaining ?? 0} dias</strong>. Probabilidade de nova licitação é de{' '}
+                <strong>{activeMuni?.tenderProbability || 0}%</strong>.
               </p>
             </div>
 
             <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl flex items-center justify-between">
               <div>
                 <span className="text-blue-900 font-bold block">Valor do Pitch Comercial</span>
-                <span className="text-xs text-blue-700">Estimativa R$ {activeMuni.estimatedNewContractValue.toLocaleString('pt-BR')}</span>
+                <span className="text-xs text-blue-700">Estimativa R$ {(activeMuni?.estimatedNewContractValue || 0).toLocaleString('pt-BR')}</span>
               </div>
               <button
                 onClick={() => onGenerateAIStrategy(activeMuni)}

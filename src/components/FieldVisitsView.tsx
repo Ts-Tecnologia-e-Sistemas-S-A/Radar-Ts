@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { Municipality, CRMInteraction, FunnelStage } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
+import { openGoogleCalendar, formatCardDetailsForCalendar } from '../utils/googleCalendar';
+import { GoogleCalendarHubModal } from './GoogleCalendarHubModal';
+import { BusinessCardFormatterModal } from './BusinessCardFormatterModal';
 import { AICitySearchModal } from './AICitySearchModal';
 import { 
   Navigation, 
@@ -26,21 +29,29 @@ import {
   ArrowRight, 
   Bot, 
   Eye, 
+  CreditCard, 
   Star, 
   Check,
+  Pencil,
+  Trash2,
   Filter,
   Layers,
   Award,
   ChevronRight,
   Loader2,
-  Database
+  Database,
+  SlidersHorizontal,
+  ArrowUpDown
 } from 'lucide-react';
 
 interface FieldVisitsViewProps {
   municipalities: Municipality[];
   crmInteractions: CRMInteraction[];
   onAddCRMInteraction: (newInteraction: CRMInteraction) => void;
+  onEditCRMInteraction?: (updatedInteraction: CRMInteraction) => void;
+  onDeleteCRMInteraction?: (id: string) => void;
   onUpdateFunnelStage: (municipalityId: string, newStage: FunnelStage) => void;
+  onUpdateMunicipality?: (updated: Municipality) => void;
   onSelectMunicipality: (m: Municipality) => void;
   onNavigateTab: (tab: string) => void;
   onAddMunicipality: (newMuni: Municipality) => void;
@@ -51,7 +62,10 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
   municipalities,
   crmInteractions,
   onAddCRMInteraction,
+  onEditCRMInteraction,
+  onDeleteCRMInteraction,
   onUpdateFunnelStage,
+  onUpdateMunicipality,
   onSelectMunicipality,
   onNavigateTab,
   onAddMunicipality,
@@ -83,13 +97,21 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     }
   }, [selectedMunicipality, municipalities]);
 
-  // 4. Filters & Search
+  // 4. Filters, Search & Sorting
   const [searchTerm, setSearchTerm] = useState('');
   const [tempFilter, setTempFilter] = useState<'all' | 'maxima' | 'muito_quente' | 'quente' | 'monitorar' | 'baixa'>('all');
+  const [sortBy, setSortBy] = useState<'cards' | 'score' | 'recente' | 'nome'>('cards');
 
-  // 5. Cartão de Visita / New Interaction Modal
+  // 5. Cartão de Visita / Interaction Modal State
   const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
+  const [isCalendarHubOpen, setIsCalendarHubOpen] = useState(false);
+  const [isFormatterModalOpen, setIsFormatterModalOpen] = useState(false);
+  const [editingInteraction, setEditingInteraction] = useState<CRMInteraction | null>(null);
   const [visitMuniId, setVisitMuniId] = useState<string>('');
+  const [visitMuniName, setVisitMuniName] = useState<string>('');
+  const [visitState, setVisitState] = useState<string>('MA');
+  const [visitType, setVisitType] = useState<CRMInteraction['type']>('visita');
+  const [visitDate, setVisitDate] = useState<string>('');
   const [contactName, setContactName] = useState('');
   const [contactRole, setContactRole] = useState('Secretária de Educação');
   const [contactPhone, setContactPhone] = useState('');
@@ -107,18 +129,86 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Dedicated City Name & Data Editing Modal State
+  const [isEditCityModalOpen, setIsEditCityModalOpen] = useState(false);
+  const [editingCityTarget, setEditingCityTarget] = useState<Municipality | null>(null);
+  const [editCityName, setEditCityName] = useState('');
+  const [editCityState, setEditCityState] = useState('MA');
+  const [editCitySystem, setEditCitySystem] = useState('');
+  const [editCityFunnel, setEditCityFunnel] = useState<FunnelStage>('prospectado');
+
+  const handleOpenEditCityModal = (m: Municipality) => {
+    setEditingCityTarget(m);
+    setEditCityName(m.name);
+    setEditCityState(m.state);
+    setEditCitySystem(m.currentSystem || 'Ainda sem contrato');
+    setEditCityFunnel(m.funnelStage || 'prospectado');
+    setIsEditCityModalOpen(true);
+  };
+
+  const handleSaveCityModal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingCityTarget || !editCityName.trim()) return;
+
+    const updatedMuni: Municipality = {
+      ...editingCityTarget,
+      name: editCityName.trim(),
+      state: editCityState.trim().toUpperCase(),
+      currentSystem: editCitySystem.trim() || editingCityTarget.currentSystem,
+      funnelStage: editCityFunnel,
+    };
+
+    if (onUpdateMunicipality) {
+      onUpdateMunicipality(updatedMuni);
+    }
+    if (activeCityId === editingCityTarget.id) {
+      onSelectMunicipality(updatedMuni);
+    }
+    setIsEditCityModalOpen(false);
+    showToast(`✏️ Prefeitura de ${updatedMuni.name} (${updatedMuni.state}) atualizada com sucesso!`);
+  };
+
   // AI Copilot for current active city
   const [isAiPitchOpen, setIsAiPitchOpen] = useState(false);
   const [aiQuestion, setAiQuestion] = useState('');
   const [aiResponseText, setAiResponseText] = useState('');
   const [isAiLoading, setIsAiLoading] = useState(false);
 
+  // Filter inside active city's interaction history
+  const [interactionSearchTerm, setInteractionSearchTerm] = useState('');
+  const [interactionTypeFilter, setInteractionTypeFilter] = useState<string>('all');
+
+  // Smooth scroll to city workstation when opening a city on mobile or desktop
+  const handleOpenCity = (m: Municipality) => {
+    if (!m) return;
+    setActiveCityId(m.id);
+    if (onSelectMunicipality) {
+      onSelectMunicipality(m);
+    }
+    showToast(`📍 Cidade de ${m.name} (${m.state}) aberta! Cartões de visita e histórico carregados abaixo.`);
+    setTimeout(() => {
+      const el = document.getElementById('active-city-workstation');
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const scrollTop = window.pageYOffset || document.documentElement.scrollTop;
+        const targetY = rect.top + scrollTop - 100;
+        window.scrollTo({ top: targetY > 0 ? targetY : 0, behavior: 'smooth' });
+      }
+    }, 100);
+  };
+
   // Classify all municipalities with Score & Temperature Range
   const classifiedMunicipalities = municipalities
     .map((m) => {
       const scoreBreakdown = calculateCommercialScore(m);
       const score = scoreBreakdown.finalScore;
-      const mInteractions = crmInteractions.filter((i) => i.municipalityId === m.id);
+      const mInteractions = (crmInteractions || []).filter(
+        (i) =>
+          i &&
+          (i.municipalityId === m.id ||
+            (i.municipalityId && m.id && i.municipalityId.toLowerCase() === m.id.toLowerCase()) ||
+            (i.municipalityName && m.name && i.municipalityName.toLowerCase().trim() === m.name.toLowerCase().trim()))
+      );
       const lastInteraction = mInteractions[0] || null;
 
       let tempCategory: 'maxima' | 'muito_quente' | 'quente' | 'monitorar' | 'baixa' = 'baixa';
@@ -173,19 +263,52 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
         lastInteraction,
       };
     })
-    .sort((a, b) => b.score - a.score);
+    .sort((a, b) => (b.score || 0) - (a.score || 0));
 
-  // Filtered list by Selected State + Search + Temperature Tab
-  const stateMunicipalities = classifiedMunicipalities.filter(({ m, tempCategory }) => {
-    const matchesState = !selectedState || m.state === selectedState;
-    const matchesSearch =
-      !searchTerm ||
-      m.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      m.currentSystem.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesTemp = tempFilter === 'all' || tempCategory === tempFilter;
+  // Filtered and Sorted list by Selected State + Search + Temperature Tab + Sort Mode
+  const stateMunicipalities = classifiedMunicipalities
+    .filter(({ m, tempCategory }) => {
+      if (!m) return false;
+      const matchesState = !selectedState || m.state === selectedState;
+      const matchesSearch =
+        !searchTerm ||
+        (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (m.currentSystem || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const matchesTemp = tempFilter === 'all' || tempCategory === tempFilter;
 
-    return matchesState && matchesSearch && matchesTemp;
-  });
+      return matchesState && matchesSearch && matchesTemp;
+    })
+    .sort((a, b) => {
+      if (!a || !b) return 0;
+      if (sortBy === 'cards') {
+        // Priority 1: Number of registered cards / interactions (descending)
+        const countA = (a.mInteractions || []).length;
+        const countB = (b.mInteractions || []).length;
+        const countDiff = countB - countA;
+        if (countDiff !== 0) return countDiff;
+        // Tie-breaker: Commercial Score IO
+        return (b.score || 0) - (a.score || 0);
+      }
+      if (sortBy === 'score') {
+        // Priority 1: Commercial Score IO (descending)
+        const scoreDiff = (b.score || 0) - (a.score || 0);
+        if (scoreDiff !== 0) return scoreDiff;
+        return (b.mInteractions || []).length - (a.mInteractions || []).length;
+      }
+      if (sortBy === 'recente') {
+        // Priority 1: Date of most recent interaction
+        const dateA = a.lastInteraction?.date || '';
+        const dateB = b.lastInteraction?.date || '';
+        if (dateA && dateB) return dateB.localeCompare(dateA);
+        if (dateB) return 1;
+        if (dateA) return -1;
+        return (b.mInteractions || []).length - (a.mInteractions || []).length;
+      }
+      if (sortBy === 'nome') {
+        return (a.m?.name || '').localeCompare(b.m?.name || '', 'pt-BR');
+      }
+      return 0;
+    });
 
   // Currently focused municipality object
   const activeMunicipalityData = classifiedMunicipalities.find(({ m }) => m.id === activeCityId);
@@ -210,7 +333,12 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
 
   // Open "Criar Cartão de Visita" Modal
   const handleOpenVisitModalForCity = (m: Municipality) => {
+    setEditingInteraction(null);
     setVisitMuniId(m.id);
+    setVisitMuniName(m.name);
+    setVisitState(m.state);
+    setVisitType('visita');
+    setVisitDate(new Date().toISOString().slice(0, 16).replace('T', ' '));
     setContactName(m.keyContacts?.[0]?.name || 'Secretária de Educação');
     setContactRole(m.keyContacts?.[0]?.role || 'Secretária de Educação');
     setContactPhone(m.keyContacts?.[0]?.phone || '');
@@ -225,33 +353,134 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setIsVisitModalOpen(true);
   };
 
-  // Save Cartão de Visita
+  // Open "Editar Cartão de Visita" Modal for an existing interaction
+  const handleOpenEditModalForInteraction = (item: CRMInteraction) => {
+    setEditingInteraction(item);
+    setVisitMuniId(item.municipalityId);
+    setVisitMuniName(item.municipalityName);
+    setVisitState(item.state || 'MA');
+    setVisitType(item.type || 'visita');
+    setVisitDate(item.date || new Date().toISOString().slice(0, 16).replace('T', ' '));
+    setContactName(item.contactName || '');
+    setContactRole(item.contactRole || 'Secretária de Educação');
+    setContactPhone('');
+    setVisitSummary(item.summary || '');
+    setVisitDescription(item.description || '');
+    setVisitOutcome(item.outcome || 'positivo');
+    setVisitNextStep(item.nextStep || '');
+    setVisitNextStepDueDate(item.nextStepDueDate || '');
+    setVisitDealOwner(item.dealOwner || 'José Badotti');
+    setIsVisitModalOpen(true);
+  };
+
+  // Delete an interaction
+  const handleDeleteInteraction = (id: string, name: string) => {
+    if (window.confirm(`Tem certeza que deseja excluir o cartão de visita de ${name}?`)) {
+      if (onDeleteCRMInteraction) {
+        onDeleteCRMInteraction(id);
+        showToast('🗑️ Cartão de visita excluído com sucesso.');
+      }
+    }
+  };
+
+  // Save Cartão de Visita (Create or Edit)
   const handleSaveVisitModal = (e: React.FormEvent) => {
     e.preventDefault();
-    const m = municipalities.find((item) => item.id === visitMuniId);
-    if (!m || !contactName.trim() || !visitSummary.trim()) return;
+    if (!visitMuniName.trim() || !contactName.trim() || !visitSummary.trim()) {
+      showToast('⚠️ Preencha Nome da Cidade, Nome do Contato e Resumo.');
+      return;
+    }
 
-    const newInteraction: CRMInteraction = {
-      id: `cartao-visita-${Date.now()}`,
-      municipalityId: m.id,
-      municipalityName: m.name,
-      state: m.state,
-      date: new Date().toISOString().slice(0, 16).replace('T', ' '),
-      type: 'visita',
-      contactName,
-      contactRole,
-      summary: visitSummary,
-      description: `🎴 CARTÃO DE VISITA EM CAMPO:\nContato: ${contactName} (${contactRole}) - Tel: ${contactPhone}\n\n${visitDescription}`,
-      outcome: visitOutcome,
-      nextStep: visitNextStep || undefined,
-      nextStepDueDate: visitNextStepDueDate || undefined,
-      dealOwner: visitDealOwner,
-    };
+    if (editingInteraction) {
+      // EDIT MODE
+      const updatedInteraction: CRMInteraction = {
+        ...editingInteraction,
+        municipalityId: visitMuniId || editingInteraction.municipalityId,
+        municipalityName: visitMuniName.trim(),
+        state: visitState.trim().toUpperCase(),
+        date: visitDate || editingInteraction.date,
+        type: visitType,
+        contactName: contactName.trim(),
+        contactRole: contactRole.trim(),
+        summary: visitSummary.trim(),
+        description: visitDescription.trim(),
+        outcome: visitOutcome,
+        nextStep: visitNextStep.trim() || undefined,
+        nextStepDueDate: visitNextStepDueDate || undefined,
+        dealOwner: visitDealOwner.trim() || 'José Badotti',
+      };
 
-    onAddCRMInteraction(newInteraction);
-    setIsVisitModalOpen(false);
-    setActiveCityId(m.id);
-    showToast(`🎴 Cartão de Visita gravado para Prefeitura de ${m.name}!`);
+      if (onEditCRMInteraction) {
+        onEditCRMInteraction(updatedInteraction);
+      } else {
+        onAddCRMInteraction(updatedInteraction);
+      }
+
+      // Sync the underlying municipality if found
+      const matchedMuni = municipalities.find(
+        (m) =>
+          m.id === visitMuniId ||
+          m.id === editingInteraction.municipalityId ||
+          (m.name || '').toLowerCase().trim() === (editingInteraction.municipalityName || '').toLowerCase().trim()
+      );
+      if (matchedMuni && onUpdateMunicipality) {
+        onUpdateMunicipality({
+          ...matchedMuni,
+          name: visitMuniName.trim(),
+          state: visitState.trim().toUpperCase(),
+        });
+      }
+
+      setIsVisitModalOpen(false);
+      setEditingInteraction(null);
+
+      if (matchedMuni) {
+        const updatedMuni = { ...matchedMuni, name: visitMuniName.trim(), state: visitState.trim().toUpperCase() };
+        setActiveCityId(updatedMuni.id);
+        onSelectMunicipality(updatedMuni);
+      }
+      showToast(`✏️ Cartão de Visita de ${visitMuniName} (${visitState}) atualizado com sucesso!`);
+    } else {
+      // CREATE MODE
+      const newInteraction: CRMInteraction = {
+        id: `cartao-visita-${Date.now()}`,
+        municipalityId: visitMuniId || 'custom_muni',
+        municipalityName: visitMuniName.trim(),
+        state: visitState.trim().toUpperCase(),
+        date: visitDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+        type: visitType,
+        contactName: contactName.trim(),
+        contactRole: contactRole.trim(),
+        summary: visitSummary.trim(),
+        description: visitDescription.trim(),
+        outcome: visitOutcome,
+        nextStep: visitNextStep.trim() || undefined,
+        nextStepDueDate: visitNextStepDueDate || undefined,
+        dealOwner: visitDealOwner.trim() || 'José Badotti',
+      };
+
+      onAddCRMInteraction(newInteraction);
+
+      // Sync municipality if found
+      const matchedMuni = municipalities.find(
+        (item) => item.id === visitMuniId || (item.name || '').toLowerCase().trim() === visitMuniName.toLowerCase().trim()
+      );
+      if (matchedMuni && onUpdateMunicipality && (matchedMuni.name !== visitMuniName.trim() || matchedMuni.state !== visitState.trim().toUpperCase())) {
+        onUpdateMunicipality({
+          ...matchedMuni,
+          name: visitMuniName.trim(),
+          state: visitState.trim().toUpperCase(),
+        });
+      }
+
+      setIsVisitModalOpen(false);
+
+      if (matchedMuni) {
+        setActiveCityId(matchedMuni.id);
+        onSelectMunicipality(matchedMuni);
+      }
+      showToast(`🎴 Cartão de Visita gravado para Prefeitura de ${visitMuniName}!`);
+    }
   };
 
   // Ask AI Pitch
@@ -356,6 +585,25 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
           >
             <Sparkles className="w-4 h-4 text-purple-900 shrink-0" />
             <span>+ Analisar & Cadastrar Cidade com IA</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsFormatterModalOpen(true)}
+            className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-black text-xs py-2.5 rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer border border-amber-500/50"
+            title="Formatador Automático de Cartões de Visita, Contratos, Vencimentos e Empresa Ganhadora"
+          >
+            <CreditCard className="w-4 h-4 text-amber-200 shrink-0" />
+            <span>💳 Formatador de Cartões de Visita</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setIsCalendarHubOpen(true)}
+            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer border border-indigo-500/50"
+          >
+            <Calendar className="w-4 h-4 text-indigo-200 shrink-0" />
+            <span>📅 Agenda Google Calendar</span>
           </button>
 
           <div className="text-[11px] text-slate-300 font-medium text-center">
@@ -466,9 +714,82 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
         
         {/* Left Column: List of Cities Classified by Temperature Range */}
         <div className="lg:col-span-5 space-y-3">
-          <div className="flex items-center justify-between text-xs font-extrabold text-slate-700 bg-slate-200/70 px-4 py-2.5 rounded-xl">
-            <span>Cidades em {selectedState} (Ordenadas por Score IO)</span>
-            <span className="text-slate-500">{stateMunicipalities.length} cidades</span>
+          {/* Header Bar with Sort Controls */}
+          <div className="bg-slate-200/90 p-3 rounded-2xl border border-slate-300 space-y-2 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
+                <SlidersHorizontal className="w-4 h-4 text-blue-800 shrink-0" />
+                <span>Ordenar Cidades ({stateMunicipalities.length}):</span>
+              </div>
+
+              {/* Sort Options */}
+              <div className="flex flex-wrap items-center gap-1 bg-white p-1 rounded-xl border border-slate-300 shadow-sm">
+                <button
+                  type="button"
+                  onClick={() => setSortBy('cards')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    sortBy === 'cards'
+                      ? 'bg-blue-900 text-white shadow-md'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Exibir primeiro as cidades com mais cartões de visita e interações cadastradas"
+                >
+                  <span>🎴</span>
+                  <span>Nº de Cartões</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSortBy('score')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    sortBy === 'score'
+                      ? 'bg-blue-900 text-white shadow-md'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Ordenar por maior Score IO Comercial"
+                >
+                  <span>⭐</span>
+                  <span>Score IO</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSortBy('recente')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    sortBy === 'recente'
+                      ? 'bg-blue-900 text-white shadow-md'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Ordenar por data da última visita/interação recente"
+                >
+                  <span>🕒</span>
+                  <span>Recentes</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setSortBy('nome')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer ${
+                    sortBy === 'nome'
+                      ? 'bg-blue-900 text-white shadow-md'
+                      : 'text-slate-700 hover:bg-slate-100'
+                  }`}
+                  title="Ordenar em ordem alfabética"
+                >
+                  <span>🔤</span>
+                  <span>A-Z</span>
+                </button>
+              </div>
+            </div>
+
+            {sortBy === 'cards' && (
+              <div className="text-[11px] font-bold text-blue-950 bg-blue-50 p-2 rounded-xl border border-blue-200/80 flex items-center gap-1.5">
+                <span>💡</span>
+                <span>
+                  <strong>Ordem de Trabalho no Campo:</strong> Exibindo primeiro as cidades com mais cartões de visita e registros no CRM.
+                </span>
+              </div>
+            )}
           </div>
 
           {stateMunicipalities.length === 0 ? (
@@ -500,7 +821,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
             </div>
           ) : (
             <div className="space-y-3 max-h-[800px] overflow-y-auto pr-1">
-              {stateMunicipalities.map(({ m, score, tempMeta, lastInteraction }) => {
+              {stateMunicipalities.map(({ m, score, tempMeta, mInteractions, lastInteraction }) => {
                 const isSelectedForItinerary = selectedCityIds.includes(m.id);
                 const isActiveInWorkstation = activeCityId === m.id;
 
@@ -514,10 +835,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                         ? 'border-emerald-400 bg-emerald-50/20'
                         : 'border-slate-200 hover:border-slate-300'
                     }`}
-                    onClick={() => {
-                      setActiveCityId(m.id);
-                      onSelectMunicipality(m);
-                    }}
+                    onClick={() => handleOpenCity(m)}
                   >
                     {/* Top Header: Checkbox + Name + Temperature Badge */}
                     <div className="flex items-start justify-between gap-3">
@@ -539,10 +857,21 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                         </button>
 
                         <div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-1.5">
                             <h3 className="font-extrabold text-sm text-slate-900">
                               Prefeitura de {m.name} ({m.state})
                             </h3>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleOpenEditCityModal(m);
+                              }}
+                              className="text-slate-400 hover:text-amber-700 bg-slate-100 hover:bg-amber-100 p-1 rounded-md transition-colors cursor-pointer"
+                              title="Editar nome e dados desta cidade"
+                            >
+                              <Pencil className="w-3 h-3" />
+                            </button>
                           </div>
 
                           <div className="text-[11px] text-slate-500 font-semibold mt-0.5 flex items-center gap-2">
@@ -559,46 +888,65 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                       </span>
                     </div>
 
-                    {/* Key Metrics */}
-                    <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-100">
-                      <div>
-                        <span className="text-slate-400 font-bold block text-[9px] uppercase">Vencimento Contrato</span>
-                        <span className={`font-extrabold ${m.contractDaysRemaining <= 60 ? 'text-red-700' : 'text-slate-800'}`}>
-                          {m.contractDaysRemaining <= 0 ? 'Expirado / Licitação' : `${m.contractDaysRemaining} dias`}
-                        </span>
+                    {/* Key Metrics & Registered Cards Badge */}
+                    <div className="space-y-2">
+                      <div className="grid grid-cols-2 gap-2 text-[11px] bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                        <div>
+                          <span className="text-slate-400 font-bold block text-[9px] uppercase">Vencimento Contrato</span>
+                          <span className={`font-extrabold ${m.contractDaysRemaining <= 60 ? 'text-red-700' : 'text-slate-800'}`}>
+                            {m.contractDaysRemaining <= 0 ? 'Expirado / Licitação' : `${m.contractDaysRemaining} dias`}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-slate-400 font-bold block text-[9px] uppercase">Estágio no Funil</span>
+                          <span className="font-extrabold text-blue-900 capitalize">
+                            {(m.funnelStage || 'prospectado').replace(/_/g, ' ')}
+                          </span>
+                        </div>
                       </div>
 
-                      <div>
-                        <span className="text-slate-400 font-bold block text-[9px] uppercase">Estágio no Funil</span>
-                        <span className="font-extrabold text-blue-900 capitalize">
-                          {m.funnelStage.replace(/_/g, ' ')}
-                        </span>
+                      {/* Card Count Status Badge */}
+                      <div className="flex items-center justify-between text-[11px] px-3 py-1.5 rounded-xl border font-bold bg-slate-50 border-slate-200">
+                        <span className="text-slate-500 font-semibold text-[10px] uppercase">Trabalho Registrado:</span>
+                        {mInteractions.length > 0 ? (
+                          <span className="text-emerald-950 bg-emerald-100 border border-emerald-300 font-black px-2 py-0.5 rounded-lg flex items-center gap-1">
+                            <span>🎴</span>
+                            <span>{mInteractions.length} cartão(ões) cadastrado(s)</span>
+                          </span>
+                        ) : (
+                          <span className="text-slate-500 bg-slate-100 border border-slate-200 font-medium px-2 py-0.5 rounded-lg text-[10px]">
+                            ⚪ Sem cartões ainda
+                          </span>
+                        )}
                       </div>
                     </div>
 
                     {/* Bottom Action Bar */}
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100 text-xs">
+                    <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-2 border-t border-slate-100 text-xs">
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenVisitModalForCity(m);
                         }}
-                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11px] px-3 py-1.5 rounded-lg flex items-center gap-1 transition-all"
+                        className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-95"
                       >
                         <Plus className="w-3.5 h-3.5" />
                         <span>🎴 Criar Cartão de Visita</span>
                       </button>
 
                       <button
+                        type="button"
                         onClick={(e) => {
                           e.stopPropagation();
-                          setActiveCityId(m.id);
-                          onSelectMunicipality(m);
+                          handleOpenCity(m);
                         }}
-                        className="text-blue-600 hover:text-blue-800 font-bold text-xs flex items-center gap-1"
+                        className="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-xs px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all"
+                        title="Abrir dossiê, contatos e histórico de conversas desta cidade"
                       >
-                        <span>Abrir Cidade</span>
-                        <ChevronRight className="w-4 h-4" />
+                        <span>📍 Abrir Cidade ({mInteractions.length})</span>
+                        <ChevronRight className="w-4 h-4 text-amber-300" />
                       </button>
                     </div>
 
@@ -610,9 +958,24 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
         </div>
 
         {/* Right Column: Active City Field Workstation (Onde o vendedor gerencia a cidade atual) */}
-        <div className="lg:col-span-7 space-y-6">
+        <div id="active-city-workstation" className="lg:col-span-7 space-y-6 scroll-mt-20">
           {activeMunicipalityData ? (
-            <div className="bg-white rounded-2xl border border-slate-200 p-6 shadow-md space-y-6">
+            <div className="bg-white rounded-2xl border border-slate-200 p-4 sm:p-6 shadow-md space-y-6">
+              
+              {/* Mobile Active City Quick Status Bar */}
+              <div className="lg:hidden bg-blue-900 text-white p-3 rounded-xl border border-blue-800 flex items-center justify-between gap-2 shadow">
+                <div className="min-w-0">
+                  <span className="text-[10px] font-black text-amber-300 uppercase tracking-wider block">
+                    📍 CIDADE ABERTA EM TELA:
+                  </span>
+                  <span className="text-xs font-black truncate block text-white">
+                    Prefeitura de {activeMunicipalityData.m.name} ({activeMunicipalityData.m.state})
+                  </span>
+                </div>
+                <span className="bg-emerald-500 text-slate-950 font-black text-[10px] px-2 py-0.5 rounded uppercase shrink-0">
+                  {activeMunicipalityData.m.currentSystem}
+                </span>
+              </div>
               
               {/* City Workstation Header */}
               <div className="flex flex-wrap items-start justify-between gap-4 border-b border-slate-100 pb-5">
@@ -626,9 +989,20 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                     </span>
                   </div>
 
-                  <h2 className="text-2xl font-black text-slate-900 mt-1">
-                    Prefeitura de {activeMunicipalityData.m.name} ({activeMunicipalityData.m.state})
-                  </h2>
+                  <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <h2 className="text-2xl font-black text-slate-900">
+                      Prefeitura de {activeMunicipalityData.m.name} ({activeMunicipalityData.m.state})
+                    </h2>
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEditCityModal(activeMunicipalityData.m)}
+                      className="bg-amber-100 hover:bg-amber-200 text-amber-950 text-xs font-extrabold px-3 py-1 rounded-xl border border-amber-300 transition-all flex items-center gap-1 active:scale-95 shadow-sm cursor-pointer"
+                      title="Editar o nome e estado desta prefeitura"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-amber-800" />
+                      <span>Editar Nome da Cidade</span>
+                    </button>
+                  </div>
 
                   <div className="text-xs text-slate-500 font-semibold mt-1 flex flex-wrap items-center gap-3">
                     <span>Concorrente: <strong className="text-blue-900">{activeMunicipalityData.m.currentSystem}</strong></span>
@@ -656,7 +1030,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                     <span>1. Estágio Atual no Funil Comercial:</span>
                   </span>
                   <span className="text-xs font-extrabold text-blue-900 capitalize">
-                    {activeMunicipalityData.m.funnelStage.replace(/_/g, ' ')}
+                    {(activeMunicipalityData.m.funnelStage || 'prospectado').replace(/_/g, ' ')}
                   </span>
                 </div>
 
@@ -740,50 +1114,284 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 )}
               </div>
 
-              {/* ACTION STEP 4: MONITORAR HISTÓRICOS DA CIDADE */}
-              <div className="space-y-3 pt-2">
-                <div className="flex items-center justify-between">
-                  <h3 className="font-black text-sm text-slate-900 uppercase tracking-wider flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-blue-600" />
-                    <span>3. Histórico de Interações desta Cidade ({activeMunicipalityData.mInteractions.length})</span>
-                  </h3>
+              {/* ACTION STEP 4: CARTÕES DE VISITA & HISTÓRICO DAS CONVERSAS ANTERIORES */}
+              <div className="space-y-4 pt-2 border-t border-slate-200">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="font-black text-base text-slate-900 uppercase tracking-wider flex items-center gap-2">
+                      <Clock className="w-5 h-5 text-emerald-600" />
+                      <span>🎴 Cartões de Visita & Histórico de Conversas Anteriores ({activeMunicipalityData.mInteractions.length})</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Veja tudo o que já foi conversado com a gestão de {activeMunicipalityData.m.name} em visitas presenciais, reuniões e chamadas.
+                    </p>
+                  </div>
+
+                  <button
+                    onClick={() => handleOpenVisitModalForCity(activeMunicipalityData.m)}
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-emerald-900/20 active:scale-95 shrink-0"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>🎴 Novo Cartão de Visita</span>
+                  </button>
                 </div>
 
+                {/* Sub-Filters & Search within this city's history */}
+                {activeMunicipalityData.mInteractions.length > 0 && (
+                  <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 space-y-2.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      {/* Type Filter Pills */}
+                      <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs">
+                        <button
+                          onClick={() => setInteractionTypeFilter('all')}
+                          className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] transition-all ${
+                            interactionTypeFilter === 'all'
+                              ? 'bg-slate-900 text-white shadow-sm'
+                              : 'bg-white text-slate-700 hover:bg-slate-200 border border-slate-200'
+                          }`}
+                        >
+                          Ver Tudo ({activeMunicipalityData.mInteractions.length})
+                        </button>
+                        <button
+                          onClick={() => setInteractionTypeFilter('visita')}
+                          className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] transition-all flex items-center gap-1 ${
+                            interactionTypeFilter === 'visita'
+                              ? 'bg-emerald-600 text-white shadow-sm'
+                              : 'bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
+                        >
+                          <span>🚗 Visitas Presenciais</span>
+                          <span className="text-[10px] font-black opacity-80">
+                            ({activeMunicipalityData.mInteractions.filter((i) => i.type === 'visita').length})
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setInteractionTypeFilter('ligacao')}
+                          className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] transition-all flex items-center gap-1 ${
+                            interactionTypeFilter === 'ligacao'
+                              ? 'bg-blue-600 text-white shadow-sm'
+                              : 'bg-blue-50 text-blue-800 hover:bg-blue-100 border border-blue-200'
+                          }`}
+                        >
+                          <span>📞 Ligações</span>
+                          <span className="text-[10px] font-black opacity-80">
+                            ({activeMunicipalityData.mInteractions.filter((i) => i.type === 'ligacao').length})
+                          </span>
+                        </button>
+                        <button
+                          onClick={() => setInteractionTypeFilter('reuniao_virtual')}
+                          className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] transition-all flex items-center gap-1 ${
+                            interactionTypeFilter === 'reuniao_virtual'
+                              ? 'bg-purple-600 text-white shadow-sm'
+                              : 'bg-purple-50 text-purple-800 hover:bg-purple-100 border border-purple-200'
+                          }`}
+                        >
+                          <span>💻 Reuniões</span>
+                          <span className="text-[10px] font-black opacity-80">
+                            ({activeMunicipalityData.mInteractions.filter((i) => i.type === 'reuniao_virtual').length})
+                          </span>
+                        </button>
+                      </div>
+
+                      {/* Search Input for City Interactions */}
+                      <div className="relative w-full sm:w-48">
+                        <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+                        <input
+                          type="text"
+                          placeholder="Buscar no histórico..."
+                          value={interactionSearchTerm}
+                          onChange={(e) => setInteractionSearchTerm(e.target.value)}
+                          className="w-full bg-white border border-slate-200 rounded-lg pl-8 pr-2.5 py-1 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Interaction Cards List */}
                 {activeMunicipalityData.mInteractions.length === 0 ? (
-                  <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 text-center space-y-2">
-                    <Clock className="w-6 h-6 text-slate-300 mx-auto" />
-                    <p className="text-xs text-slate-500 font-semibold">Nenhuma visita ou ligação registrada para esta cidade ainda.</p>
+                  <div className="bg-slate-50 p-8 rounded-2xl border border-slate-200 text-center space-y-3">
+                    <Clock className="w-8 h-8 text-slate-300 mx-auto" />
+                    <div>
+                      <p className="text-sm font-bold text-slate-700">Nenhum cartão de visita ou histórico registrado para {activeMunicipalityData.m.name}.</p>
+                      <p className="text-xs text-slate-500 mt-1">Registre a primeira visita presencial ou contato telefônico para guardar o histórico da negociação.</p>
+                    </div>
                     <button
                       onClick={() => handleOpenVisitModalForCity(activeMunicipalityData.m)}
-                      className="text-xs font-bold text-blue-600 hover:underline"
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs px-4 py-2 rounded-xl transition-all inline-flex items-center gap-1.5 shadow"
                     >
-                      Registrar a primeira visita
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Criar Primeiro Cartão de Visita</span>
                     </button>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-                    {activeMunicipalityData.mInteractions.map((item) => (
-                      <div key={item.id} className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 text-xs space-y-1.5">
-                        <div className="flex items-center justify-between font-bold text-slate-800">
-                          <span className="flex items-center gap-1.5">
-                            <span className="bg-blue-100 text-blue-900 px-2 py-0.5 rounded text-[10px] uppercase font-black">
-                              {item.type}
-                            </span>
-                            <span>{item.summary}</span>
-                          </span>
-                          <span className="text-[11px] text-slate-400">{item.date}</span>
-                        </div>
+                  <div className="space-y-4 max-h-[500px] overflow-y-auto pr-1">
+                    {activeMunicipalityData.mInteractions
+                      .filter((item) => {
+                        const matchesType = interactionTypeFilter === 'all' || item.type === interactionTypeFilter;
+                        const term = (interactionSearchTerm || '').toLowerCase();
+                        const matchesSearch =
+                          !term ||
+                          (item.summary || '').toLowerCase().includes(term) ||
+                          (item.description || '').toLowerCase().includes(term) ||
+                          (item.contactName || '').toLowerCase().includes(term) ||
+                          (item.contactRole || '').toLowerCase().includes(term);
+                        return matchesType && matchesSearch;
+                      })
+                      .map((item) => {
+                        const isVisita = item.type === 'visita';
+                        const isCall = item.type === 'ligacao';
+                        const isMeeting = item.type === 'reuniao_virtual';
 
-                        <p className="text-slate-600 leading-snug whitespace-pre-wrap">{item.description}</p>
+                        return (
+                          <div
+                            key={item.id}
+                            className={`rounded-2xl border p-4 text-xs space-y-3 transition-all shadow-sm ${
+                              isVisita
+                                ? 'bg-gradient-to-r from-emerald-50/50 via-white to-white border-emerald-200'
+                                : isCall
+                                ? 'bg-gradient-to-r from-blue-50/50 via-white to-white border-blue-200'
+                                : isMeeting
+                                ? 'bg-gradient-to-r from-purple-50/50 via-white to-white border-purple-200'
+                                : 'bg-white border-slate-200'
+                            }`}
+                          >
+                            {/* Card Top Header */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                              <div className="flex items-center gap-2">
+                                <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider flex items-center gap-1 ${
+                                  isVisita
+                                    ? 'bg-emerald-600 text-white'
+                                    : isCall
+                                    ? 'bg-blue-600 text-white'
+                                    : isMeeting
+                                    ? 'bg-purple-600 text-white'
+                                    : 'bg-slate-800 text-white'
+                                }`}>
+                                  {isVisita ? '🚗 CARTÃO DE VISITA PRESENCIAL' : isCall ? '📞 LIGAÇÃO TELEFÔNICA' : isMeeting ? '💻 REUNIÃO VIRTUAL' : item.type.toUpperCase()}
+                                </span>
 
-                        <div className="text-[11px] font-semibold text-slate-500 flex items-center justify-between pt-1 border-t border-slate-200">
-                          <span>Contato: <strong className="text-slate-800">{item.contactName}</strong> ({item.contactRole})</span>
-                          {item.nextStep && (
-                            <span className="text-emerald-700 font-bold">Próximo Passo: {item.nextStep}</span>
-                          )}
-                        </div>
-                      </div>
-                    ))}
+                                <span className="text-[11px] font-bold text-slate-500">
+                                  {item.date ? `${item.date}` : ''}
+                                </span>
+                              </div>
+
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <span className="bg-slate-100 text-slate-700 font-bold px-2 py-0.5 rounded border border-slate-200">
+                                  👤 Vendedor: {item.dealOwner || 'José Badotti'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Contact & Summary Info */}
+                            <div className="space-y-1">
+                              <div className="flex flex-wrap items-center justify-between gap-2">
+                                <h4 className="font-black text-sm text-slate-900 flex items-center gap-1.5">
+                                  <span>📌</span>
+                                  <span>{item.summary}</span>
+                                </h4>
+
+                                <span className={`text-[10px] font-extrabold px-2.5 py-0.5 rounded-full border ${
+                                  item.outcome === 'positivo'
+                                    ? 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                                    : item.outcome === 'critico'
+                                    ? 'bg-red-100 text-red-900 border-red-300'
+                                    : item.outcome === 'aguardando_retorno'
+                                    ? 'bg-amber-100 text-amber-900 border-amber-300'
+                                    : 'bg-slate-100 text-slate-800 border-slate-300'
+                                }`}>
+                                  Status: {item.outcome === 'positivo' ? '🟢 Avanço / Sucesso' : item.outcome === 'critico' ? '🔴 Risco / Objeção' : item.outcome === 'aguardando_retorno' ? '⏳ Aguardando Retorno' : item.outcome}
+                                </span>
+                              </div>
+
+                              <div className="text-xs text-slate-600 font-semibold flex items-center gap-2">
+                                <span className="text-blue-900 font-extrabold">Pessoa Contatada:</span>
+                                <span><strong>{item.contactName}</strong> ({item.contactRole || 'Gestão Escolar'})</span>
+                              </div>
+                            </div>
+
+                            {/* Full Narrative Box (O que foi conversado) */}
+                            <div className="bg-slate-50/90 p-3.5 rounded-xl border border-slate-200/80 text-slate-800 leading-relaxed font-normal text-xs whitespace-pre-wrap">
+                              <span className="block text-[10px] font-extrabold uppercase text-slate-400 mb-1">
+                                📝 Relato do que foi conversado na visita / contato:
+                              </span>
+                              {item.description}
+                            </div>
+
+                            {/* Next Step & Actions */}
+                            {item.nextStep && (
+                              <div className="bg-emerald-50 border border-emerald-200 p-2.5 rounded-xl flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-emerald-900">
+                                <div className="flex items-center gap-2">
+                                  <ArrowRight className="w-4 h-4 text-emerald-600 shrink-0" />
+                                  <span>Próximo Passo Agendado: {item.nextStep}</span>
+                                </div>
+                                {item.nextStepDueDate && (
+                                  <span className="bg-emerald-200/80 text-emerald-950 px-2 py-0.5 rounded text-[10px] font-black">
+                                    Prazo: {item.nextStepDueDate}
+                                  </span>
+                                )}
+                              </div>
+                            )}
+
+                            {/* Card Action Buttons: Edit all fields & Delete */}
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 pt-3 mt-2">
+                              <div className="flex items-center gap-1.5 text-blue-900 font-extrabold text-[11px] bg-blue-50/80 px-2.5 py-1 rounded-lg border border-blue-200">
+                                <span>📍 Cidade:</span>
+                                <span className="font-black text-slate-900">{item.municipalityName} ({item.state})</span>
+                              </div>
+
+                              <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    openGoogleCalendar(item);
+                                    showToast(`📅 Abrindo Google Agenda com a cópia do cartão de ${item.municipalityName}!`);
+                                  }}
+                                  className="text-xs bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-black px-3 py-1.5 rounded-xl border border-indigo-700 shadow-sm transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                                  title="Salvar e agendar compromisso no Google Agenda com a cópia completa do cartão"
+                                >
+                                  <Calendar className="w-3.5 h-3.5 text-indigo-200" />
+                                  <span>📅 Agenda Google</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const text = formatCardDetailsForCalendar(item);
+                                    navigator.clipboard.writeText(text);
+                                    showToast(`📋 Cópia do cartão de ${item.municipalityName} copiada para a área de transferência!`);
+                                  }}
+                                  className="text-xs bg-slate-100 hover:bg-slate-200 text-slate-800 font-extrabold px-2.5 py-1.5 rounded-xl border border-slate-200 transition-colors flex items-center gap-1 active:scale-95 cursor-pointer"
+                                  title="Copiar relatório completo do cartão para colar no WhatsApp, e-mail ou agenda"
+                                >
+                                  <span>📋 Copiar</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenEditModalForInteraction(item)}
+                                  className="text-xs bg-amber-400 hover:bg-amber-500 active:bg-amber-600 text-slate-950 font-black px-3 py-1.5 rounded-xl border border-amber-500 shadow-sm transition-all flex items-center gap-1.5 active:scale-95 cursor-pointer"
+                                  title="Editar todos os campos do cartão de visita (inclusive nome da cidade e estado)"
+                                >
+                                  <Pencil className="w-3.5 h-3.5 text-slate-950" />
+                                  <span>✏️ Editar</span>
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleDeleteInteraction(item.id, item.municipalityName)}
+                                  className="text-xs bg-red-50 hover:bg-red-100 active:bg-red-200 text-red-700 font-extrabold px-2.5 py-1.5 rounded-xl border border-red-200 transition-colors flex items-center gap-1 active:scale-95 cursor-pointer"
+                                  title="Excluir este cartão de visita"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5 text-red-600" />
+                                  <span>Excluir</span>
+                                </button>
+                              </div>
+                            </div>
+
+                          </div>
+                        );
+                      })}
                   </div>
                 )}
               </div>
@@ -929,28 +1537,31 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
         </div>
       )}
 
-      {/* CARTÃO DE VISITA PRESENCIAL MODAL */}
+      {/* CARTÃO DE VISITA PRESENCIAL / INTERACTION MODAL */}
       {isVisitModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-3xl max-w-xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in">
+          <div className="bg-white rounded-3xl max-w-2xl w-full p-6 space-y-4 shadow-2xl border border-slate-200 animate-in fade-in">
             
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-              <div className="flex items-center gap-2">
-                <div className="p-2 bg-emerald-100 text-emerald-800 rounded-xl">
-                  <Plus className="w-5 h-5" />
+              <div className="flex items-center gap-2.5">
+                <div className={`p-2.5 rounded-2xl ${editingInteraction ? 'bg-amber-100 text-amber-900' : 'bg-emerald-100 text-emerald-900'}`}>
+                  {editingInteraction ? <Pencil className="w-5 h-5 text-amber-700" /> : <Plus className="w-5 h-5 text-emerald-700" />}
                 </div>
                 <div>
                   <h3 className="font-black text-base text-slate-900">
-                    Criar Cartão de Visita Presencial
+                    {editingInteraction ? '✏️ Editar Cartão de Visita Presencial' : '🎴 Criar Cartão de Visita Presencial'}
                   </h3>
                   <p className="text-xs text-slate-500">
-                    Lançar reunião presencial e contatos da prefeitura
+                    {editingInteraction ? 'Atualize todos os campos, incluindo nome da cidade, contatos e relatos' : 'Lançar reunião presencial e contatos da prefeitura'}
                   </p>
                 </div>
               </div>
 
               <button
-                onClick={() => setIsVisitModalOpen(false)}
+                onClick={() => {
+                  setIsVisitModalOpen(false);
+                  setEditingInteraction(null);
+                }}
                 className="p-2 text-slate-400 hover:text-slate-700 rounded-xl"
               >
                 <X className="w-5 h-5" />
@@ -959,7 +1570,119 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
 
             <form onSubmit={handleSaveVisitModal} className="space-y-4 text-xs">
               
-              <div className="grid grid-cols-2 gap-3">
+              {/* Municipality Name & State Edit Section */}
+              <div className="bg-amber-50/70 p-3.5 rounded-2xl border border-amber-200/80 space-y-2">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-black text-amber-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <span>📍 Dados da Cidade / Prefeitura *</span>
+                  </label>
+                  <span className="text-[10px] text-amber-800 font-bold">Você pode editar o nome diretamente</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[10px] font-black text-slate-600 uppercase mb-1">Nome do Município / Cidade *</label>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Ex: Teresina, Esperantina, Caxias..."
+                      value={visitMuniName}
+                      onChange={(e) => setVisitMuniName(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-black text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-black text-slate-600 uppercase mb-1">Estado (UF) *</label>
+                    <select
+                      value={visitState}
+                      onChange={(e) => setVisitState(e.target.value)}
+                      className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2 font-bold text-slate-900 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    >
+                      <option value="PI">PI (Piauí)</option>
+                      <option value="MA">MA (Maranhão)</option>
+                      <option value="CE">CE (Ceará)</option>
+                      <option value="PB">PB (Paraíba)</option>
+                      <option value="RN">RN (Rio Grande do Norte)</option>
+                      <option value="PE">PE (Pernambuco)</option>
+                      <option value="BA">BA (Bahia)</option>
+                      <option value="TO">TO (Tocantins)</option>
+                      <option value="PA">PA (Pará)</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* Optional select from registered municipalities */}
+                <div>
+                  <label className="block text-[10px] font-bold text-slate-500 mb-1">Vincular a uma prefeitura existente no cadastro (opcional):</label>
+                  <select
+                    value={visitMuniId}
+                    onChange={(e) => {
+                      const id = e.target.value;
+                      setVisitMuniId(id);
+                      const matched = municipalities.find(m => m.id === id);
+                      if (matched) {
+                        setVisitMuniName(matched.name);
+                        setVisitState(matched.state);
+                      }
+                    }}
+                    className="w-full bg-white border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">-- Selecionar Prefeitura da Lista --</option>
+                    {municipalities.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name} ({m.state}) - {m.currentSystem}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Type, Date and Owner */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Tipo de Interação *</label>
+                  <select
+                    value={visitType}
+                    onChange={(e) => setVisitType(e.target.value as CRMInteraction['type'])}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  >
+                    <option value="visita">🚗 Visita Presencial</option>
+                    <option value="ligacao">📞 Ligação Telefônica</option>
+                    <option value="reuniao_virtual">💻 Reunião Virtual</option>
+                    <option value="email">✉️ E-mail / Ofício</option>
+                    <option value="proposta">📄 Proposta / Minuta ARP</option>
+                    <option value="impugnacao">⚖️ Impugnação / Recurso</option>
+                    <option value="outros">📌 Outros</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Data / Hora *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="AAAA-MM-DD HH:MM"
+                    value={visitDate}
+                    onChange={(e) => setVisitDate(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Vendedor / Responsável *</label>
+                  <input
+                    type="text"
+                    required
+                    value={visitDealOwner}
+                    onChange={(e) => setVisitDealOwner(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+              </div>
+
+              {/* Contact Info */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Nome do Contato Visitado *</label>
                   <input
@@ -983,19 +1706,6 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Telefone / WhatsApp</label>
-                  <input
-                    type="text"
-                    placeholder="Ex: (86) 99988-7766"
-                    value={contactPhone}
-                    onChange={(e) => setContactPhone(e.target.value)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
-                  />
-                </div>
 
                 <div>
                   <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Resultado da Reunião</label>
@@ -1008,12 +1718,14 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                     <option value="neutro">🟡 Informativo</option>
                     <option value="critico">🔴 Objeção / Risco</option>
                     <option value="aguardando_retorno">⏳ Aguardando Retorno</option>
+                    <option value="deferido">✅ Deferido</option>
+                    <option value="indeferido">❌ Indeferido</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Resumo da Visita *</label>
+                <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Resumo / Título do Cartão *</label>
                 <input
                   type="text"
                   required
@@ -1027,11 +1739,11 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
               <div>
                 <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Detalhamento & Notas de Campo</label>
                 <textarea
-                  rows={3}
-                  placeholder="Descreva os assuntos tratados, dores apresentadas e interesse em Diário Eletrônico..."
+                  rows={4}
+                  placeholder="Descreva os assuntos tratados, dores apresentadas, concorrentes citados e nível de interesse..."
                   value={visitDescription}
                   onChange={(e) => setVisitDescription(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-500 leading-relaxed"
                 />
               </div>
 
@@ -1048,7 +1760,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Data do Follow-Up</label>
+                  <label className="block text-[10px] font-black text-slate-500 uppercase mb-1">Data do Follow-Up / Prazo</label>
                   <input
                     type="date"
                     value={visitNextStepDueDate}
@@ -1058,19 +1770,67 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 </div>
               </div>
 
-              <div className="pt-2 flex items-center justify-end gap-2">
+              <div className="pt-3 border-t border-slate-100 flex flex-wrap items-center justify-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setIsVisitModalOpen(false)}
-                  className="px-4 py-2.5 rounded-xl font-bold text-slate-600 hover:bg-slate-100"
+                  onClick={() => {
+                    setIsVisitModalOpen(false);
+                    setEditingInteraction(null);
+                  }}
+                  className="px-4 py-2.5 rounded-xl font-bold text-slate-600 hover:bg-slate-100 transition-colors"
                 >
                   Cancelar
                 </button>
+
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (!visitMuniName.trim() || !contactName.trim() || !visitSummary.trim()) {
+                      showToast('⚠️ Preencha Nome da Cidade, Nome do Contato e Resumo.');
+                      return;
+                    }
+                    const tempInteraction: CRMInteraction = {
+                      id: editingInteraction ? editingInteraction.id : `cartao-visita-${Date.now()}`,
+                      municipalityId: visitMuniId || 'custom_muni',
+                      municipalityName: visitMuniName.trim(),
+                      state: visitState.trim().toUpperCase(),
+                      date: visitDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
+                      type: visitType,
+                      contactName: contactName.trim(),
+                      contactRole: contactRole.trim(),
+                      summary: visitSummary.trim(),
+                      description: visitDescription.trim(),
+                      outcome: visitOutcome,
+                      nextStep: visitNextStep.trim() || undefined,
+                      nextStepDueDate: visitNextStepDueDate || undefined,
+                      dealOwner: visitDealOwner.trim() || 'José Badotti',
+                    };
+
+                    if (editingInteraction && onEditCRMInteraction) {
+                      onEditCRMInteraction(tempInteraction);
+                    } else {
+                      onAddCRMInteraction(tempInteraction);
+                    }
+
+                    setIsVisitModalOpen(false);
+                    setEditingInteraction(null);
+                    openGoogleCalendar(tempInteraction);
+                    showToast(`📅 Cartão de ${visitMuniName} gravado e aberto no Google Agenda!`);
+                  }}
+                  className="bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white font-extrabold px-5 py-2.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-2"
+                  title="Salvar cartão de visita e abrir o compromisso diretamente no Google Agenda com a cópia completa do cartão"
+                >
+                  <Calendar className="w-4 h-4 text-indigo-200" />
+                  <span>📅 Salvar + Agendar no Google Agenda</span>
+                </button>
+
                 <button
                   type="submit"
-                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-black px-5 py-2.5 rounded-xl shadow-md active:scale-95"
+                  className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-black px-5 py-2.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-2"
                 >
-                  Salvar Cartão de Visita
+                  <span>💾</span>
+                  <span>{editingInteraction ? 'Salvar Alterações' : 'Salvar Apenas Cartão'}</span>
                 </button>
               </div>
 
@@ -1095,6 +1855,131 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
         onSelectAndNavigate={(muni) => {
           onSelectMunicipality(muni);
         }}
+      />
+
+      {/* Modal para Editar Nome da Cidade & Dados Básicos */}
+      {isEditCityModalOpen && editingCityTarget && (
+        <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl border border-amber-300 shadow-2xl max-w-md w-full p-6 space-y-4 my-auto animate-in fade-in zoom-in-95">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 rounded-xl text-amber-900 font-bold">
+                  <Pencil className="w-5 h-5 text-amber-800" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-slate-900">Editar Dados da Cidade</h3>
+                  <p className="text-xs text-slate-500 font-normal">Altere o nome oficial da prefeitura, estado e dados</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsEditCityModalOpen(false)}
+                className="text-slate-400 hover:text-slate-700 bg-slate-100 p-1.5 rounded-lg transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveCityModal} className="space-y-4 text-xs">
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Nome da Prefeitura / Cidade <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  required
+                  value={editCityName}
+                  onChange={(e) => setEditCityName(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Ex: Codó"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Estado (UF) <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    value={editCityState}
+                    onChange={(e) => setEditCityState(e.target.value.toUpperCase())}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold text-sm uppercase focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="MA"
+                  />
+                </div>
+
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">
+                    Estágio no Funil
+                  </label>
+                  <select
+                    value={editCityFunnel}
+                    onChange={(e) => setEditCityFunnel(e.target.value as FunnelStage)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="prospectado">1. Prospecção Inicial</option>
+                    <option value="primeiro_contato">2. Primeiro Contato Feito</option>
+                    <option value="reuniao">3. Reunião Agendada</option>
+                    <option value="demonstracao">4. Demonstração / Piloto</option>
+                    <option value="projeto_apresentado">5. Projeto Apresentado</option>
+                    <option value="processo_licitatorio">6. Processo Licitatório</option>
+                    <option value="homologacao">7. Homologação / Vencido</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-800 mb-1">
+                  Sistema Concorrente Atual
+                </label>
+                <input
+                  type="text"
+                  value={editCitySystem}
+                  onChange={(e) => setEditCitySystem(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                  placeholder="Ex: Educar / Betha / Sem Sistema"
+                />
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsEditCityModalOpen(false)}
+                  className="px-4 py-2 rounded-xl font-bold text-slate-600 hover:bg-slate-100"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="bg-amber-500 hover:bg-amber-600 active:bg-amber-700 text-slate-950 font-black px-5 py-2 rounded-xl shadow transition-all cursor-pointer"
+                >
+                  Salvar Alterações
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Google Calendar Hub Modal */}
+      <GoogleCalendarHubModal
+        isOpen={isCalendarHubOpen}
+        onClose={() => setIsCalendarHubOpen(false)}
+        interactions={crmInteractions}
+        onShowToast={(msg) => showToast(msg)}
+      />
+
+      {/* Business Card Formatter Modal */}
+      <BusinessCardFormatterModal
+        isOpen={isFormatterModalOpen}
+        onClose={() => setIsFormatterModalOpen(false)}
+        municipalities={municipalities}
+        onSaveInteraction={(newInter) => onAddCRMInteraction(newInter)}
+        onShowToast={(msg) => showToast(msg)}
+        initialMunicipalityId={activeCityId || selectedMunicipality?.id || undefined}
       />
 
     </div>

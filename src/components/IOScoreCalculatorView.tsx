@@ -330,7 +330,7 @@ export const IOScoreCalculatorView: React.FC<IOScoreCalculatorViewProps> = ({
                     setSelectedMuniId(m.id);
                   }}
                   className={`p-3.5 rounded-xl border transition-all cursor-pointer flex flex-wrap items-center justify-between gap-3 ${
-                    selectedMuni.id === m.id
+                    selectedMuni && selectedMuni.id === m.id
                       ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-500/20 shadow-sm'
                       : 'bg-slate-50/60 hover:bg-slate-100 border-slate-200'
                   }`}

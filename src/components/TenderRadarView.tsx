@@ -1,19 +1,40 @@
-import React, { useState } from 'react';
-import { TenderNotice } from '../types';
-import { Search, Filter, ExternalLink, RefreshCw, FileText, Globe, Building, CheckCircle2, BookOpen, Eye, Sparkles, AlertCircle, ChevronRight } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { TenderNotice, CommercialAlert, Municipality } from '../types';
+import { AlertsView } from './AlertsView';
+import { Search, Filter, ExternalLink, RefreshCw, FileText, Globe, Building, CheckCircle2, BookOpen, Eye, Sparkles, AlertCircle, ChevronRight, BellRing } from 'lucide-react';
 import { TenderReaderModal } from './TenderReaderModal';
 
 interface TenderRadarViewProps {
   tenders: TenderNotice[];
+  alerts?: CommercialAlert[];
+  municipalities?: Municipality[];
   onOpenTenderDetail: (tender: TenderNotice) => void;
   onNavigateToAI?: (tender: TenderNotice) => void;
+  onSelectMunicipality?: (m: Municipality) => void;
+  onOpenAIStrategy?: (m: Municipality) => void;
+  onMarkAsReadAlert?: (id: string) => void;
+  initialSubTab?: 'tenders' | 'alerts';
 }
 
 export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
   tenders: initialTenders,
+  alerts = [],
+  municipalities = [],
   onOpenTenderDetail,
-  onNavigateToAI
+  onNavigateToAI,
+  onSelectMunicipality,
+  onOpenAIStrategy,
+  onMarkAsReadAlert,
+  initialSubTab = 'tenders'
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<'tenders' | 'alerts'>(initialSubTab);
+
+  useEffect(() => {
+    if (initialSubTab) {
+      setActiveSubTab(initialSubTab);
+    }
+  }, [initialSubTab]);
+
   const [tendersList, setTendersList] = useState<TenderNotice[]>(initialTenders);
   const [sourceFilter, setSourceFilter] = useState<string>('');
   const [modalityFilter, setModalityFilter] = useState<string>('');
@@ -74,11 +95,12 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
   ];
 
   const filtered = tendersList.filter((t) => {
+    const term = (searchTerm || '').toLowerCase();
     const matchesSearch =
-      t.municipalityName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.objectStr.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.noticeNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      t.state.toLowerCase().includes(searchTerm.toLowerCase());
+      (t.municipalityName || '').toLowerCase().includes(term) ||
+      (t.objectStr || '').toLowerCase().includes(term) ||
+      (t.noticeNumber || '').toLowerCase().includes(term) ||
+      (t.state || '').toLowerCase().includes(term);
     const matchesSource = !sourceFilter || t.source === sourceFilter;
     const matchesModality = !modalityFilter || t.modality === modalityFilter;
     const matchesState = !stateFilter || t.state === stateFilter;
@@ -93,7 +115,9 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
     setIsSyncing(true);
     setSyncMessage(null);
     try {
-      const res = await fetch('/api/pncp/search?q=' + encodeURIComponent(searchTerm || 'educacao'));
+      const q = searchTerm || 'educacao software gestao';
+      const uf = stateFilter || 'PI';
+      const res = await fetch(`/api/pncp/search?q=${encodeURIComponent(q)}&uf=${encodeURIComponent(uf)}&status=todos`);
       const json = await res.json();
       if (json.success && json.data) {
         // Merge real PNCP results with existing
@@ -103,56 +127,111 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
           const newItems = realPNCPItems.filter(item => !existingIds.has(item.id));
           return [...newItems, ...prev];
         });
-        setSyncMessage(`Sincronização concluída com sucesso via API do PNCP (pncp.gov.br)! ${json.data.length} certames atualizados.`);
+        setSyncMessage(`Sincronização concluída via API PNCP (${json.source || 'pncp.gov.br'}) para UF: ${uf}! ${json.data.length} certames atualizados.`);
       }
     } catch (err) {
       console.error(err);
-      setSyncMessage('Sincronização realizada com base nos conectores ativos do PNCP e Compras.gov.br.');
+      setSyncMessage('Sincronização realizada com base nos conectores ativos do PNCP (pncp.gov.br).');
     } finally {
       setIsSyncing(false);
       setTimeout(() => setSyncMessage(null), 5000);
     }
   };
 
-  const sourcesList = ['PNCP', 'Diário Oficial', 'Tribunal de Contas', 'Compras.gov.br', 'Portal Transparência', 'Consórcio Público'];
+  const unreadAlertsCount = alerts.filter((a) => !a.isRead).length;
 
   return (
     <div className="space-y-6">
       
-      {/* Header Banner */}
-      <div className="bg-white rounded-xl border border-slate-200 p-6 shadow-sm flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-wider">
-            <Globe className="w-4 h-4" />
-            <span>Módulo 1: Captura & Rastreamento Nacional</span>
+      {/* Header Banner & Sub-tab Navigation */}
+      <div className="bg-white rounded-xl border border-slate-200 p-5 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-indigo-600 font-bold text-xs uppercase tracking-wider">
+              <Globe className="w-4 h-4 text-indigo-600" />
+              <span>Radar PNCP & Monitoramento Licitatório</span>
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mt-1">
+              Central de Oportunidades & Alertas Comerciais
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Rastreamento ao vivo de editais abertos no PNCP e monitoramento crítico de prazos e vencimentos contratuais.
+            </p>
           </div>
-          <h2 className="text-xl font-extrabold text-slate-900 mt-1">
-            Radar de Licitações Públicas (PNCP & Fontes Oficiais)
-          </h2>
-          <p className="text-xs text-slate-500 mt-1">
-            Captura contínua de avisos de licitação, editais e minutas publicados nos principais portais do país.
-          </p>
+
+          {/* Sub-tab Navigation Switcher */}
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-inner shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('tenders')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'tenders'
+                  ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Search className="w-4 h-4" />
+              <span>Monitor PNCP ({tendersList.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('alerts')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'alerts'
+                  ? 'bg-red-600 text-white shadow-md ring-1 ring-red-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <BellRing className="w-4 h-4" />
+              <span>Alertas Críticos</span>
+              {unreadAlertsCount > 0 && (
+                <span className="bg-white text-red-700 font-extrabold text-[10px] px-1.5 py-0.5 rounded-full shadow-sm">
+                  {unreadAlertsCount}
+                </span>
+              )}
+            </button>
+          </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setShowSourcesInfoModal(true)}
-            className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs px-3.5 py-2.5 rounded-xl transition-all"
-          >
-            <Globe className="w-4 h-4 text-blue-600" />
-            <span>Ver Origem das Fontes</span>
-          </button>
+        {/* Sync buttons for Tender view */}
+        {activeSubTab === 'tenders' && (
+          <div className="flex items-center justify-between pt-3 border-t border-slate-100 flex-wrap gap-2">
+            <span className="text-xs text-slate-500 font-semibold">
+              Captura contínua de avisos de licitação, editais e minutas publicados nos portais do país.
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setShowSourcesInfoModal(true)}
+                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs px-3 py-1.5 rounded-lg transition-all"
+              >
+                <Globe className="w-3.5 h-3.5 text-blue-600" />
+                <span>Fontes Conectadas</span>
+              </button>
 
-          <button
-            onClick={handleSimulateSync}
-            disabled={isSyncing}
-            className="flex items-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow active:scale-95 disabled:opacity-50"
-          >
-            <RefreshCw className={`w-4 h-4 text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span>{isSyncing ? 'Sincronizando PNCP...' : 'Sincronizar Fontes Agora'}</span>
-          </button>
-        </div>
+              <button
+                onClick={handleSimulateSync}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs px-3 py-1.5 rounded-lg transition-all shadow active:scale-95 disabled:opacity-50"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 text-blue-400 ${isSyncing ? 'animate-spin' : ''}`} />
+                <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar'}</span>
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+
+      {activeSubTab === 'alerts' ? (
+        <AlertsView
+          alerts={alerts}
+          municipalities={municipalities}
+          onSelectMunicipality={onSelectMunicipality || (() => {})}
+          onOpenAIStrategy={onOpenAIStrategy || (() => {})}
+          onMarkAsRead={onMarkAsReadAlert || (() => {})}
+        />
+      ) : (
+        <>
 
       {syncMessage && (
         <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in">
@@ -163,7 +242,7 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
 
       {/* Captured Sources Chips Bar */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-        {sourcesList.map((src) => {
+        {['PNCP', 'Licitações-e', 'Compras.gov.br', 'Licitanet', 'BNC', 'TCE-PI/MA'].map((src) => {
           const count = tendersList.filter((t) => t.source === src).length;
           return (
             <div
@@ -646,6 +725,8 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>
