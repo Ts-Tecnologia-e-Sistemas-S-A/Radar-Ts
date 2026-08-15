@@ -45,6 +45,11 @@ interface SalesFunnelViewProps {
   onNavigateTab?: (tab: any) => void;
   onOpenAIForMuni?: (m: Municipality) => void;
   initialSubTab?: 'kanban' | 'crm';
+  pendingSyncCount?: number;
+  isSyncingData?: boolean;
+  isOnline?: boolean;
+  lastSyncTime?: Date | null;
+  onTriggerSync?: () => void;
 }
 
 const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
@@ -72,7 +77,12 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   selectedMunicipality,
   onNavigateTab,
   onOpenAIForMuni,
-  initialSubTab = 'kanban'
+  initialSubTab = 'kanban',
+  pendingSyncCount,
+  isSyncingData,
+  isOnline,
+  lastSyncTime,
+  onTriggerSync
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<'kanban' | 'crm'>(initialSubTab);
 
@@ -259,6 +269,11 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
           selectedMunicipality={selectedMunicipality}
           onSelectMunicipality={onSelectMunicipality}
           onNavigateTab={onNavigateTab}
+          pendingSyncCount={pendingSyncCount}
+          isSyncingData={isSyncingData}
+          isOnline={isOnline}
+          lastSyncTime={lastSyncTime}
+          onTriggerSync={onTriggerSync}
         />
       ) : (
         <>

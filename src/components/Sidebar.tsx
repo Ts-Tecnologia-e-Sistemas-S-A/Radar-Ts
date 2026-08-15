@@ -2,11 +2,13 @@ import React, { useState } from 'react';
 import { 
   LayoutDashboard, 
   SearchCheck, 
+  Search,
   Building2, 
   BellRing, 
   Sparkles, 
   Kanban, 
   MessageSquare,
+  CreditCard,
   Swords, 
   Calculator, 
   GraduationCap,
@@ -19,6 +21,8 @@ import {
 } from 'lucide-react';
 
 export type ActiveTab = 
+  | 'single_city_query'
+  | 'task_crm'
   | 'field_visits'
   | 'dashboard'
   | 'tenders'
@@ -27,6 +31,7 @@ export type ActiveTab =
   | 'ai_agent'
   | 'funnel'
   | 'crm'
+  | 'business_cards'
   | 'competitors'
   | 'io_score'
   | 'cockpit';
@@ -124,12 +129,36 @@ export const Sidebar: React.FC<SidebarProps> = ({
       systemId: 'system_crm',
       items: [
         {
+          id: 'single_city_query' as ActiveTab,
+          label: 'Consulta Única de Cidade',
+          icon: Search,
+          badge: 'Tela Única',
+          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
+          desc: 'Busca -> Resultado -> Cartões -> Criar Cartão na mesma tela',
+        },
+        {
+          id: 'task_crm' as ActiveTab,
+          label: 'CRM Task-Based (Fluxo 4 Telas)',
+          icon: Search,
+          badge: 'Passo a Passo',
+          badgeColor: 'bg-blue-100 text-blue-800 font-bold',
+          desc: 'Busca -> Raio-X -> Cartão de Visita -> Diário de Bordo',
+        },
+        {
           id: 'crm' as ActiveTab,
           label: 'Formulário & Registro CRM',
           icon: MessageSquare,
           badge: 'Formulários',
           badgeColor: 'bg-blue-100 text-blue-800 font-bold',
           desc: 'Formulário de cadastro de reuniões, e-mails, atas e ligações',
+        },
+        {
+          id: 'business_cards' as ActiveTab,
+          label: 'Cartões de Visita por Cidade',
+          icon: CreditCard,
+          badge: 'Campo 100%',
+          badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
+          desc: 'Digite a cidade/estado para visualizar e criar cartões de visita',
         },
         {
           id: 'funnel' as ActiveTab,

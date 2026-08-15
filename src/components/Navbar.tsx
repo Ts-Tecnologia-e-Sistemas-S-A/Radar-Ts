@@ -1,6 +1,7 @@
-import React from 'react';
-import { Radar, Search, Sparkles, FileText, Bell, ShieldCheck, TrendingUp } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Radar, Search, Sparkles, FileText, Bell, ShieldCheck, TrendingUp, Database, Building2, MapPin, X, ArrowRight } from 'lucide-react';
 import { Municipality, TenderNotice, CommercialAlert } from '../types';
+import { AutoSaveIndicator } from './AutoSaveIndicator';
 
 interface NavbarProps {
   municipalities: Municipality[];
@@ -8,10 +9,17 @@ interface NavbarProps {
   alerts: CommercialAlert[];
   searchQuery: string;
   onSearchChange: (q: string) => void;
+  onSelectCityFromSearch?: (queryOrMuni: string | Municipality) => void;
   onOpenGlobalReport: () => void;
   onOpenAlertsModal: () => void;
   onOpenRadarEnricher: () => void;
   onOpenCitySearch?: () => void;
+  onOpenBackupModal?: () => void;
+  pendingSyncCount?: number;
+  isSyncingData?: boolean;
+  isOnline?: boolean;
+  lastSyncTime?: Date | null;
+  onTriggerSync?: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -20,16 +28,65 @@ export const Navbar: React.FC<NavbarProps> = ({
   alerts,
   searchQuery,
   onSearchChange,
+  onSelectCityFromSearch,
   onOpenGlobalReport,
   onOpenAlertsModal,
   onOpenRadarEnricher,
   onOpenCitySearch,
+  onOpenBackupModal,
+  pendingSyncCount = 0,
+  isSyncingData = false,
+  isOnline = true,
+  lastSyncTime = null,
+  onTriggerSync = () => {}
 }) => {
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
   // Calculate top bar pipeline KPIs
   const totalPipeline = municipalities.reduce((acc, m) => acc + m.estimatedNewContractValue, 0);
   const unreadAlerts = alerts.filter((a) => !a.isRead).length;
   const highIoCount = municipalities.filter((m) => m.ioScore >= 80).length;
   const openTendersCount = tenders.filter((t) => t.status === 'Aberto' || t.status === 'Em Análise').length;
+
+  // Filter matching municipalities for autocomplete
+  const matchingCities = React.useMemo(() => {
+    if (!searchQuery.trim()) return municipalities.slice(0, 5);
+    const q = searchQuery.toLowerCase().trim();
+    return municipalities.filter(m => 
+      m.name.toLowerCase().includes(q) || 
+      m.state.toLowerCase().includes(q) ||
+      `${m.name} - ${m.state}`.toLowerCase().includes(q)
+    ).slice(0, 7);
+  }, [searchQuery, municipalities]);
+
+  // Handle outside click to close dropdown
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleSelectCity = (muni: Municipality) => {
+    onSearchChange(muni.name);
+    setIsDropdownOpen(false);
+    if (onSelectCityFromSearch) {
+      onSelectCityFromSearch(muni);
+    }
+  };
+
+  const handleSubmitSearch = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!searchQuery.trim()) return;
+    setIsDropdownOpen(false);
+    if (onSelectCityFromSearch) {
+      onSelectCityFromSearch(searchQuery);
+    }
+  };
 
   return (
     <header className="bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-40 shadow-md">
@@ -107,16 +164,106 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Search & Actions Row */}
           <div className="flex flex-wrap items-center justify-between md:justify-end gap-2">
-            {/* Live Search Input */}
-            <div className="relative flex-1 sm:w-64 min-w-[160px]">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-              <input
-                type="text"
-                placeholder="Buscar prefeitura, edital..."
-                value={searchQuery}
-                onChange={(e) => onSearchChange(e.target.value)}
-                className="w-full bg-slate-800/90 border border-slate-700 rounded-xl pl-8 pr-3 py-1.5 text-xs text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              />
+            {/* Live Interactive City Search Input Box in Header Menu */}
+            <div ref={dropdownRef} className="relative flex-1 sm:w-80 min-w-[200px]">
+              <form onSubmit={handleSubmitSearch} className="relative flex items-center">
+                <Search className="w-4 h-4 absolute left-3 text-blue-400 pointer-events-none" />
+                <input
+                  type="text"
+                  placeholder="Buscar cidade/prefeitura (ex: Esperantina)..."
+                  value={searchQuery}
+                  onFocus={() => setIsDropdownOpen(true)}
+                  onChange={(e) => {
+                    onSearchChange(e.target.value);
+                    setIsDropdownOpen(true);
+                  }}
+                  className="w-full bg-slate-950 border border-slate-700/80 focus:border-blue-500 rounded-xl pl-9 pr-16 py-2 text-xs font-semibold text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 shadow-inner"
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSearchChange('');
+                      setIsDropdownOpen(false);
+                    }}
+                    className="absolute right-8 text-slate-400 hover:text-white p-1 cursor-pointer"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+                <button
+                  type="submit"
+                  className="absolute right-1.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] px-2 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1 shadow"
+                  title="Pesquisar Cidade na Tela Única"
+                >
+                  <ArrowRight className="w-3 h-3" />
+                </button>
+              </form>
+
+              {/* Autocomplete Dropdown Menu */}
+              {isDropdownOpen && (
+                <div className="absolute top-full left-0 right-0 mt-2 bg-slate-900 border border-slate-700 rounded-2xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-800 animate-fadeIn">
+                  <div className="p-2 bg-slate-950/80 text-[10px] font-black uppercase text-blue-400 tracking-wider flex items-center justify-between">
+                    <span>Cidades no Radar</span>
+                    <span className="text-slate-500 font-mono">Clique para abrir</span>
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto no-scrollbar">
+                    {matchingCities.length > 0 ? (
+                      matchingCities.map((muni) => (
+                        <button
+                          key={muni.id}
+                          type="button"
+                          onClick={() => handleSelectCity(muni)}
+                          className="w-full text-left p-2.5 hover:bg-blue-600/20 transition-colors flex items-center justify-between gap-2 group cursor-pointer"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Building2 className="w-4 h-4 text-slate-400 group-hover:text-blue-400 shrink-0" />
+                            <div className="truncate">
+                              <span className="font-extrabold text-xs text-white group-hover:text-blue-300 block truncate">
+                                {muni.name}
+                              </span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                {muni.currentSystem || 'Concorrente'} • Pop: {muni.population?.toLocaleString('pt-BR') || '35.000'}
+                              </span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <span className="bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[9px] font-mono font-bold px-1.5 py-0.5 rounded">
+                              {muni.state}
+                            </span>
+                            <span className="bg-emerald-500/20 text-emerald-300 text-[9px] font-bold px-1.5 py-0.5 rounded font-mono">
+                              IO {muni.ioScore}
+                            </span>
+                          </div>
+                        </button>
+                      ))
+                    ) : (
+                      <div className="p-3 text-center text-xs text-slate-400">
+                        Nenhuma cidade local encontrada para "{searchQuery}"
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Direct Action Footer */}
+                  {searchQuery.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsDropdownOpen(false);
+                        if (onSelectCityFromSearch) onSelectCityFromSearch(searchQuery);
+                      }}
+                      className="w-full p-2.5 bg-gradient-to-r from-blue-900/60 to-indigo-900/60 hover:from-blue-800/80 hover:to-indigo-800/80 text-blue-200 text-xs font-bold flex items-center justify-between gap-2 transition-colors cursor-pointer"
+                    >
+                      <span className="truncate">
+                        Consultar <strong>"{searchQuery}"</strong> na API Pública
+                      </span>
+                      <ArrowRight className="w-3.5 h-3.5 shrink-0 text-blue-400" />
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* AI Status Badge */}
@@ -171,6 +318,27 @@ export const Navbar: React.FC<NavbarProps> = ({
                 <FileText className="w-3.5 h-3.5" />
                 <span>Dossiê</span>
               </button>
+
+              {/* Data Backup & Restore Button */}
+              {onOpenBackupModal && (
+                <button
+                  onClick={onOpenBackupModal}
+                  className="flex items-center gap-1 bg-emerald-700 hover:bg-emerald-600 text-white text-xs font-bold px-2.5 py-1.5 rounded-xl shadow-sm border border-emerald-500/30 transition-all active:scale-95 shrink-0"
+                  title="Exportar e Importar Backup em JSON (Prevenção de Perdas)"
+                >
+                  <Database className="w-3.5 h-3.5 text-emerald-200" />
+                  <span>Backup JSON</span>
+                </button>
+              )}
+
+              {/* Auto-Save & Cloud Sync Badge */}
+              <AutoSaveIndicator
+                pendingCount={pendingSyncCount}
+                isSyncing={isSyncingData}
+                isOnline={isOnline}
+                lastSavedTime={lastSyncTime}
+                onTriggerSync={onTriggerSync}
+              />
             </div>
 
           </div>

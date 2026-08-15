@@ -442,9 +442,66 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
       showToast(`✏️ Cartão de Visita de ${visitMuniName} (${visitState}) atualizado com sucesso!`);
     } else {
       // CREATE MODE
+      let matchedMuni = municipalities.find(
+        (item) => item.id === visitMuniId || (item.name || '').toLowerCase().trim() === visitMuniName.toLowerCase().trim()
+      );
+
+      let targetMuniId = matchedMuni ? matchedMuni.id : (visitMuniId && visitMuniId !== 'custom_muni' ? visitMuniId : `mun-${Date.now()}`);
+
+      if (!matchedMuni && onAddMunicipality) {
+        const createdCity: Municipality = {
+          id: targetMuniId,
+          name: visitMuniName.trim(),
+          state: visitState.trim().toUpperCase(),
+          region: 'Nordeste',
+          population: 25000,
+          status: 'oportunidade',
+          funnelStage: 'prospectado',
+          currentSystem: 'Em prospecção',
+          currentContractValue: 0,
+          contractDaysRemaining: 90,
+          renewalProbability: 'Média',
+          tenderProbability: 80,
+          estimatedNewContractValue: 350000,
+          probableModality: 'Pregão Eletrônico',
+          ioScore: 70,
+          ioFactors: {
+            contractExpiringDays: 70,
+            lowIdebScore: 60,
+            techInvestmentHistory: 70,
+            budgetAvailability: 65,
+            managementChange: 50,
+            federalFundsAvailable: 80,
+            existingRelationship: 60
+          },
+          educationalMetrics: {
+            ideb: 4.0,
+            idebTarget: 5.0,
+            dropoutRate: 6.0,
+            schoolsCount: 15,
+            studentsCount: 3200,
+            teachersCount: 180,
+            fundebBudget: 9500000,
+            mainPains: ['Diário Eletrônico Offline', 'Prestação de Contas']
+          },
+          keyContacts: [
+            {
+              name: contactName.trim(),
+              role: contactRole.trim(),
+              phone: contactPhone.trim() || '(99) 98800-0000'
+            }
+          ],
+          buyingHistory: [],
+          lastActivityDate: new Date().toISOString().slice(0, 10),
+          dealOwner: visitDealOwner.trim() || 'José Badotti'
+        };
+        onAddMunicipality(createdCity);
+        matchedMuni = createdCity;
+      }
+
       const newInteraction: CRMInteraction = {
-        id: `cartao-visita-${Date.now()}`,
-        municipalityId: visitMuniId || 'custom_muni',
+        id: `cartao-visita-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+        municipalityId: targetMuniId,
         municipalityName: visitMuniName.trim(),
         state: visitState.trim().toUpperCase(),
         date: visitDate || new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -460,11 +517,6 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
       };
 
       onAddCRMInteraction(newInteraction);
-
-      // Sync municipality if found
-      const matchedMuni = municipalities.find(
-        (item) => item.id === visitMuniId || (item.name || '').toLowerCase().trim() === visitMuniName.toLowerCase().trim()
-      );
       if (matchedMuni && onUpdateMunicipality && (matchedMuni.name !== visitMuniName.trim() || matchedMuni.state !== visitState.trim().toUpperCase())) {
         onUpdateMunicipality({
           ...matchedMuni,

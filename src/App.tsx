@@ -20,16 +20,28 @@ import { CompetitorRadarView } from './components/CompetitorRadarView';
 import { IOScoreCalculatorView } from './components/IOScoreCalculatorView';
 import { EducationalCockpitBridge } from './components/EducationalCockpitBridge';
 import { FieldVisitsView } from './components/FieldVisitsView';
+import { BusinessCardsView } from './components/BusinessCardsView';
+import { TaskBasedCrmView } from './components/TaskBasedCrmView';
+import { SingleCityQueryView } from './components/SingleCityQueryView';
+import { MobileScrollNav } from './components/MobileScrollNav';
 import { DossierExportModal } from './components/DossierExportModal';
 import { SicapRadarCrmEnricherModal } from './components/SicapRadarCrmEnricherModal';
 import { AICitySearchModal } from './components/AICitySearchModal';
+import { DataBackupModal } from './components/DataBackupModal';
 import { SelectedCityBar } from './components/SelectedCityBar';
 import { 
   subscribeToMunicipalities, 
   subscribeToInteractions, 
   saveMunicipalityToFirebase, 
-  saveInteractionToFirebase 
+  saveInteractionToFirebase,
+  deleteInteractionFromFirebase 
 } from './services/firebaseService';
+import {
+  enqueuePendingSync,
+  processAutoSaveQueue,
+  auditAndEnqueueUnsyncedItems,
+  getPendingQueue
+} from './services/autoSaveService';
 
 function deduplicateMunicipalities(list: Municipality[]): Municipality[] {
   const map = new Map<string, Municipality>();
@@ -57,7 +69,7 @@ function deduplicateInteractions(list: CRMInteraction[]): CRMInteraction[] {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('field_visits');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('single_city_query');
   const [firebaseStatus, setFirebaseStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   
   // App persistent state with Firebase Cloud & LocalStorage fallback
@@ -99,12 +111,23 @@ export default function App() {
     }
   });
 
-  // Real-time synchronization with Firebase Cloud Firestore
+  // Real-time synchronization with Firebase Cloud Firestore (Safe Merge to prevent data loss)
   useEffect(() => {
     const unsubMunicipalities = subscribeToMunicipalities(
-      (data) => {
-        if (data && data.length > 0) {
-          setMunicipalities(deduplicateMunicipalities(data));
+      (firestoreData) => {
+        if (firestoreData) {
+          setMunicipalities((prev) => {
+            const map = new Map<string, Municipality>();
+            // Keep existing local state first
+            prev.forEach((m) => {
+              if (m && m.id) map.set(m.id, m);
+            });
+            // Merge incoming Cloud Firestore data
+            firestoreData.forEach((m) => {
+              if (m && m.id) map.set(m.id, m);
+            });
+            return deduplicateMunicipalities(Array.from(map.values()));
+          });
           setFirebaseStatus('connected');
         }
       },
@@ -112,9 +135,22 @@ export default function App() {
     );
 
     const unsubInteractions = subscribeToInteractions(
-      (data) => {
-        if (data && data.length > 0) {
-          setCrmInteractions(deduplicateInteractions(data));
+      (firestoreData) => {
+        if (firestoreData) {
+          setCrmInteractions((prev) => {
+            const map = new Map<string, CRMInteraction>();
+            // Keep existing local state first so newly registered visits are never wiped
+            prev.forEach((item) => {
+              if (item && item.id) map.set(item.id, item);
+            });
+            // Merge incoming Cloud Firestore data
+            firestoreData.forEach((item) => {
+              if (item && item.id) map.set(item.id, item);
+            });
+            const merged = Array.from(map.values());
+            merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            return merged;
+          });
           setFirebaseStatus('connected');
         }
       },
@@ -175,10 +211,154 @@ export default function App() {
   const [selectedStateFilter, setSelectedStateFilter] = useState<string>('');
   const [searchQuery, setSearchQuery] = useState<string>('');
   
+  // Auto-Save & Offline Queue State
+  const [pendingSyncCount, setPendingSyncCount] = useState<number>(0);
+  const [isSyncingData, setIsSyncingData] = useState<boolean>(false);
+  const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
+  const [lastSyncTime, setLastSyncTime] = useState<Date | null>(new Date());
+
+  // Trigger manual or automatic background sync
+  const triggerAutoSaveSync = async () => {
+    if (isSyncingData) return;
+    setIsSyncingData(true);
+
+    try {
+      // First audit local state to catch any unsynced items
+      auditAndEnqueueUnsyncedItems(municipalities, crmInteractions);
+      
+      const res = await processAutoSaveQueue();
+      setPendingSyncCount(res.remainingCount);
+
+      if (res.syncedCount > 0) {
+        setLastSyncTime(new Date());
+        showToast(`☁️ Auto-Save: ${res.syncedCount} registro(s) sincronizado(s) com o Firestore!`);
+      }
+    } catch (err) {
+      console.error('Auto-save sync error:', err);
+    } finally {
+      setIsSyncingData(false);
+    }
+  };
+
+  // Listen for online/offline events & background auto-save loop
+  useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showToast('🟢 Conexão restabelecida! Iniciando sincronização do Auto-Save...');
+      triggerAutoSaveSync();
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      showToast('⚠️ Dispositivo em Modo Offline. Registros salvos localmente.');
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial audit & sync
+    auditAndEnqueueUnsyncedItems(municipalities, crmInteractions);
+    setPendingSyncCount(getPendingQueue().length);
+
+    // Periodic verification interval (every 10 seconds)
+    const interval = setInterval(() => {
+      if (navigator.onLine) {
+        triggerAutoSaveSync();
+      } else {
+        setPendingSyncCount(getPendingQueue().length);
+      }
+    }, 10000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+      clearInterval(interval);
+    };
+  }, [municipalities, crmInteractions]);
+
   // Modals state
   const [showExportModal, setShowExportModal] = useState<boolean>(false);
   const [showRadarEnricherModal, setShowRadarEnricherModal] = useState<boolean>(false);
   const [showCitySearchModal, setShowCitySearchModal] = useState<boolean>(false);
+  const [showBackupModal, setShowBackupModal] = useState<boolean>(false);
+  const [toastMessage, setToastMessage] = useState<string | null>(null);
+
+  const showToast = (msg: string) => {
+    setToastMessage(msg);
+    setTimeout(() => {
+      setToastMessage(null);
+    }, 4000);
+  };
+
+  const handleImportData = (
+    importedData: {
+      municipalities?: Municipality[];
+      crmInteractions?: CRMInteraction[];
+      tenders?: TenderNotice[];
+      alerts?: CommercialAlert[];
+    },
+    mode: 'merge' | 'replace'
+  ) => {
+    if (mode === 'replace') {
+      if (importedData.municipalities && importedData.municipalities.length > 0) {
+        const dedupedMunis = deduplicateMunicipalities(importedData.municipalities);
+        setMunicipalities(dedupedMunis);
+        dedupedMunis.forEach((m) => saveMunicipalityToFirebase(m));
+      }
+      if (importedData.crmInteractions) {
+        const dedupedInteractions = deduplicateInteractions(importedData.crmInteractions);
+        setCrmInteractions(dedupedInteractions);
+        dedupedInteractions.forEach((i) => saveInteractionToFirebase(i));
+      }
+      if (importedData.tenders) setTenders(importedData.tenders);
+      if (importedData.alerts) setAlerts(importedData.alerts);
+    } else {
+      // Merge Mode (Default)
+      if (importedData.municipalities && importedData.municipalities.length > 0) {
+        setMunicipalities((prev) => {
+          const merged = deduplicateMunicipalities([...prev, ...importedData.municipalities!]);
+          merged.forEach((m) => saveMunicipalityToFirebase(m));
+          return merged;
+        });
+      }
+      if (importedData.crmInteractions && importedData.crmInteractions.length > 0) {
+        setCrmInteractions((prev) => {
+          const merged = deduplicateInteractions([...prev, ...importedData.crmInteractions!]);
+          merged.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          merged.forEach((i) => saveInteractionToFirebase(i));
+          return merged;
+        });
+      }
+      if (importedData.tenders && importedData.tenders.length > 0) {
+        setTenders((prev) => {
+          const map = new Map<string, TenderNotice>();
+          prev.forEach((t) => map.set(t.id, t));
+          importedData.tenders!.forEach((t) => map.set(t.id, t));
+          return Array.from(map.values());
+        });
+      }
+      if (importedData.alerts && importedData.alerts.length > 0) {
+        setAlerts((prev) => {
+          const map = new Map<string, CommercialAlert>();
+          prev.forEach((a) => map.set(a.id, a));
+          importedData.alerts!.forEach((a) => map.set(a.id, a));
+          return Array.from(map.values());
+        });
+      }
+    }
+  };
+
+  const handleResetData = () => {
+    const cleanM = deduplicateMunicipalities(MOCK_MUNICIPALITIES);
+    const cleanI = deduplicateInteractions(MOCK_CRM_INTERACTIONS);
+    setMunicipalities(cleanM);
+    setCrmInteractions(cleanI);
+    setTenders(MOCK_TENDERS);
+    setAlerts(MOCK_ALERTS);
+    cleanM.forEach((m) => saveMunicipalityToFirebase(m));
+    cleanI.forEach((i) => saveInteractionToFirebase(i));
+    showToast('🔄 Base de dados restaurada para o estado inicial com sucesso!');
+  };
 
   const handleUpdateMunicipality = (updated: Municipality) => {
     setMunicipalities((prev) =>
@@ -195,8 +375,9 @@ export default function App() {
           : i
       )
     );
-    // Save to Firebase Cloud
-    saveMunicipalityToFirebase(updated);
+    // Enqueue & auto-save to Firebase Cloud
+    enqueuePendingSync('municipality', updated);
+    triggerAutoSaveSync();
   };
 
   // Handlers
@@ -219,8 +400,9 @@ export default function App() {
 
   const handleAddCRMInteraction = (newInteraction: CRMInteraction) => {
     setCrmInteractions((prev) => [newInteraction, ...prev]);
-    // Save to Firebase Cloud
-    saveInteractionToFirebase(newInteraction);
+    // Enqueue & auto-save to Firebase Cloud
+    enqueuePendingSync('interaction', newInteraction);
+    triggerAutoSaveSync();
   };
 
   const handleEditCRMInteraction = (updatedInteraction: CRMInteraction) => {
@@ -252,12 +434,14 @@ export default function App() {
       );
     }
 
-    // Save to Firebase Cloud
-    saveInteractionToFirebase(updatedInteraction);
+    // Enqueue & auto-save to Firebase Cloud
+    enqueuePendingSync('interaction', updatedInteraction);
+    triggerAutoSaveSync();
   };
 
   const handleDeleteCRMInteraction = (id: string) => {
     setCrmInteractions((prev) => prev.filter((item) => item.id !== id));
+    deleteInteractionFromFirebase(id);
   };
 
   const handleAddMunicipality = (newMuni: Municipality) => {
@@ -387,6 +571,24 @@ export default function App() {
 
   const unreadAlertsCount = alerts.filter((a) => !a.isRead).length;
 
+  const handleNavbarCitySearch = (queryOrMuni: string | Municipality) => {
+    if (typeof queryOrMuni === 'string') {
+      const q = queryOrMuni.trim();
+      setSearchQuery(q);
+      const match = municipalities.find(
+        (m) => m.name.toLowerCase() === q.toLowerCase() || `${m.name} - ${m.state}`.toLowerCase() === q.toLowerCase()
+      );
+      if (match) {
+        setSelectedMunicipality(match);
+      }
+      setActiveTab('single_city_query');
+    } else {
+      setSelectedMunicipality(queryOrMuni);
+      setSearchQuery(queryOrMuni.name);
+      setActiveTab('single_city_query');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-100 flex flex-col font-sans text-slate-800 antialiased selection:bg-blue-500 selection:text-white overflow-x-hidden w-full">
       
@@ -397,10 +599,17 @@ export default function App() {
         alerts={alerts}
         searchQuery={searchQuery}
         onSearchChange={setSearchQuery}
+        onSelectCityFromSearch={handleNavbarCitySearch}
         onOpenGlobalReport={() => setShowExportModal(true)}
         onOpenAlertsModal={() => setActiveTab('alerts')}
         onOpenRadarEnricher={() => setShowRadarEnricherModal(true)}
         onOpenCitySearch={() => setShowCitySearchModal(true)}
+        onOpenBackupModal={() => setShowBackupModal(true)}
+        pendingSyncCount={pendingSyncCount}
+        isSyncingData={isSyncingData}
+        isOnline={isOnline}
+        lastSyncTime={lastSyncTime}
+        onTriggerSync={triggerAutoSaveSync}
       />
 
       {/* Main Layout: Left Sidebar + Right Content Area */}
@@ -414,20 +623,22 @@ export default function App() {
         />
 
         {/* Dynamic Main Workspace View - Single Scroll Container */}
-        <main className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 min-w-0 max-w-full w-full">
+        <main className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 min-w-0 max-w-full w-full pb-32 sm:pb-24">
           
           {/* Active City 360º Commercial Context & Navigation Bar */}
-          <SelectedCityBar
-            municipalities={municipalities}
-            crmInteractions={crmInteractions}
-            selectedMunicipality={selectedMunicipality}
-            onSelectMunicipality={handleSelectMunicipality}
-            onUpdateMunicipality={handleUpdateMunicipality}
-            activeTab={activeTab}
-            onNavigateTab={setActiveTab}
-            onOpenExportModal={() => setShowExportModal(true)}
-            onOpenEnricherModal={() => setShowRadarEnricherModal(true)}
-          />
+          {activeTab !== 'task_crm' && activeTab !== 'single_city_query' && (
+            <SelectedCityBar
+              municipalities={municipalities}
+              crmInteractions={crmInteractions}
+              selectedMunicipality={selectedMunicipality}
+              onSelectMunicipality={handleSelectMunicipality}
+              onUpdateMunicipality={handleUpdateMunicipality}
+              activeTab={activeTab}
+              onNavigateTab={setActiveTab}
+              onOpenExportModal={() => setShowExportModal(true)}
+              onOpenEnricherModal={() => setShowRadarEnricherModal(true)}
+            />
+          )}
 
           {activeTab === 'field_visits' && (
             <FieldVisitsView
@@ -526,6 +737,52 @@ export default function App() {
               selectedMunicipality={selectedMunicipality}
               onNavigateTab={setActiveTab}
               onOpenAIForMuni={handleOpenAIForMuni}
+              pendingSyncCount={pendingSyncCount}
+              isSyncingData={isSyncingData}
+              isOnline={isOnline}
+              lastSyncTime={lastSyncTime}
+              onTriggerSync={triggerAutoSaveSync}
+            />
+          )}
+
+          {activeTab === 'single_city_query' && (
+            <SingleCityQueryView
+              municipalities={municipalities}
+              crmInteractions={crmInteractions}
+              onAddCRMInteraction={handleAddCRMInteraction}
+              onEditCRMInteraction={handleEditCRMInteraction}
+              onDeleteCRMInteraction={handleDeleteCRMInteraction}
+              onAddMunicipality={handleAddMunicipality}
+              onUpdateMunicipality={handleUpdateMunicipality}
+              onSelectMunicipality={handleSelectMunicipality}
+              selectedMunicipality={selectedMunicipality}
+              onNavigateTab={(tab) => setActiveTab(tab as any)}
+            />
+          )}
+
+          {activeTab === 'task_crm' && (
+            <TaskBasedCrmView
+              municipalities={municipalities}
+              crmInteractions={crmInteractions}
+              onAddMunicipality={handleAddMunicipality}
+              onUpdateMunicipality={handleUpdateMunicipality}
+              onAddCRMInteraction={handleAddCRMInteraction}
+              selectedMunicipality={selectedMunicipality}
+              onSelectMunicipality={handleSelectMunicipality}
+            />
+          )}
+
+          {activeTab === 'business_cards' && (
+            <BusinessCardsView
+              municipalities={municipalities}
+              crmInteractions={crmInteractions}
+              onAddCRMInteraction={handleAddCRMInteraction}
+              onEditCRMInteraction={handleEditCRMInteraction}
+              onDeleteCRMInteraction={handleDeleteCRMInteraction}
+              onAddMunicipality={handleAddMunicipality}
+              onSelectMunicipality={handleSelectMunicipality}
+              onNavigateTab={(tab) => setActiveTab(tab as any)}
+              selectedMunicipality={selectedMunicipality}
             />
           )}
 
@@ -556,11 +813,42 @@ export default function App() {
         existingMunicipalities={municipalities}
         onAddMunicipality={(newMuni) => {
           handleAddMunicipality(newMuni);
+          handleSelectMunicipality(newMuni);
           setActiveTab('field_visits');
         }}
         initialCityName={searchQuery || 'Codó'}
         initialState="MA"
       />
+
+      {/* Data Backup & Restore Modal */}
+      <DataBackupModal
+        isOpen={showBackupModal}
+        onClose={() => setShowBackupModal(false)}
+        municipalities={municipalities}
+        crmInteractions={crmInteractions}
+        tenders={tenders}
+        alerts={alerts}
+        onImportData={handleImportData}
+        onResetData={handleResetData}
+        onShowToast={showToast}
+        firebaseStatus={firebaseStatus}
+      />
+
+      {/* Mobile Scroll & Quick Actions Floating Navigation Dock */}
+      <MobileScrollNav />
+
+      {/* Toast Notification Banner */}
+      {toastMessage && (
+        <div className="fixed bottom-5 right-5 z-50 bg-slate-900 text-white border border-slate-700 shadow-2xl px-4 py-3 rounded-2xl flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-200">
+          <span className="text-xs font-semibold">{toastMessage}</span>
+          <button
+            onClick={() => setToastMessage(null)}
+            className="text-slate-400 hover:text-white font-bold text-xs"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
     </div>
   );
