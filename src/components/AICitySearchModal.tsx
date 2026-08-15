@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Municipality } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
 import { auditAIDataIntegrity } from '../utils/aiAuditValidator';
+import { searchIbgeCity } from '../services/govApisService';
 import { Button } from './atoms/Button';
 import { Input } from './atoms/Input';
 import { Badge } from './atoms/Badge';
@@ -81,12 +82,16 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
     ]);
 
     try {
+      // 1. Consultar IBGE API REST Oficial em tempo real
+      const ibgeData = await searchIbgeCity(cityName.trim(), state);
+      
       const res = await fetch('/api/ai/analyze-city', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          cityName: cityName.trim(),
+          cityName: ibgeData?.nome || cityName.trim(),
           state: state,
+          ibgeCode: ibgeData?.id || null,
         }),
       });
 
@@ -107,12 +112,18 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
         const scoreBreakdown = calculateCommercialScore(auditedMuni);
         const finalMuni: Municipality = {
           ...auditedMuni,
+          name: ibgeData?.nome || auditedMuni.name,
           ioScore: scoreBreakdown.finalScore,
+          verifiedSources: [
+            ...(auditedMuni.verifiedSources || []),
+            ibgeData ? `IBGE REST API Oficial (Código IBGE: ${ibgeData.id})` : 'IBGE'
+          ]
         };
 
         setAnalyzedMuni(finalMuni);
         setAnalysisLogs((prev) => [
           ...prev,
+          `🏛️ IBGE REST API: Município "${ibgeData?.nome || cityName}" localizado oficialmente (Código: ${ibgeData?.id || 'OK'}).`,
           `🛡️ Auditoria de Veracidade: ${auditResult.dataVerificationStatus}`,
           `✅ Fontes validadas: ${auditResult.verifiedSources.join(', ')}`,
           `✅ Análise concluída com sucesso! Score IO: ${scoreBreakdown.finalScore}/100.`,
@@ -214,8 +225,8 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in">
-      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
+    <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-md flex items-start sm:items-center justify-center p-2 sm:p-4 overflow-y-auto animate-in fade-in">
+      <div className="bg-white rounded-2xl sm:rounded-3xl max-w-2xl w-full p-4 sm:p-6 space-y-4 sm:space-y-5 shadow-2xl border border-slate-200 my-auto max-h-[92vh] overflow-y-auto">
         
         {/* Modal Header */}
         <div className="flex items-center justify-between border-b border-slate-100 pb-4">

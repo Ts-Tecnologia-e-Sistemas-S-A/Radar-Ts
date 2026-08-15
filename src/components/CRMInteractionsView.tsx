@@ -4,6 +4,7 @@ import { calculateCommercialScore } from '../utils/scoreCalculator';
 import { openGoogleCalendar, formatCardDetailsForCalendar } from '../utils/googleCalendar';
 import { GoogleCalendarHubModal } from './GoogleCalendarHubModal';
 import { BusinessCardFormatterModal } from './BusinessCardFormatterModal';
+import { AutoSaveIndicator } from './AutoSaveIndicator';
 import { 
   PhoneCall, 
   MapPin, 
@@ -59,6 +60,11 @@ interface CRMInteractionsViewProps {
   selectedMunicipality?: Municipality | null;
   onSelectMunicipality?: (m: Municipality) => void;
   onNavigateTab?: (tab: string) => void;
+  pendingSyncCount?: number;
+  isSyncingData?: boolean;
+  isOnline?: boolean;
+  lastSyncTime?: Date | null;
+  onTriggerSync?: () => void;
 }
 
 export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
@@ -72,6 +78,11 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
   selectedMunicipality,
   onSelectMunicipality,
   onNavigateTab,
+  pendingSyncCount = 0,
+  isSyncingData = false,
+  isOnline = true,
+  lastSyncTime = null,
+  onTriggerSync = () => {}
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [stateFilter, setStateFilter] = useState<string>('');
@@ -211,7 +222,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
     const nowStr = new Date().toISOString().slice(0, 16).replace('T', ' ');
 
     const newInteraction: CRMInteraction = {
-      id: `crm-ai-copilot-${Date.now()}`,
+      id: `crm-ai-copilot-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       municipalityId: targetM.id,
       municipalityName: targetM.name,
       state: targetM.state,
@@ -703,7 +714,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
     if (!formSummary || !formContactName) return;
 
     const newObj: CRMInteraction = {
-      id: `crm-${Date.now()}`,
+      id: `crm-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
       municipalityId: targetMuniId,
       municipalityName: targetMuniName,
       state: targetState,
@@ -796,6 +807,14 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
             <Calendar className="w-4 h-4 text-indigo-200" />
             <span>📅 Agenda Google Calendar ({pendingNextStepsCount})</span>
           </button>
+
+          <AutoSaveIndicator
+            pendingCount={pendingSyncCount}
+            isSyncing={isSyncingData}
+            isOnline={isOnline}
+            lastSavedTime={lastSyncTime}
+            onTriggerSync={onTriggerSync}
+          />
 
           <button
             type="button"

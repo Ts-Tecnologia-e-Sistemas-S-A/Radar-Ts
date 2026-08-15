@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { TenderNotice, CommercialAlert, Municipality } from '../types';
 import { AlertsView } from './AlertsView';
-import { Search, Filter, ExternalLink, RefreshCw, FileText, Globe, Building, CheckCircle2, BookOpen, Eye, Sparkles, AlertCircle, ChevronRight, BellRing } from 'lucide-react';
+import { Search, Filter, ExternalLink, RefreshCw, FileText, Globe, Building, CheckCircle2, BookOpen, Eye, Sparkles, AlertCircle, ChevronRight, BellRing, Database } from 'lucide-react';
 import { TenderReaderModal } from './TenderReaderModal';
+import { PncpCnpjExtractorModal } from './PncpCnpjExtractorModal';
 
 interface TenderRadarViewProps {
   tenders: TenderNotice[];
@@ -45,6 +46,7 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
   const [showSourcesInfoModal, setShowSourcesInfoModal] = useState<boolean>(false);
   const [showScopeTestModal, setShowScopeTestModal] = useState<boolean>(false);
+  const [showPncpExtractorModal, setShowPncpExtractorModal] = useState<boolean>(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
   const [selectedTenderForReader, setSelectedTenderForReader] = useState<TenderNotice | null>(null);
 
@@ -202,8 +204,16 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
             </span>
             <div className="flex items-center gap-2">
               <button
+                onClick={() => setShowPncpExtractorModal(true)}
+                className="flex items-center gap-1.5 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-xs px-3.5 py-1.5 rounded-lg transition-all shadow-md shadow-blue-600/20 active:scale-95 cursor-pointer"
+              >
+                <Database className="w-3.5 h-3.5 text-blue-200" />
+                <span>Mapear CNPJs PNCP (FME/SEMED)</span>
+              </button>
+
+              <button
                 onClick={() => setShowSourcesInfoModal(true)}
-                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs px-3 py-1.5 rounded-lg transition-all"
+                className="flex items-center gap-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 font-bold text-xs px-3 py-1.5 rounded-lg transition-all cursor-pointer"
               >
                 <Globe className="w-3.5 h-3.5 text-blue-600" />
                 <span>Fontes Conectadas</span>
@@ -677,40 +687,60 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
 
             <div className="space-y-3 text-xs text-slate-700">
               <p className="leading-relaxed bg-blue-50 p-3 rounded-xl border border-blue-100 text-blue-900 font-medium">
-                <strong>Origem dos Dados:</strong> Os certames do Radar SICAP são capturados continuamente por conectores que consomem dados abertos e APIs públicas oficiais dos órgãos governamentais:
+                <strong>Consumo Direto de APIs REST Oficiais e Gratuitas:</strong> O SICAP RADAR está integrado diretamente aos endpoints das principais bases públicas governamentais brasileiras para garantir dados auditados, verídicos e atualizados em tempo real:
               </p>
 
               <div className="space-y-2.5">
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="flex items-center justify-between font-bold text-slate-900">
-                    <span>1. PNCP - Portal Nacional de Contratações Públicas</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-black">API REST Oficial (pncp.gov.br)</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-blue-600 font-mono font-black">1.</span>
+                      <span>Portal Nacional de Contratações Públicas (PNCP)</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-black font-mono">pncp.gov.br/api/v1</span>
                   </div>
-                  <p className="text-slate-500 mt-1">API do Governo Federal regida pela Lei nº 14.133/2021. Fornece publicações de editais, avisos, atas de registro de preço e extratos de contratos de todos os municípios do país.</p>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    Exigido pela Nova Lei de Licitações (Lei nº 14.133/2021). Consome editais, atas de registro de preços, andamentos e contratos de todos os municípios através dos endpoints públicos da API REST.
+                  </p>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="flex items-center justify-between font-bold text-slate-900">
-                    <span>2. Compras.gov.br (Antigo Comprasnet)</span>
-                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-black">compras.dados.gov.br</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-blue-600 font-mono font-black">2.</span>
+                      <span>Portal da Transparência do Governo Federal (CGU)</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-black font-mono">portaldatransparencia.gov.br/api</span>
                   </div>
-                  <p className="text-slate-500 mt-1">Portal federal de compras governamentais, capturando licitações por pregão eletrônico e dispensas.</p>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    Mantida pela Controladoria-Geral da União (CGU). Permite consultas em tempo real da execução orçamentária através dos endpoints <code className="bg-slate-200 px-1 py-0.5 rounded">/api-de-dados/licitacoes</code> e <code className="bg-slate-200 px-1 py-0.5 rounded">/api-de-dados/contratos</code>.
+                  </p>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="flex items-center justify-between font-bold text-slate-900">
-                    <span>3. Diários Oficiais Estaduais e Municipais (DOM/DOE)</span>
-                    <span className="text-[10px] bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-black">Web Scrapers Automatizados</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-blue-600 font-mono font-black">3.</span>
+                      <span>API do Compras.gov.br (Comprasnet / Contratos.gov.br 1.0)</span>
+                    </span>
+                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-black font-mono">contratos.comprasnet.gov.br</span>
                   </div>
-                  <p className="text-slate-500 mt-1">Varredura diária dos Diários Oficiais das Associações de Municípios (ex: APPM-PI, FAMEM-MA, APRECE-CE) para capturar avisos de abertura antes dos portais nacionais.</p>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    Centraliza as compras governamentais. A API Contratos.gov.br 1.0 fornece o histórico detalhado do ciclo de vida dos contratos, garantias, aditivos, empenhos e ordens bancárias.
+                  </p>
                 </div>
 
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200">
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
                   <div className="flex items-center justify-between font-bold text-slate-900">
-                    <span>4. Tribunais de Contas Estaduais (TCEs) & INEP / FUNDEB</span>
-                    <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-black">Painéis de Transparência</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="text-blue-600 font-mono font-black">4.</span>
+                      <span>APIs de Transparência Estaduais, Municipais e IBGE</span>
+                    </span>
+                    <span className="text-[10px] bg-purple-100 text-purple-800 px-2 py-0.5 rounded font-black font-mono">servicodados.ibge.gov.br</span>
                   </div>
-                  <p className="text-slate-500 mt-1">Dados de vigência de contratos anteriores, suplementações do Fundeb e estatísticas educacionais do Censo Escolar.</p>
+                  <p className="text-slate-500 text-[11px] leading-relaxed">
+                    Mapeamento descentralizado de portais de dados abertos estaduais (ex: Transparência Maranhão, TCE-PI, TCE-MA) e consumo de dados populacionais em tempo real via API REST do IBGE para mais de 5.500 municípios.
+                  </p>
                 </div>
               </div>
             </div>
@@ -726,6 +756,14 @@ export const TenderRadarView: React.FC<TenderRadarViewProps> = ({
           </div>
         </div>
       )}
+
+      {/* Extrator Mapeador de CNPJs de Educação do PNCP */}
+      <PncpCnpjExtractorModal
+        isOpen={showPncpExtractorModal}
+        onClose={() => setShowPncpExtractorModal(false)}
+        onAddMunicipality={onSelectMunicipality}
+        municipalities={municipalities}
+      />
         </>
       )}
 

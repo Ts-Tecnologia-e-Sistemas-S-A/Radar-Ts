@@ -5,7 +5,8 @@ import {
   setDoc, 
   onSnapshot, 
   updateDoc, 
-  addDoc 
+  addDoc,
+  deleteDoc 
 } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Municipality, CRMInteraction } from '../types';
@@ -111,42 +112,48 @@ export function subscribeToInteractions(
 /**
  * Save or update a municipality in Firebase
  */
-export async function saveMunicipalityToFirebase(m: Municipality): Promise<void> {
+export async function saveMunicipalityToFirebase(m: Municipality): Promise<boolean> {
   try {
     const docRef = doc(db, MUNICIPALITIES_COLLECTION, m.id);
     await setDoc(docRef, m, { merge: true });
+    return true;
   } catch (err) {
     console.error('Failed to save municipality to Firebase:', err);
+    return false;
   }
 }
 
 /**
  * Add or update a CRM interaction in Firebase
  */
-export async function saveInteractionToFirebase(interaction: CRMInteraction): Promise<void> {
+export async function saveInteractionToFirebase(interaction: CRMInteraction): Promise<boolean> {
   try {
     const docRef = doc(db, INTERACTIONS_COLLECTION, interaction.id);
     await setDoc(docRef, interaction, { merge: true });
+    return true;
   } catch (err) {
     console.error('Failed to save interaction to Firebase:', err);
+    return false;
   }
 }
 
 /**
  * Record a field checkin/visit in Firebase
  */
-export async function saveFieldCheckinToFirebase(checkinData: {
-  municipalityId: string;
-  municipalityName: string;
-  timestamp: string;
-  location: string;
-  contactMet?: string;
-  notes?: string;
-}): Promise<void> {
+export async function deleteInteractionFromFirebase(id: string): Promise<void> {
   try {
-    const colRef = collection(db, FIELD_VISITS_COLLECTION);
-    await addDoc(colRef, checkinData);
+    const docRef = doc(db, INTERACTIONS_COLLECTION, id);
+    await deleteDoc(docRef);
   } catch (err) {
-    console.error('Failed to save field checkin to Firebase:', err);
+    console.error('Failed to delete interaction from Firebase:', err);
+  }
+}
+
+export async function deleteMunicipalityFromFirebase(id: string): Promise<void> {
+  try {
+    const docRef = doc(db, MUNICIPALITIES_COLLECTION, id);
+    await deleteDoc(docRef);
+  } catch (err) {
+    console.error('Failed to delete municipality from Firebase:', err);
   }
 }

@@ -262,7 +262,7 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
   };
 
   return (
-    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-2 sm:p-6 overflow-y-auto">
+    <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-start sm:items-center justify-center p-2 sm:p-6 overflow-y-auto">
       <div className="bg-slate-900 border border-purple-500/30 rounded-2xl shadow-2xl max-w-4xl w-full p-4 sm:p-7 space-y-4 sm:space-y-5 my-auto text-white animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
         
         {/* Toast */}

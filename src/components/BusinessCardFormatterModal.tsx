@@ -80,6 +80,13 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
   const [nextStepDueDate, setNextStepDueDate] = useState<string>('');
   const [dealOwner, setDealOwner] = useState<string>('José Badotti');
 
+  // Auto-save notification on field blur
+  const handleAutoSaveBlur = () => {
+    if (muniName.trim() || contactName.trim() || rawText.trim()) {
+      onShowToast(`💾 Dados do cartão salvos automaticamente ao sair do campo`);
+    }
+  };
+
   // Sync when municipality selection changes
   useEffect(() => {
     if (selectedMuniId) {
@@ -218,10 +225,14 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
     }
   };
 
+  const matchedMuni = municipalities.find(
+    (m) => m.id === selectedMuniId || (m.name || '').toLowerCase().trim() === (muniName || '').toLowerCase().trim()
+  );
+
   // Construct CRMInteraction object
   const currentInteraction: CRMInteraction = {
-    id: `card-fmt-${Date.now()}`,
-    municipalityId: selectedMuniId || 'custom_muni',
+    id: `card-fmt-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+    municipalityId: matchedMuni ? matchedMuni.id : (selectedMuniId || 'custom_muni'),
     municipalityName: muniName || 'Prefeitura Municipal',
     state: muniState || 'PI',
     date: new Date().toISOString().slice(0, 16).replace('T', ' '),
@@ -290,17 +301,19 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
     onShowToast(`📥 Evento .ICS baixado com sucesso!`);
   };
 
+  const [isSavedSuccessfully, setIsSavedSuccessfully] = useState(false);
+
   const handleSaveToCrm = () => {
     if (onSaveInteraction) {
       onSaveInteraction(currentInteraction);
-      onShowToast(`💾 Interação consolidada e salva com sucesso sem duplicidades no CRM!`);
+      setIsSavedSuccessfully(true);
+      onShowToast(`💾 Interação e Cartão salvos com sucesso no CRM! Você continua na tela.`);
     }
-    onClose();
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 backdrop-blur-sm p-3 md:p-5 animate-fadeIn">
-      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 backdrop-blur-sm p-2 sm:p-4 flex items-start sm:items-center justify-center animate-fadeIn">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-5xl max-h-[92vh] my-auto flex flex-col overflow-hidden relative">
         
         {/* Modal Header */}
         <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-5 flex items-center justify-between border-b border-indigo-800/60">
@@ -365,6 +378,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
               <textarea
                 value={rawText}
                 onChange={(e) => setRawText(e.target.value)}
+                onBlur={handleAutoSaveBlur}
                 rows={3}
                 placeholder="Cole aqui anotações de reunião, texto de WhatsApp ou dados do cartão... Ex: Reunião com Dr. Marcos (Secretário de Educação de Esperantina-PI). Empresa atual: TechGov com o sistema Educar. Contrato de R$ 850mil vence em 60 dias. Próximo passo: apresentar o SICAP dia 20..."
                 className="w-full text-xs p-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-slate-50/50"
@@ -400,6 +414,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                       type="text"
                       value={muniName}
                       onChange={(e) => setMuniName(e.target.value)}
+                      onBlur={handleAutoSaveBlur}
                       placeholder="Ex: Prefeitura de Teresina"
                       className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
                     />
@@ -410,6 +425,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                       type="text"
                       value={muniState}
                       onChange={(e) => setMuniState(e.target.value.toUpperCase())}
+                      onBlur={handleAutoSaveBlur}
                       placeholder="PI"
                       maxLength={2}
                       className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white text-center font-bold focus:ring-2 focus:ring-indigo-500 uppercase"
@@ -423,6 +439,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                     type="text"
                     value={contactName}
                     onChange={(e) => setContactName(e.target.value)}
+                    onBlur={handleAutoSaveBlur}
                     placeholder="Ex: João da Silva"
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500"
                   />
@@ -434,6 +451,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                     type="text"
                     value={contactRole}
                     onChange={(e) => setContactRole(e.target.value)}
+                    onBlur={handleAutoSaveBlur}
                     placeholder="Ex: Secretário de Educação / Pregoeiro"
                     className="w-full text-xs p-2.5 border border-slate-200 rounded-xl bg-white focus:ring-2 focus:ring-indigo-500"
                   />
@@ -455,6 +473,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                     type="text"
                     value={winningCompany}
                     onChange={(e) => setWinningCompany(e.target.value)}
+                    onBlur={handleAutoSaveBlur}
                     placeholder="Ex: TechGov Sistemas Ltda"
                     className="w-full text-xs p-2.5 border border-amber-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 font-semibold"
                   />
@@ -466,6 +485,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                     type="text"
                     value={currentSystem}
                     onChange={(e) => setCurrentSystem(e.target.value)}
+                    onBlur={handleAutoSaveBlur}
                     placeholder="Ex: Gestão Escolar Cloud v3"
                     className="w-full text-xs p-2.5 border border-amber-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 font-semibold"
                   />
@@ -477,6 +497,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                     type="number"
                     value={contractValue || ''}
                     onChange={(e) => setContractValue(parseFloat(e.target.value) || 0)}
+                    onBlur={handleAutoSaveBlur}
                     placeholder="850000"
                     className="w-full text-xs p-2.5 border border-amber-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 font-extrabold text-slate-800"
                   />
@@ -495,6 +516,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                         setContractDaysRemaining(diffDays > 0 ? diffDays : 0);
                       }
                     }}
+                    onBlur={handleAutoSaveBlur}
                     className="w-full text-xs p-2.5 border border-amber-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 font-bold"
                   />
                 </div>
@@ -505,6 +527,7 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                     type="text"
                     value={contractItems}
                     onChange={(e) => setContractItems(e.target.value)}
+                    onBlur={handleAutoSaveBlur}
                     placeholder="Ex: Módulos de Folha de Pagamento, Transparência, Protocolo, Compras e Licitações"
                     className="w-full text-xs p-2.5 border border-amber-200 rounded-xl bg-white focus:ring-2 focus:ring-amber-500 font-medium"
                   />
@@ -628,15 +651,41 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
                   </button>
                 </div>
 
+                {isSavedSuccessfully && (
+                  <div className="bg-emerald-950/80 border border-emerald-500/50 p-3 rounded-xl flex items-center justify-between text-xs text-emerald-300 font-bold">
+                    <span className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-emerald-400" />
+                      <span>✓ Registro salvo com sucesso no CRM! Você continua na tela.</span>
+                    </span>
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="text-white hover:text-emerald-200 underline text-[11px] font-mono cursor-pointer"
+                    >
+                      Fechar
+                    </button>
+                  </div>
+                )}
+
                 {onSaveInteraction && (
-                  <button
-                    type="button"
-                    onClick={handleSaveToCrm}
-                    className="w-full bg-slate-100 hover:bg-white text-slate-900 font-extrabold text-xs py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer border border-slate-300"
-                  >
-                    <Send className="w-4 h-4 text-emerald-600" />
-                    <span>💾 Salvar / Atualizar Registro sem Duplicidade no CRM</span>
-                  </button>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleSaveToCrm}
+                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 active:scale-95 cursor-pointer border border-emerald-400/30"
+                    >
+                      <Send className="w-4 h-4 text-emerald-100" />
+                      <span>{isSavedSuccessfully ? '💾 Re-salvar Alterações' : '💾 Salvar no CRM sem Sair'}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs py-2.5 rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+                    >
+                      <span>← Concluir e Fechar Tela</span>
+                    </button>
+                  </div>
                 )}
               </div>
 
@@ -644,6 +693,35 @@ export const BusinessCardFormatterModal: React.FC<BusinessCardFormatterModalProp
 
           </div>
 
+        </div>
+
+        {/* Persistent Sticky Action Footer */}
+        <div className="bg-slate-900 border-t border-slate-800 p-3 sm:p-4 z-30 shadow-2xl flex flex-wrap items-center justify-between gap-3">
+          <div className="text-[11px] text-slate-400 font-medium hidden sm:flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>Salvamento em tempo real ativo</span>
+          </div>
+
+          <div className="flex items-center gap-2 w-full sm:w-auto ml-auto">
+            {onSaveInteraction && (
+              <button
+                type="button"
+                onClick={handleSaveToCrm}
+                className="flex-1 sm:flex-initial bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-5 py-3 rounded-xl shadow-lg shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 active:scale-95 cursor-pointer border border-emerald-400/30"
+              >
+                <Send className="w-4 h-4 text-emerald-100" />
+                <span>{isSavedSuccessfully ? '💾 Re-salvar Alterações' : '💾 Salvar no CRM sem Sair'}</span>
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 sm:flex-initial bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs px-4 py-3 rounded-xl border border-slate-700 transition-all flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <span>← Fechar</span>
+            </button>
+          </div>
         </div>
 
       </div>

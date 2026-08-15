@@ -55,6 +55,11 @@ interface SalesFunnelViewProps {
   initialSubTab?: CrmSubTab;
   competitors?: CompetitorItem[];
   onAddCompetitor?: (c: CompetitorItem) => void;
+  pendingSyncCount?: number;
+  isSyncingData?: boolean;
+  isOnline?: boolean;
+  lastSyncTime?: Date | null;
+  onTriggerSync?: () => void;
 }
 
 export const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
@@ -85,6 +90,11 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   initialSubTab = 'kanban',
   competitors,
   onAddCompetitor,
+  pendingSyncCount,
+  isSyncingData,
+  isOnline,
+  lastSyncTime,
+  onTriggerSync
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<CrmSubTab>(initialSubTab);
 
@@ -324,6 +334,11 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
           selectedMunicipality={selectedMunicipality}
           onSelectMunicipality={onSelectMunicipality}
           onNavigateTab={onNavigateTab}
+          pendingSyncCount={pendingSyncCount}
+          isSyncingData={isSyncingData}
+          isOnline={isOnline}
+          lastSyncTime={lastSyncTime}
+          onTriggerSync={onTriggerSync}
         />
       ) : activeSubTab === 'geral' ? (
         <MunicipalityIntelligenceView
