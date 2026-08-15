@@ -1,15 +1,7 @@
 import React, { useState } from 'react';
-import { 
-  LayoutDashboard, 
-  SearchCheck, 
-  Building2, 
-  BellRing, 
-  Sparkles, 
-  Kanban, 
+import {
+  SearchCheck,
   MessageSquare,
-  Swords, 
-  Calculator, 
-  GraduationCap,
   Compass,
   Menu,
   X,
@@ -18,7 +10,7 @@ import {
   PanelLeftOpen
 } from 'lucide-react';
 
-export type ActiveTab = 
+export type ActiveTab =
   | 'field_visits'
   | 'dashboard'
   | 'tenders'
@@ -30,6 +22,17 @@ export type ActiveTab =
   | 'competitors'
   | 'io_score'
   | 'cockpit';
+
+// As telas "extras" abaixo não têm mais botão fixo no menu (só 3 funções ficam visíveis),
+// mas continuam acessíveis por atalhos de dentro das telas. Isso mapeia cada uma de volta
+// pra uma das 3 funções, só pra manter o item certo destacado no menu quando chegamos nelas.
+function getPrimaryTab(tab: ActiveTab): ActiveTab {
+  if (tab === 'field_visits') return 'field_visits';
+  if (tab === 'tenders' || tab === 'alerts' || tab === 'io_score' || tab === 'cockpit' || tab === 'competitors') {
+    return 'dashboard';
+  }
+  return 'crm'; // intelligence, ai_agent, funnel, crm
+}
 
 interface SidebarProps {
   activeTab: ActiveTab;
@@ -68,121 +71,40 @@ export const Sidebar: React.FC<SidebarProps> = ({
 
   const menuSections = [
     {
-      title: 'SISTEMA 1: BUSCA DE PREFEITURAS & EDITAIS',
-      systemId: 'system_radar',
+      title: 'SICAP · 3 FUNÇÕES',
+      systemId: 'main',
       items: [
-        {
-          id: 'tenders' as ActiveTab,
-          label: 'Monitor de Editais PNCP',
-          icon: SearchCheck,
-          badge: 'Cidade Ativa',
-          badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
-          desc: 'Rastreamento de licitações públicas abertas e prefeituras ativas',
-        },
-        {
-          id: 'alerts' as ActiveTab,
-          label: 'Alertas Comerciais Críticos',
-          icon: BellRing,
-          badge: unreadAlertsCount > 0 ? `${unreadAlertsCount} Alertas` : null,
-          badgeColor: 'bg-red-500 text-white font-bold',
-          desc: 'Contratos vincendos, prazos e impugnações',
-        },
-      ],
-    },
-    {
-      title: 'SISTEMA 2: ROTEIRO DE CAMPO & PROBABILIDADE',
-      systemId: 'system_field',
-      items: [
-        {
-          id: 'field_visits' as ActiveTab,
-          label: 'Roteiros de Campo & Visitas',
-          icon: Compass,
-          badge: 'Operação',
-          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
-          desc: 'Planejamento de rotas, reuniões e atas presenciais',
-        },
-        {
-          id: 'io_score' as ActiveTab,
-          label: 'Calculadora IO & Probabilidade',
-          icon: Calculator,
-          badge: 'Score IO',
-          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
-          desc: 'Algoritmo de viabilidade de fechamento comercial',
-        },
-        {
-          id: 'cockpit' as ActiveTab,
-          label: 'Indicadores Educacionais MEC',
-          icon: GraduationCap,
-          badge: 'IDEB / INEP',
-          badgeColor: 'bg-indigo-100 text-indigo-800 font-bold',
-          desc: 'Dados do censo escolar, Fundeb e dores pedagógicas',
-        },
-      ],
-    },
-    {
-      title: 'SISTEMA 3: MÓDULO DE FORMULÁRIO & CRM DE VENDAS',
-      systemId: 'system_crm',
-      items: [
-        {
-          id: 'crm' as ActiveTab,
-          label: 'Formulário & Registro CRM',
-          icon: MessageSquare,
-          badge: 'Formulários',
-          badgeColor: 'bg-blue-100 text-blue-800 font-bold',
-          desc: 'Formulário de cadastro de reuniões, e-mails, atas e ligações',
-        },
-        {
-          id: 'funnel' as ActiveTab,
-          label: 'Funil Kanban de Contratos',
-          icon: Kanban,
-          badge: '9 Etapas',
-          badgeColor: 'bg-amber-100 text-amber-800 font-bold',
-          desc: 'Gestão visual da negociação e estágios de proposta',
-        },
-        {
-          id: 'intelligence' as ActiveTab,
-          label: 'Dossiê 360º da Prefeitura',
-          icon: Building2,
-          badge: 'Ficha 360º',
-          badgeColor: 'bg-blue-100 text-blue-800 font-bold',
-          desc: 'Secretários, fornecedores atuais e verbas municipais',
-        },
-        {
-          id: 'competitors' as ActiveTab,
-          label: 'Radar de Concorrentes',
-          icon: Swords,
-          badge: 'Battlecards',
-          badgeColor: 'bg-slate-200 text-slate-800 font-bold',
-          desc: 'Mapeamento de sistemas rivais e pontos fracos',
-        },
-      ],
-    },
-    {
-      title: 'SISTEMA 4: COPILOTO IA & PAINEL',
-      systemId: 'system_ai',
-      items: [
-        {
-          id: 'ai_agent' as ActiveTab,
-          label: 'Copiloto Comercial IA',
-          icon: Sparkles,
-          badge: 'IA Gemini',
-          badgeColor: 'bg-purple-100 text-purple-800 font-bold',
-          desc: 'Gerador de pitches, propostas e respostas de editais',
-        },
         {
           id: 'dashboard' as ActiveTab,
-          label: 'Dashboard & Mapa Geral',
-          icon: LayoutDashboard,
-          badge: 'Visão Macro',
-          badgeColor: 'bg-slate-100 text-slate-700 font-bold',
-          desc: 'Visão executiva das metas e cobertura geográfica',
+          label: 'Encontrar Oportunidades',
+          icon: SearchCheck,
+          badge: unreadAlertsCount > 0 ? `${unreadAlertsCount} Alertas` : null,
+          badgeColor: 'bg-red-500 text-white font-bold',
+          desc: 'Mapa, editais/alertas, Score IO e concorrentes',
+        },
+        {
+          id: 'field_visits' as ActiveTab,
+          label: 'Roteiro de Viagem',
+          icon: Compass,
+          badge: 'Campo',
+          badgeColor: 'bg-emerald-100 text-emerald-800 font-bold',
+          desc: 'Achar cidade, conferir dados oficiais e abrir cartão de visita',
+        },
+        {
+          id: 'crm' as ActiveTab,
+          label: 'CRM',
+          icon: MessageSquare,
+          badge: 'Principal',
+          badgeColor: 'bg-amber-100 text-amber-800 font-bold',
+          desc: 'Dossiê, funil, interações e estratégia com IA',
         },
       ],
     },
   ];
 
   const allItems = menuSections.flatMap((s) => s.items);
-  const currentItem = allItems.find((item) => item.id === activeTab) || allItems[0];
+  const primaryActiveTab = getPrimaryTab(activeTab);
+  const currentItem = allItems.find((item) => item.id === primaryActiveTab) || allItems[0];
   const CurrentIcon = currentItem.icon;
 
   const handleSelectTab = (tab: ActiveTab) => {
@@ -269,7 +191,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                   </div>
                   {section.items.map((item) => {
                     const Icon = item.icon;
-                    const isActive = activeTab === item.id;
+                    const isActive = primaryActiveTab === item.id;
 
                     return (
                       <button
@@ -372,7 +294,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 )}
                 {section.items.map((item) => {
                   const Icon = item.icon;
-                  const isActive = activeTab === item.id;
+                  const isActive = primaryActiveTab === item.id;
 
                   if (isCollapsed) {
                     return (
@@ -387,9 +309,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         }`}
                       >
                         <Icon className="w-5 h-5" />
-                        
+
                         {/* Indicator Dot */}
-                        {item.id === 'alerts' && unreadAlertsCount ? (
+                        {item.id === 'dashboard' && unreadAlertsCount ? (
                           <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse border border-white" />
                         ) : item.badge ? (
                           <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-blue-500 rounded-full border border-white" />
