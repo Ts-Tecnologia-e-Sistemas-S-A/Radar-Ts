@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { Municipality, KeyContact, CRMInteraction } from '../types';
+import { Municipality, KeyContact, CRMInteraction, CompetitorItem } from '../types';
 import { EducationalCockpitBridge } from './EducationalCockpitBridge';
 import { IOScoreCalculatorView } from './IOScoreCalculatorView';
 import { CompetitorRadarView } from './CompetitorRadarView';
 import { MOCK_COMPETITORS } from '../data/mockData';
-import { 
+import {
   Building2, 
   Users, 
   History, 
@@ -38,6 +38,8 @@ interface MunicipalityIntelligenceViewProps {
   crmInteractions?: CRMInteraction[];
   onOpenCRM?: (m: Municipality) => void;
   initialSubTab?: string;
+  competitors?: CompetitorItem[];
+  onAddCompetitor?: (c: CompetitorItem) => void;
 }
 
 export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceViewProps> = ({
@@ -49,6 +51,8 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
   crmInteractions = [],
   onOpenCRM,
   initialSubTab,
+  competitors = MOCK_COMPETITORS,
+  onAddCompetitor,
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState<'geral' | 'equipe' | 'historico' | 'educacional' | 'io_score' | 'competitors' | 'crm'>('geral');
@@ -460,7 +464,8 @@ export const MunicipalityIntelligenceView: React.FC<MunicipalityIntelligenceView
 
             {activeTab === 'competitors' && (
               <CompetitorRadarView
-                competitors={MOCK_COMPETITORS}
+                competitors={competitors}
+                onAddCompetitor={onAddCompetitor}
                 selectedMunicipality={activeMuni}
               />
             )}

@@ -6,7 +6,7 @@ import {
   MOCK_COMPETITORS,
   MOCK_CRM_INTERACTIONS
 } from './data/mockData';
-import { Municipality, TenderNotice, CommercialAlert, FunnelStage, CRMInteraction } from './types';
+import { Municipality, TenderNotice, CommercialAlert, FunnelStage, CRMInteraction, CompetitorItem } from './types';
 import { Navbar } from './components/Navbar';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
@@ -99,6 +99,15 @@ export default function App() {
     }
   });
 
+  const [competitors, setCompetitors] = useState<CompetitorItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('sicap_competitors_v1');
+      return saved ? JSON.parse(saved) : MOCK_COMPETITORS;
+    } catch (e) {
+      return MOCK_COMPETITORS;
+    }
+  });
+
   // Real-time synchronization with Firebase Cloud Firestore
   useEffect(() => {
     const unsubMunicipalities = subscribeToMunicipalities(
@@ -143,6 +152,14 @@ export default function App() {
       console.error('Error saving crmInteractions to localStorage', e);
     }
   }, [crmInteractions]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('sicap_competitors_v1', JSON.stringify(competitors));
+    } catch (e) {
+      console.error('Error saving competitors to localStorage', e);
+    }
+  }, [competitors]);
 
   React.useEffect(() => {
     try {
@@ -385,6 +402,26 @@ export default function App() {
     setActiveTab('crm');
   };
 
+  const handleAddCompetitor = (newCompetitor: CompetitorItem) => {
+    setCompetitors((prev) => [newCompetitor, ...prev]);
+  };
+
+  const handleMarkAlertAsRead = (alertId: string) => {
+    setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a)));
+  };
+
+  const handleOpenTenderDetail = (tender: TenderNotice) => {
+    const m = municipalities.find((item) => item.id === tender.municipalityId);
+    if (m) setSelectedMunicipality(m);
+    setActiveTab('intelligence');
+  };
+
+  const handleNavigateTenderToAI = (tender: TenderNotice) => {
+    const m = municipalities.find((item) => item.id === tender.municipalityId);
+    if (m) setSelectedMunicipality(m);
+    setActiveTab('ai_agent');
+  };
+
   const unreadAlertsCount = alerts.filter((a) => !a.isRead).length;
 
   return (
@@ -449,12 +486,17 @@ export default function App() {
               municipalities={municipalities}
               tenders={tenders}
               alerts={alerts}
+              competitors={competitors}
+              onAddCompetitor={handleAddCompetitor}
               selectedMunicipality={selectedMunicipality}
               onSelectMunicipality={handleSelectMunicipality}
               selectedStateFilter={selectedStateFilter}
               onStateFilterChange={setSelectedStateFilter}
               onNavigateTab={setActiveTab}
               onOpenAISystem={handleOpenAIForMuni}
+              onMarkAsReadAlert={handleMarkAlertAsRead}
+              onOpenTenderDetail={handleOpenTenderDetail}
+              onNavigateTenderToAI={handleNavigateTenderToAI}
             />
           )}
 
@@ -466,21 +508,9 @@ export default function App() {
               initialSubTab={activeTab === 'alerts' ? 'alerts' : 'tenders'}
               onSelectMunicipality={handleSelectMunicipality}
               onOpenAIStrategy={handleOpenAIForMuni}
-              onMarkAsReadAlert={(alertId) => {
-                setAlerts((prev) =>
-                  prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a))
-                );
-              }}
-              onOpenTenderDetail={(tender) => {
-                const m = municipalities.find((item) => item.id === tender.municipalityId);
-                if (m) setSelectedMunicipality(m);
-                setActiveTab('intelligence');
-              }}
-              onNavigateToAI={(tender) => {
-                const m = municipalities.find((item) => item.id === tender.municipalityId);
-                if (m) setSelectedMunicipality(m);
-                setActiveTab('ai_agent');
-              }}
+              onMarkAsReadAlert={handleMarkAlertAsRead}
+              onOpenTenderDetail={handleOpenTenderDetail}
+              onNavigateToAI={handleNavigateTenderToAI}
             />
           )}
 
@@ -494,6 +524,8 @@ export default function App() {
               crmInteractions={crmInteractions}
               onOpenCRM={handleOpenCRMForMuni}
               initialSubTab={activeTab}
+              competitors={competitors}
+              onAddCompetitor={handleAddCompetitor}
             />
           )}
 
@@ -525,6 +557,8 @@ export default function App() {
               selectedMunicipality={selectedMunicipality}
               onNavigateTab={setActiveTab}
               onOpenAIForMuni={handleOpenAIForMuni}
+              competitors={competitors}
+              onAddCompetitor={handleAddCompetitor}
             />
           )}
 

@@ -5,25 +5,28 @@ import { Swords, ShieldAlert, TrendingDown, Award, Search, Plus, Building2, Exte
 interface CompetitorRadarViewProps {
   competitors: CompetitorItem[];
   selectedMunicipality?: Municipality | null;
+  onAddCompetitor?: (c: CompetitorItem) => void;
 }
 
 export const CompetitorRadarView: React.FC<CompetitorRadarViewProps> = ({
-  competitors: initialCompetitors,
+  competitors: competitorsList,
   selectedMunicipality,
+  onAddCompetitor,
 }) => {
-  const [competitorsList, setCompetitorsList] = useState<CompetitorItem[]>(initialCompetitors || []);
   const [selectedCompetitor, setSelectedCompetitor] = useState<CompetitorItem>(() => {
     if (selectedMunicipality && selectedMunicipality.currentSystem) {
       const currentSys = (selectedMunicipality.currentSystem || '').toLowerCase();
-      const match = (initialCompetitors || []).find((c) =>
+      const match = (competitorsList || []).find((c) =>
         c && c.name && (currentSys.includes(c.name.toLowerCase()) || c.name.toLowerCase().includes(currentSys))
       );
       if (match) return match;
     }
-    return (initialCompetitors && initialCompetitors[0]) || {
+    return (competitorsList && competitorsList[0]) || {
+      id: 'comp-none',
       name: 'Sem Concorrente',
-      marketShareState: '0%',
-      avgContractPrice: 'R$ 0',
+      marketShare: 0,
+      wonContractsCount: 0,
+      avgPrice: 0,
       strengths: [],
       weaknesses: [],
       vulnerabilitiesForSICAP: [],
@@ -81,7 +84,7 @@ export const CompetitorRadarView: React.FC<CompetitorRadarViewProps> = ({
       ]
     };
 
-    setCompetitorsList([newComp, ...competitorsList]);
+    onAddCompetitor?.(newComp);
     setSelectedCompetitor(newComp);
     setShowAddModal(false);
     setNewName('');

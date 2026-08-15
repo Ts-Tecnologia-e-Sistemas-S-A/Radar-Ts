@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Municipality, FunnelStage, CRMInteraction } from '../types';
+import { Municipality, FunnelStage, CRMInteraction, CompetitorItem } from '../types';
 import { CRMInteractionsView } from './CRMInteractionsView';
 import { MunicipalityIntelligenceView } from './MunicipalityIntelligenceView';
 import { AICommercialAgentView } from './AICommercialAgentView';
@@ -53,6 +53,8 @@ interface SalesFunnelViewProps {
   onNavigateTab?: (tab: any) => void;
   onOpenAIForMuni?: (m: Municipality) => void;
   initialSubTab?: CrmSubTab;
+  competitors?: CompetitorItem[];
+  onAddCompetitor?: (c: CompetitorItem) => void;
 }
 
 export const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
@@ -80,7 +82,9 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   selectedMunicipality,
   onNavigateTab,
   onOpenAIForMuni,
-  initialSubTab = 'kanban'
+  initialSubTab = 'kanban',
+  competitors,
+  onAddCompetitor,
 }) => {
   const [activeSubTab, setActiveSubTab] = useState<CrmSubTab>(initialSubTab);
 
@@ -330,6 +334,8 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
           onGenerateAIStrategy={handleGenerateAIStrategyHere}
           crmInteractions={crmInteractions}
           onOpenCRM={handleOpenCrmHere}
+          competitors={competitors}
+          onAddCompetitor={onAddCompetitor}
         />
       ) : activeSubTab === 'ia' ? (
         <AICommercialAgentView
