@@ -1279,7 +1279,7 @@ export const CRMInteractionsView: React.FC<CRMInteractionsViewProps> = ({
                             <span>•</span>
                             <span className="flex items-center gap-1 font-semibold text-slate-700">
                               <User className="w-3.5 h-3.5 text-slate-400" />
-                              Alunos: <strong className="text-slate-900">{m.studentCount.toLocaleString('pt-BR')}</strong>
+                              Alunos: <strong className="text-slate-900">{(m.educationalMetrics?.studentsCount || 0).toLocaleString('pt-BR')}</strong>
                             </span>
                           </div>
                         </div>

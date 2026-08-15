@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Municipality, FunnelStage, CRMInteraction } from '../types';
 import { CRMInteractionsView } from './CRMInteractionsView';
-import { 
-  Kanban, 
-  Building2, 
-  ArrowRight, 
-  ArrowLeft, 
-  ChevronRight, 
-  DollarSign, 
+import { MunicipalityIntelligenceView } from './MunicipalityIntelligenceView';
+import { AICommercialAgentView } from './AICommercialAgentView';
+import { DossierExportModal } from './DossierExportModal';
+import {
+  Kanban,
+  Building2,
+  ArrowRight,
+  ArrowLeft,
+  ChevronRight,
+  DollarSign,
   Calculator,
   Search,
   Filter,
@@ -28,8 +31,13 @@ import {
   ExternalLink,
   Pencil,
   Trash2,
-  MessageSquare
+  MessageSquare,
+  Download
 } from 'lucide-react';
+
+// CRM: tela única e principal — Funil (pipeline), Visão Geral (dossiê do município),
+// Interações (histórico/cartão de visita) e Estratégia IA, tudo sobre o mesmo município ativo.
+type CrmSubTab = 'kanban' | 'crm' | 'geral' | 'ia';
 
 interface SalesFunnelViewProps {
   municipalities: Municipality[];
@@ -44,7 +52,7 @@ interface SalesFunnelViewProps {
   selectedMunicipality?: Municipality | null;
   onNavigateTab?: (tab: any) => void;
   onOpenAIForMuni?: (m: Municipality) => void;
-  initialSubTab?: 'kanban' | 'crm';
+  initialSubTab?: CrmSubTab;
 }
 
 export const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
@@ -74,7 +82,7 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
   onOpenAIForMuni,
   initialSubTab = 'kanban'
 }) => {
-  const [activeSubTab, setActiveSubTab] = useState<'kanban' | 'crm'>(initialSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<CrmSubTab>(initialSubTab);
 
   useEffect(() => {
     if (initialSubTab) {
@@ -84,7 +92,8 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
 
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedState, setSelectedState] = useState('');
-  
+  const [showExportModal, setShowExportModal] = useState(false);
+
   // Modal detail state
   const [activeMuniModal, setActiveMuniModal] = useState<Municipality | null>(null);
   
@@ -160,6 +169,20 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
     ? crmInteractions.filter((i) => i.municipalityId === activeMuniModal.id)
     : [];
 
+  // Município ativo para Visão Geral / Estratégia IA / Exportar Dossiê (mesmo contexto global do app)
+  const activeMuniForTabs = selectedMunicipality || municipalities[0] || null;
+
+  // Ao pedir estratégia de dentro da Visão Geral, troca de sub-aba nesta mesma tela em vez de navegar pra outra
+  const handleGenerateAIStrategyHere = (m: Municipality) => {
+    onSelectMunicipality(m);
+    setActiveSubTab('ia');
+  };
+
+  const handleOpenCrmHere = (m: Municipality) => {
+    onSelectMunicipality(m);
+    setActiveSubTab('crm');
+  };
+
   return (
     <div className="space-y-6">
       
@@ -169,18 +192,31 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
           <div>
             <div className="flex items-center gap-2 text-amber-600 font-bold text-xs uppercase tracking-wider">
               <Kanban className="w-4 h-4 text-amber-600" />
-              <span>Pipeline & CRM de Vendas Licitatório</span>
+              <span>CRM · Prefeituras, Funil, Interações & Estratégia</span>
             </div>
             <h2 className="text-xl font-extrabold text-slate-900 mt-1">
-              Gestão Unificada de Oportunidades & Relacionamento
+              CRM
             </h2>
             <p className="text-xs text-slate-500 mt-0.5">
-              Alterne entre a visão Kanban por estágios de negociação e o registro completo de interações comerciais com os municípios.
+              Um único lugar para o município ativo: dados da prefeitura, estágio no funil, histórico de interações e estratégia de abordagem com IA.
             </p>
           </div>
 
           {/* Sub-tab Navigation Switcher */}
-          <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 shadow-inner shrink-0">
+          <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap items-center gap-1 border border-slate-200 shadow-inner shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('geral')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'geral'
+                  ? 'bg-indigo-600 text-white shadow-md ring-1 ring-indigo-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Visão Geral</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setActiveSubTab('kanban')}
@@ -191,7 +227,7 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
               }`}
             >
               <Kanban className="w-4 h-4" />
-              <span>Funil Kanban (9 Etapas)</span>
+              <span>Funil (9 Etapas)</span>
             </button>
 
             <button
@@ -204,8 +240,33 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
               }`}
             >
               <MessageSquare className="w-4 h-4" />
-              <span>Histórico de Ações CRM ({crmInteractions.length})</span>
+              <span>Interações ({crmInteractions.length})</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('ia')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'ia'
+                  ? 'bg-purple-600 text-white shadow-md ring-1 ring-purple-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Sparkles className="w-4 h-4" />
+              <span>Estratégia IA</span>
+            </button>
+
+            {activeMuniForTabs && (
+              <button
+                type="button"
+                onClick={() => setShowExportModal(true)}
+                className="flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer text-slate-600 hover:text-slate-900 hover:bg-slate-200/80 border-l border-slate-300 ml-1 pl-3"
+                title={`Exportar dossiê de ${activeMuniForTabs.name}`}
+              >
+                <Download className="w-4 h-4" />
+                <span>Dossiê</span>
+              </button>
+            )}
           </div>
         </div>
 
@@ -259,6 +320,24 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
           selectedMunicipality={selectedMunicipality}
           onSelectMunicipality={onSelectMunicipality}
           onNavigateTab={onNavigateTab}
+        />
+      ) : activeSubTab === 'geral' ? (
+        <MunicipalityIntelligenceView
+          municipalities={municipalities}
+          selectedMunicipality={selectedMunicipality || null}
+          onSelectMunicipality={onSelectMunicipality}
+          onUpdateMunicipality={onUpdateMunicipality}
+          onGenerateAIStrategy={handleGenerateAIStrategyHere}
+          crmInteractions={crmInteractions}
+          onOpenCRM={handleOpenCrmHere}
+        />
+      ) : activeSubTab === 'ia' ? (
+        <AICommercialAgentView
+          municipalities={municipalities}
+          selectedMunicipality={selectedMunicipality || null}
+          onSelectMunicipality={onSelectMunicipality}
+          onAddCRMInteraction={onAddCRMInteraction}
+          onNavigateToCRM={() => setActiveSubTab('crm')}
         />
       ) : (
         <>
@@ -468,14 +547,14 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="text-[10px] text-slate-400 font-bold block uppercase">Alunos na Rede</span>
                 <span className="font-extrabold text-slate-800 text-xs">
-                  {activeMuniModal.studentCount.toLocaleString('pt-BR')} alunos
+                  {(activeMuniModal.educationalMetrics?.studentsCount || 0).toLocaleString('pt-BR')} alunos
                 </span>
               </div>
 
               <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="text-[10px] text-slate-400 font-bold block uppercase">Escolas Municipais</span>
                 <span className="font-extrabold text-slate-800 text-xs">
-                  {activeMuniModal.schoolCount} unidades
+                  {activeMuniModal.educationalMetrics?.schoolsCount || 0} unidades
                 </span>
               </div>
             </div>
@@ -553,8 +632,8 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
                         className="w-full bg-white border border-slate-200 rounded-lg p-2 font-medium"
                       >
                         <option value="ligacao">📞 Ligação Telefônica</option>
-                        <option value="reuniao_presencial">🏛️ Reunião Presencial</option>
-                        <option value="reuniao_online">💻 Reunião Online</option>
+                        <option value="visita">🏛️ Visita Presencial</option>
+                        <option value="reuniao_virtual">💻 Reunião Virtual</option>
                         <option value="email">✉️ E-mail Enviado</option>
                         <option value="impugnacao">📜 Impugnação de Edital</option>
                         <option value="chat_assistente_ia">🤖 Estudo com IA</option>
@@ -672,6 +751,13 @@ export const SalesFunnelView: React.FC<SalesFunnelViewProps> = ({
         </div>
       )}
         </>
+      )}
+
+      {showExportModal && activeMuniForTabs && (
+        <DossierExportModal
+          municipality={activeMuniForTabs}
+          onClose={() => setShowExportModal(false)}
+        />
       )}
 
     </div>
