@@ -552,6 +552,7 @@ REGRAS RÍGIDAS DE AUDITORIA E FACT-CHECKING:
 4. REGRA DE TIMON: Prevalece o contrato vigente em execução sobre editais antigos de licitação.
 5. VALOR REAL: Grave apenas o VALOR HOMOLOGADO ou CONTRATADO do contrato vigente de software escolar/tecnologia.
 6. SELO DE VERIFICAÇÃO: Indique as fontes consultadas e o nível de confirmação dos dados.
+7. DATA DO CONTRATO: Localize e grave a data de assinatura/homologação do contrato vigente (buyingHistory[0].contractDate) junto com o nome da empresa vencedora.
 
 Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
 
@@ -617,7 +618,8 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
       "value": 1850000,
       "objectStr": "Locação/Licenciamento de software de gestão pública escolar e suporte ao Educacenso",
       "modality": "Pregão Eletrônico",
-      "addendumsCount": 1
+      "addendumsCount": 1,
+      "contractDate": "Data de assinatura/homologação do contrato (AAAA-MM-DD) ou Não localizado em fonte oficial"
     }
   ],
   "lastActivityDate": "${new Date().toISOString().slice(0, 10)}",
@@ -709,7 +711,8 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
             value: 1950000,
             objectStr: "Locação de software de gestão pública escolar",
             modality: "Pregão Eletrônico",
-            addendumsCount: 1
+            addendumsCount: 1,
+            contractDate: "Não localizado em fonte oficial (Pendente de verificação presencial)"
           }
         ],
         lastActivityDate: new Date().toISOString().slice(0, 10),

@@ -38,6 +38,7 @@ export interface BuyingHistoryItem {
   objectStr: string;
   modality: string;
   addendumsCount?: number;
+  contractDate?: string; // Data de assinatura/homologação do contrato vigente (AAAA-MM-DD)
 }
 
 export interface IOFactorWeights {

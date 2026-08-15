@@ -436,7 +436,6 @@ export default function App() {
               onAddCRMInteraction={handleAddCRMInteraction}
               onEditCRMInteraction={handleEditCRMInteraction}
               onDeleteCRMInteraction={handleDeleteCRMInteraction}
-              onUpdateFunnelStage={handleUpdateFunnelStage}
               onUpdateMunicipality={handleUpdateMunicipality}
               onSelectMunicipality={handleSelectMunicipality}
               onNavigateTab={(tab) => setActiveTab(tab as any)}

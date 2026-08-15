@@ -200,6 +200,34 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
       }
     });
 
+    // Empresa vencedora + data do contrato vigente, extraídas do resultado da IA
+    const wonCompany = enrichmentResult.currentSystem?.company || enrichmentResult.currentSystem?.name;
+    const contractDate = enrichmentResult.contract?.signatureDate;
+    const existingHistory = currentMuni.buyingHistory || [];
+    const latestEntry = existingHistory[0];
+    const sameCompanyAsLatest =
+      latestEntry && wonCompany && latestEntry.company.trim().toLowerCase() === String(wonCompany).trim().toLowerCase();
+
+    const updatedLatestEntry = wonCompany
+      ? {
+          year: contractDate ? Number(String(contractDate).slice(0, 4)) || latestEntry?.year || new Date().getFullYear() : latestEntry?.year || new Date().getFullYear(),
+          company: String(wonCompany),
+          value: enrichmentResult.contract?.contractedValue || latestEntry?.value || currentMuni.currentContractValue,
+          objectStr: enrichmentResult.contract?.number
+            ? `Contrato ${enrichmentResult.contract.number}${enrichmentResult.contract?.process ? ` / Processo ${enrichmentResult.contract.process}` : ''}`
+            : latestEntry?.objectStr || 'Locação/Licenciamento de software de gestão pública escolar',
+          modality: enrichmentResult.contract?.modality || latestEntry?.modality || currentMuni.probableModality,
+          addendumsCount: latestEntry?.addendumsCount,
+          contractDate: contractDate || latestEntry?.contractDate,
+        }
+      : null;
+
+    const updatedBuyingHistory = updatedLatestEntry
+      ? sameCompanyAsLatest || !latestEntry
+        ? [updatedLatestEntry, ...existingHistory.slice(sameCompanyAsLatest ? 1 : 0)]
+        : [updatedLatestEntry, ...existingHistory]
+      : existingHistory;
+
     const updatedMuni: Municipality = {
       ...currentMuni,
       population: enrichmentResult.population || currentMuni.population,
@@ -213,6 +241,7 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
         schoolsCount: enrichmentResult.schoolCount || currentMuni.educationalMetrics.schoolsCount,
         mainPains: enrichmentResult.pains || currentMuni.educationalMetrics.mainPains,
       },
+      buyingHistory: updatedBuyingHistory,
       keyContacts: [
         {
           name: enrichmentResult.secretaria?.secretaryName || currentMuni.keyContacts[0]?.name || 'Secretário(a) de Educação',
@@ -431,7 +460,9 @@ export const SicapRadarCrmEnricherModal: React.FC<SicapRadarCrmEnricherModalProp
                 </span>
                 <div className="space-y-1 text-slate-300">
                   <p><strong>Sistema Atual:</strong> {enrichmentResult.currentSystem?.name}</p>
+                  <p><strong>Empresa Vencedora:</strong> {enrichmentResult.currentSystem?.company || 'Não localizado'}</p>
                   <p><strong>Nº do Contrato:</strong> {enrichmentResult.contract?.number}</p>
+                  <p><strong>Data do Contrato:</strong> {enrichmentResult.contract?.signatureDate || 'Não localizado'}</p>
                   <p><strong>Modalidade:</strong> {enrichmentResult.contract?.modality}</p>
                   <p className="text-emerald-400 font-extrabold text-sm mt-1">
                     Valor Homologado: R$ {(enrichmentResult.contract?.contractedValue || 0).toLocaleString('pt-BR')}

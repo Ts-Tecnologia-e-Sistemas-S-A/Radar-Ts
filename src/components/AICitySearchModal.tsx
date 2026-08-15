@@ -183,6 +183,7 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
             objectStr: 'Locação de software de gestão pública escolar',
             modality: 'Pregão Eletrônico',
             addendumsCount: 1,
+            contractDate: 'Não localizado em fonte oficial (Pendente de verificação presencial)',
           },
         ],
         lastActivityDate: new Date().toISOString().slice(0, 10),
@@ -447,6 +448,19 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
               </div>
 
             </div>
+
+            {/* Última Licitação Vencida (Empresa + Data do Contrato) */}
+            {analyzedMuni.buyingHistory && analyzedMuni.buyingHistory[0] && (
+              <div className="bg-white p-3 rounded-xl border border-slate-200 text-xs space-y-1">
+                <span className="text-[10px] font-black uppercase text-slate-400 block">Empresa Vencedora da Última Licitação</span>
+                <div className="flex flex-wrap items-center justify-between gap-2 font-bold text-slate-800">
+                  <span>🏢 {analyzedMuni.buyingHistory[0].company} ({analyzedMuni.buyingHistory[0].year})</span>
+                  <span className="text-slate-500 font-semibold">
+                    Contrato: {analyzedMuni.buyingHistory[0].contractDate || 'Não localizado'}
+                  </span>
+                </div>
+              </div>
+            )}
 
             {/* Key Contact */}
             {analyzedMuni.keyContacts && analyzedMuni.keyContacts[0] && (
