@@ -47,7 +47,7 @@ interface SalesFunnelViewProps {
   initialSubTab?: 'kanban' | 'crm';
 }
 
-const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
+export const FUNNEL_STAGES_CONFIG: { id: FunnelStage; label: string; color: string }[] = [
   { id: 'prospectado', label: '1. Prospectado', color: 'border-slate-300 bg-slate-50' },
   { id: 'primeiro_contato', label: '2. Primeiro Contato', color: 'border-blue-300 bg-blue-50/50' },
   { id: 'reuniao', label: '3. Reunião', color: 'border-indigo-300 bg-indigo-50/50' },

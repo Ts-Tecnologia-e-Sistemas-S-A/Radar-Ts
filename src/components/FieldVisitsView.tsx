@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
-import { Municipality, CRMInteraction } from '../types';
+import { Municipality, CRMInteraction, FunnelStage } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
 import { openGoogleCalendar, formatCardDetailsForCalendar } from '../utils/googleCalendar';
 import { AICitySearchModal } from './AICitySearchModal';
+import { FUNNEL_STAGES_CONFIG } from './SalesFunnelView';
+import { citySearchScore, normalizeForSearch } from '../utils/fuzzySearch';
 import { 
   Navigation, 
   MapPin, 
@@ -114,6 +116,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
   const [visitNextStep, setVisitNextStep] = useState('');
   const [visitNextStepDueDate, setVisitNextStepDueDate] = useState('');
   const [visitDealOwner, setVisitDealOwner] = useState('José Badotti');
+  const [visitFunnelStage, setVisitFunnelStage] = useState<FunnelStage>('prospectado');
 
   // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -302,16 +305,23 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     .filter(({ m, tempCategory }) => {
       if (!m) return false;
       const matchesState = !selectedState || m.state === selectedState;
+      // Busca inteligente: ignora acentuação e tolera pequenos erros de digitação no nome da cidade
       const matchesSearch =
-        !searchTerm ||
-        (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (m.currentSystem || '').toLowerCase().includes(searchTerm.toLowerCase());
+        !searchTerm.trim() ||
+        citySearchScore(searchTerm, m.name) !== null ||
+        normalizeForSearch(m.currentSystem || '').includes(normalizeForSearch(searchTerm));
       const matchesTemp = tempFilter === 'all' || tempCategory === tempFilter;
 
       return matchesState && matchesSearch && matchesTemp;
     })
     .sort((a, b) => {
       if (!a || !b) return 0;
+      // Com busca ativa, prioriza a cidade com a escrita mais próxima do termo digitado
+      if (searchTerm.trim()) {
+        const scoreA = citySearchScore(searchTerm, a.m?.name || '') ?? 999;
+        const scoreB = citySearchScore(searchTerm, b.m?.name || '') ?? 999;
+        if (scoreA !== scoreB) return scoreA - scoreB;
+      }
       if (sortBy === 'cards') {
         // Priority 1: Number of registered cards / interactions (descending)
         const countA = (a.mInteractions || []).length;
@@ -382,6 +392,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setVisitNextStep('Enviar proposta comercial / minuta de ARP');
     setVisitNextStepDueDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
     setVisitDealOwner('José Badotti');
+    setVisitFunnelStage(m.funnelStage || 'prospectado');
     setIsVisitModalOpen(true);
   };
 
@@ -402,6 +413,8 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setVisitNextStep(item.nextStep || '');
     setVisitNextStepDueDate(item.nextStepDueDate || '');
     setVisitDealOwner(item.dealOwner || 'José Badotti');
+    const linkedMuni = municipalities.find((m) => m.id === item.municipalityId);
+    setVisitFunnelStage(linkedMuni?.funnelStage || 'prospectado');
     setIsVisitModalOpen(true);
   };
 
@@ -460,6 +473,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
           ...matchedMuni,
           name: visitMuniName.trim(),
           state: visitState.trim().toUpperCase(),
+          funnelStage: visitFunnelStage,
         });
       }
 
@@ -497,11 +511,18 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
       const matchedMuni = municipalities.find(
         (item) => item.id === visitMuniId || (item.name || '').toLowerCase().trim() === visitMuniName.toLowerCase().trim()
       );
-      if (matchedMuni && onUpdateMunicipality && (matchedMuni.name !== visitMuniName.trim() || matchedMuni.state !== visitState.trim().toUpperCase())) {
+      if (
+        matchedMuni &&
+        onUpdateMunicipality &&
+        (matchedMuni.name !== visitMuniName.trim() ||
+          matchedMuni.state !== visitState.trim().toUpperCase() ||
+          matchedMuni.funnelStage !== visitFunnelStage)
+      ) {
         onUpdateMunicipality({
           ...matchedMuni,
           name: visitMuniName.trim(),
           state: visitState.trim().toUpperCase(),
+          funnelStage: visitFunnelStage,
         });
       }
 
@@ -716,7 +737,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar cidade ou sistema..."
+              placeholder="Buscar cidade (mesmo com acento ou erro de digitação)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -1051,7 +1072,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                   type="button"
                   onClick={() => onNavigateTab('funnel')}
                   className="text-xs font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl border border-amber-300 transition-all flex items-center gap-1 active:scale-95 cursor-pointer shrink-0"
-                  title="Alterar o estágio no Funil Kanban (aba Funil)"
+                  title="Também é possível alterar o estágio direto no cartão de visita (Passo 3)"
                 >
                   <span>Ver/Alterar no Funil</span>
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -1717,6 +1738,24 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 </div>
               </div>
 
+              {/* Estágio do Funil: atualizado junto com o cartão, direto pela negociação */}
+              <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80">
+                <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">
+                  Estágio do Funil Após esta Interação
+                </label>
+                <select
+                  value={visitFunnelStage}
+                  onChange={(e) => setVisitFunnelStage(e.target.value as FunnelStage)}
+                  className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  {FUNNEL_STAGES_CONFIG.map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Contact Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1847,6 +1886,13 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                       onEditCRMInteraction(tempInteraction);
                     } else {
                       onAddCRMInteraction(tempInteraction);
+                    }
+
+                    const matchedMuniForCalendar = municipalities.find(
+                      (m) => m.id === visitMuniId || (m.name || '').toLowerCase().trim() === visitMuniName.toLowerCase().trim()
+                    );
+                    if (matchedMuniForCalendar && onUpdateMunicipality && matchedMuniForCalendar.funnelStage !== visitFunnelStage) {
+                      onUpdateMunicipality({ ...matchedMuniForCalendar, funnelStage: visitFunnelStage });
                     }
 
                     setIsVisitModalOpen(false);
