@@ -2,19 +2,13 @@ import React from 'react';
 import { Municipality, CRMInteraction } from '../types';
 import { ActiveTab } from './Sidebar';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
-import { 
-  Building2, 
-  Sparkles, 
-  Compass, 
-  FileText, 
-  Kanban, 
-  MessageSquare, 
-  GraduationCap, 
-  Calculator, 
-  Swords, 
-  Download, 
-  Zap, 
-  ChevronDown,
+import {
+  Building2,
+  Compass,
+  MessageSquare,
+  Swords,
+  Download,
+  Zap,
   Clock,
   Users,
   Award,
@@ -112,36 +106,25 @@ export const SelectedCityBar: React.FC<SelectedCityBarProps> = ({
 
   const cityVisitsCount = cityInteractions.filter((i) => i.type === 'visita').length;
 
+  // As 3 funções do app — mesma navegação principal do Sidebar, só que com atalho para a cidade ativa
   const actionButtons = [
     {
-      id: 'field_visits' as ActiveTab,
-      label: `Roteiro & Campo (${cityVisitsCount})`,
-      icon: Compass,
-      color: 'bg-emerald-600 text-white hover:bg-emerald-500',
-    },
-    {
-      id: 'funnel' as ActiveTab,
-      label: `Pipeline & CRM (${cityInteractions.length})`,
-      icon: Kanban,
-      color: 'bg-amber-600 text-white hover:bg-amber-500',
-    },
-    {
-      id: 'intelligence' as ActiveTab,
-      label: 'Dossiê 360º & IDEB',
-      icon: Building2,
-      color: 'bg-blue-600 text-white hover:bg-blue-500',
-    },
-    {
-      id: 'tenders' as ActiveTab,
-      label: 'Radar PNCP & Alertas',
+      id: 'dashboard' as ActiveTab,
+      label: 'Oportunidades',
       icon: SearchCheck,
       color: 'bg-indigo-600 text-white hover:bg-indigo-500',
     },
     {
-      id: 'ai_agent' as ActiveTab,
-      label: 'Copiloto Comercial IA',
-      icon: Sparkles,
-      color: 'bg-purple-600 text-white hover:bg-purple-500',
+      id: 'field_visits' as ActiveTab,
+      label: `Roteiro de Campo (${cityVisitsCount})`,
+      icon: Compass,
+      color: 'bg-emerald-600 text-white hover:bg-emerald-500',
+    },
+    {
+      id: 'crm' as ActiveTab,
+      label: `CRM (${cityInteractions.length})`,
+      icon: MessageSquare,
+      color: 'bg-amber-600 text-white hover:bg-amber-500',
     },
   ];
 

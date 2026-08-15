@@ -2,9 +2,9 @@ import React, { useState } from 'react';
 import { Municipality, CRMInteraction, FunnelStage } from '../types';
 import { calculateCommercialScore } from '../utils/scoreCalculator';
 import { openGoogleCalendar, formatCardDetailsForCalendar } from '../utils/googleCalendar';
-import { GoogleCalendarHubModal } from './GoogleCalendarHubModal';
-import { BusinessCardFormatterModal } from './BusinessCardFormatterModal';
 import { AICitySearchModal } from './AICitySearchModal';
+import { FUNNEL_STAGES_CONFIG } from './SalesFunnelView';
+import { citySearchScore, normalizeForSearch } from '../utils/fuzzySearch';
 import { 
   Navigation, 
   MapPin, 
@@ -28,9 +28,8 @@ import {
   X, 
   ArrowRight, 
   Bot, 
-  Eye, 
-  CreditCard, 
-  Star, 
+  Eye,
+  Star,
   Check,
   Pencil,
   Trash2,
@@ -50,7 +49,6 @@ interface FieldVisitsViewProps {
   onAddCRMInteraction: (newInteraction: CRMInteraction) => void;
   onEditCRMInteraction?: (updatedInteraction: CRMInteraction) => void;
   onDeleteCRMInteraction?: (id: string) => void;
-  onUpdateFunnelStage: (municipalityId: string, newStage: FunnelStage) => void;
   onUpdateMunicipality?: (updated: Municipality) => void;
   onSelectMunicipality: (m: Municipality) => void;
   onNavigateTab: (tab: string) => void;
@@ -64,7 +62,6 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
   onAddCRMInteraction,
   onEditCRMInteraction,
   onDeleteCRMInteraction,
-  onUpdateFunnelStage,
   onUpdateMunicipality,
   onSelectMunicipality,
   onNavigateTab,
@@ -104,8 +101,6 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
 
   // 5. Cartão de Visita / Interaction Modal State
   const [isVisitModalOpen, setIsVisitModalOpen] = useState(false);
-  const [isCalendarHubOpen, setIsCalendarHubOpen] = useState(false);
-  const [isFormatterModalOpen, setIsFormatterModalOpen] = useState(false);
   const [editingInteraction, setEditingInteraction] = useState<CRMInteraction | null>(null);
   const [visitMuniId, setVisitMuniId] = useState<string>('');
   const [visitMuniName, setVisitMuniName] = useState<string>('');
@@ -121,6 +116,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
   const [visitNextStep, setVisitNextStep] = useState('');
   const [visitNextStepDueDate, setVisitNextStepDueDate] = useState('');
   const [visitDealOwner, setVisitDealOwner] = useState('José Badotti');
+  const [visitFunnelStage, setVisitFunnelStage] = useState<FunnelStage>('prospectado');
 
   // Toast Notification
   const [toastMessage, setToastMessage] = useState<string | null>(null);
@@ -129,20 +125,32 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Dedicated City Name & Data Editing Modal State
+  // Dedicated City Name & Official Data Editing Modal State (Passo 2 · Corrigir Dados)
   const [isEditCityModalOpen, setIsEditCityModalOpen] = useState(false);
   const [editingCityTarget, setEditingCityTarget] = useState<Municipality | null>(null);
   const [editCityName, setEditCityName] = useState('');
   const [editCityState, setEditCityState] = useState('MA');
   const [editCitySystem, setEditCitySystem] = useState('');
-  const [editCityFunnel, setEditCityFunnel] = useState<FunnelStage>('prospectado');
+  const [editSchoolsCount, setEditSchoolsCount] = useState('');
+  const [editStudentsCount, setEditStudentsCount] = useState('');
+  const [editContractValue, setEditContractValue] = useState('');
+  const [editBuyingCompany, setEditBuyingCompany] = useState('');
+  const [editContractDate, setEditContractDate] = useState('');
+  const [editContactName, setEditContactName] = useState('');
+  const [editContactPhone, setEditContactPhone] = useState('');
 
   const handleOpenEditCityModal = (m: Municipality) => {
     setEditingCityTarget(m);
     setEditCityName(m.name);
     setEditCityState(m.state);
     setEditCitySystem(m.currentSystem || 'Ainda sem contrato');
-    setEditCityFunnel(m.funnelStage || 'prospectado');
+    setEditSchoolsCount(m.educationalMetrics?.schoolsCount != null ? String(m.educationalMetrics.schoolsCount) : '');
+    setEditStudentsCount(m.educationalMetrics?.studentsCount != null ? String(m.educationalMetrics.studentsCount) : '');
+    setEditContractValue(m.currentContractValue != null ? String(m.currentContractValue) : '');
+    setEditBuyingCompany(m.buyingHistory?.[0]?.company || '');
+    setEditContractDate(m.buyingHistory?.[0]?.contractDate || '');
+    setEditContactName(m.keyContacts?.[0]?.name || '');
+    setEditContactPhone(m.keyContacts?.[0]?.phone || '');
     setIsEditCityModalOpen(true);
   };
 
@@ -150,12 +158,39 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     e.preventDefault();
     if (!editingCityTarget || !editCityName.trim()) return;
 
+    const existingHistory = editingCityTarget.buyingHistory || [];
+    const updatedFirstHistoryEntry = {
+      year: editContractDate
+        ? Number(editContractDate.slice(0, 4)) || existingHistory[0]?.year || new Date().getFullYear()
+        : existingHistory[0]?.year || new Date().getFullYear(),
+      company: editBuyingCompany.trim() || existingHistory[0]?.company || 'Não localizado em fonte oficial',
+      value: Number(editContractValue) || existingHistory[0]?.value || 0,
+      objectStr: existingHistory[0]?.objectStr || 'Locação/Licenciamento de software de gestão pública escolar',
+      modality: existingHistory[0]?.modality || editingCityTarget.probableModality,
+      addendumsCount: existingHistory[0]?.addendumsCount,
+      contractDate: editContractDate.trim() || existingHistory[0]?.contractDate,
+    };
+
     const updatedMuni: Municipality = {
       ...editingCityTarget,
       name: editCityName.trim(),
       state: editCityState.trim().toUpperCase(),
       currentSystem: editCitySystem.trim() || editingCityTarget.currentSystem,
-      funnelStage: editCityFunnel,
+      currentContractValue: Number(editContractValue) || editingCityTarget.currentContractValue,
+      educationalMetrics: {
+        ...editingCityTarget.educationalMetrics,
+        schoolsCount: editSchoolsCount ? Number(editSchoolsCount) : editingCityTarget.educationalMetrics?.schoolsCount,
+        studentsCount: editStudentsCount ? Number(editStudentsCount) : editingCityTarget.educationalMetrics?.studentsCount,
+      },
+      buyingHistory: [updatedFirstHistoryEntry, ...existingHistory.slice(1)],
+      keyContacts: [
+        {
+          ...(editingCityTarget.keyContacts?.[0] || { role: 'Secretário(a) de Educação' }),
+          name: editContactName.trim() || editingCityTarget.keyContacts?.[0]?.name || 'Secretário(a) de Educação',
+          phone: editContactPhone.trim() || editingCityTarget.keyContacts?.[0]?.phone,
+        },
+        ...(editingCityTarget.keyContacts || []).slice(1),
+      ],
     };
 
     if (onUpdateMunicipality) {
@@ -165,7 +200,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
       onSelectMunicipality(updatedMuni);
     }
     setIsEditCityModalOpen(false);
-    showToast(`✏️ Prefeitura de ${updatedMuni.name} (${updatedMuni.state}) atualizada com sucesso!`);
+    showToast(`✏️ Dados de ${updatedMuni.name} (${updatedMuni.state}) corrigidos e salvos com sucesso!`);
   };
 
   // AI Copilot for current active city
@@ -270,16 +305,23 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     .filter(({ m, tempCategory }) => {
       if (!m) return false;
       const matchesState = !selectedState || m.state === selectedState;
+      // Busca inteligente: ignora acentuação e tolera pequenos erros de digitação no nome da cidade
       const matchesSearch =
-        !searchTerm ||
-        (m.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (m.currentSystem || '').toLowerCase().includes(searchTerm.toLowerCase());
+        !searchTerm.trim() ||
+        citySearchScore(searchTerm, m.name) !== null ||
+        normalizeForSearch(m.currentSystem || '').includes(normalizeForSearch(searchTerm));
       const matchesTemp = tempFilter === 'all' || tempCategory === tempFilter;
 
       return matchesState && matchesSearch && matchesTemp;
     })
     .sort((a, b) => {
       if (!a || !b) return 0;
+      // Com busca ativa, prioriza a cidade com a escrita mais próxima do termo digitado
+      if (searchTerm.trim()) {
+        const scoreA = citySearchScore(searchTerm, a.m?.name || '') ?? 999;
+        const scoreB = citySearchScore(searchTerm, b.m?.name || '') ?? 999;
+        if (scoreA !== scoreB) return scoreA - scoreB;
+      }
       if (sortBy === 'cards') {
         // Priority 1: Number of registered cards / interactions (descending)
         const countA = (a.mInteractions || []).length;
@@ -350,6 +392,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setVisitNextStep('Enviar proposta comercial / minuta de ARP');
     setVisitNextStepDueDate(new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
     setVisitDealOwner('José Badotti');
+    setVisitFunnelStage(m.funnelStage || 'prospectado');
     setIsVisitModalOpen(true);
   };
 
@@ -370,6 +413,8 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
     setVisitNextStep(item.nextStep || '');
     setVisitNextStepDueDate(item.nextStepDueDate || '');
     setVisitDealOwner(item.dealOwner || 'José Badotti');
+    const linkedMuni = municipalities.find((m) => m.id === item.municipalityId);
+    setVisitFunnelStage(linkedMuni?.funnelStage || 'prospectado');
     setIsVisitModalOpen(true);
   };
 
@@ -428,6 +473,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
           ...matchedMuni,
           name: visitMuniName.trim(),
           state: visitState.trim().toUpperCase(),
+          funnelStage: visitFunnelStage,
         });
       }
 
@@ -456,7 +502,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
           region: 'Nordeste',
           population: 25000,
           status: 'oportunidade',
-          funnelStage: 'prospectado',
+          funnelStage: visitFunnelStage,
           currentSystem: 'Em prospecção',
           currentContractValue: 0,
           contractDaysRemaining: 90,
@@ -517,11 +563,18 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
       };
 
       onAddCRMInteraction(newInteraction);
-      if (matchedMuni && onUpdateMunicipality && (matchedMuni.name !== visitMuniName.trim() || matchedMuni.state !== visitState.trim().toUpperCase())) {
+      if (
+        matchedMuni &&
+        onUpdateMunicipality &&
+        (matchedMuni.name !== visitMuniName.trim() ||
+          matchedMuni.state !== visitState.trim().toUpperCase() ||
+          matchedMuni.funnelStage !== visitFunnelStage)
+      ) {
         onUpdateMunicipality({
           ...matchedMuni,
           name: visitMuniName.trim(),
           state: visitState.trim().toUpperCase(),
+          funnelStage: visitFunnelStage,
         });
       }
 
@@ -596,10 +649,10 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
             <span>Navegação & Rota de Vendas em Campo</span>
           </div>
           <h1 className="text-2xl font-black text-white">
-            Roteiro de Campo & Probabilidade de Vendas
+            Roteiro de Campo: Cidade → Dados → Cartão de Visita
           </h1>
           <p className="text-xs text-slate-300 leading-relaxed">
-            Selecione o estado em que você está para visualizar as cidades ordenadas por <strong>faixa de temperatura (maior probabilidade de fechamento)</strong>. Selecione as cidades desejadas e gere o seu roteiro de viagem.
+            <strong className="text-amber-300">Passo 1:</strong> encontre ou pesquise a cidade na lista abaixo. <strong className="text-blue-300">Passo 2:</strong> confira/corrija os dados oficiais e estude a estratégia. <strong className="text-emerald-300">Passo 3:</strong> abra o cartão de visita da interação (visita, ligação, e-mail, contrato...).
           </p>
         </div>
 
@@ -639,27 +692,11 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
             <span>+ Analisar & Cadastrar Cidade com IA</span>
           </button>
 
-          <button
-            type="button"
-            onClick={() => setIsFormatterModalOpen(true)}
-            className="w-full bg-gradient-to-r from-amber-600 to-amber-700 hover:from-amber-700 hover:to-amber-800 text-white font-black text-xs py-2.5 rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer border border-amber-500/50"
-            title="Formatador Automático de Cartões de Visita, Contratos, Vencimentos e Empresa Ganhadora"
-          >
-            <CreditCard className="w-4 h-4 text-amber-200 shrink-0" />
-            <span>💳 Formatador de Cartões de Visita</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setIsCalendarHubOpen(true)}
-            className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-extrabold text-xs py-2.5 rounded-xl shadow-md flex items-center justify-center gap-2 active:scale-95 transition-all cursor-pointer border border-indigo-500/50"
-          >
-            <Calendar className="w-4 h-4 text-indigo-200 shrink-0" />
-            <span>📅 Agenda Google Calendar</span>
-          </button>
-
           <div className="text-[11px] text-slate-300 font-medium text-center">
             {totalStateCities} cidades mapeadas em <strong>{selectedState}</strong>
+          </div>
+          <div className="text-[10px] text-slate-400 font-medium text-center leading-relaxed">
+            Formatador de Cartões e Agenda Google ficam na aba <strong className="text-slate-200">CRM</strong>, junto do histórico de interações.
           </div>
         </div>
       </div>
@@ -752,7 +789,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
             <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input
               type="text"
-              placeholder="Buscar cidade ou sistema..."
+              placeholder="Buscar cidade (mesmo com acento ou erro de digitação)..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -771,7 +808,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
               <div className="flex items-center gap-1.5 text-xs font-black text-slate-800">
                 <SlidersHorizontal className="w-4 h-4 text-blue-800 shrink-0" />
-                <span>Ordenar Cidades ({stateMunicipalities.length}):</span>
+                <span>Passo 1 · Encontrar Cidade ({stateMunicipalities.length}):</span>
               </div>
 
               {/* Sort Options */}
@@ -1074,75 +1111,95 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 </div>
               </div>
 
-              {/* ACTION STEP 1: FUNNEL STAGE SELECTOR (Colocar no Funil) */}
-              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
-                    <Kanban className="w-4 h-4 text-amber-600" />
-                    <span>1. Estágio Atual no Funil Comercial:</span>
-                  </span>
-                  <span className="text-xs font-extrabold text-blue-900 capitalize">
+              {/* Estágio no Funil: somente leitura aqui. Alterar sempre pelo Funil Kanban (aba Funil), evitando estágios divergentes entre telas */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2">
+                <span className="text-xs font-extrabold text-slate-800 uppercase tracking-wider flex items-center gap-1.5">
+                  <Kanban className="w-4 h-4 text-amber-600" />
+                  <span>Estágio no Funil:</span>
+                  <span className="text-blue-900 capitalize font-black normal-case">
                     {(activeMunicipalityData.m.funnelStage || 'prospectado').replace(/_/g, ' ')}
                   </span>
-                </div>
-
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                  {[
-                    { id: 'prospectado', label: '1. Prospecção' },
-                    { id: 'contato_inicial', label: '2. Qualificação' },
-                    { id: 'reuniao_agendada', label: '3. Apresentação' },
-                    { id: 'proposta_enviada', label: '4. Minuta / ARP' },
-                    { id: 'negociacao', label: '5. Negociação' },
-                    { id: 'fechado_ganho', label: '6. Fechado / Ganho' },
-                  ].map((stage) => {
-                    const isCurrent = activeMunicipalityData.m.funnelStage === stage.id;
-                    return (
-                      <button
-                        key={stage.id}
-                        onClick={() => {
-                          onUpdateFunnelStage(activeMunicipalityData.m.id, stage.id as FunnelStage);
-                          showToast(`Funil de ${activeMunicipalityData.m.name} alterado para "${stage.label}"!`);
-                        }}
-                        className={`py-2 px-3 rounded-xl font-extrabold text-xs text-center transition-all border ${
-                          isCurrent
-                            ? 'bg-amber-500 text-white border-amber-600 shadow-md shadow-amber-500/30'
-                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                        }`}
-                      >
-                        {stage.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* ACTION STEP 2: CRIAR CARTÃO DE VISITA BUTTON */}
-              <div className="flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-emerald-900 to-teal-900 text-white p-4 rounded-2xl shadow-md">
-                <div className="space-y-0.5">
-                  <h4 className="font-extrabold text-sm text-white flex items-center gap-2">
-                    <Plus className="w-4 h-4 text-emerald-400" />
-                    <span>2. Chegou na cidade? Registre a Visita</span>
-                  </h4>
-                  <p className="text-xs text-emerald-100">
-                    Crie o cartão de visita presencial, contatos e próximos passos.
-                  </p>
-                </div>
-
+                </span>
                 <button
-                  onClick={() => handleOpenVisitModalForCity(activeMunicipalityData.m)}
-                  className="bg-white hover:bg-emerald-50 text-emerald-900 font-black text-xs px-5 py-2.5 rounded-xl transition-all shadow-md active:scale-95 shrink-0"
+                  type="button"
+                  onClick={() => onNavigateTab('funnel')}
+                  className="text-xs font-extrabold text-amber-800 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-xl border border-amber-300 transition-all flex items-center gap-1 active:scale-95 cursor-pointer shrink-0"
+                  title="Também é possível alterar o estágio direto no cartão de visita (Passo 3)"
                 >
-                  🎴 Criar Cartão de Visita Presencial
+                  <span>Ver/Alterar no Funil</span>
+                  <ChevronRight className="w-3.5 h-3.5" />
                 </button>
               </div>
 
-              {/* ACTION STEP 3: PITCH IA E ESTRATÉGIA DA CIDADE */}
+              {/* PASSO 2: DADOS OFICIAIS DA CIDADE (pesquisados via IA em fontes do governo) */}
+              <div className="bg-blue-50/60 p-4 rounded-2xl border border-blue-200 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-extrabold text-blue-950 uppercase tracking-wider flex items-center gap-1.5">
+                    <Database className="w-4 h-4 text-blue-700" />
+                    <span>Passo 2 · Dados Oficiais da Cidade</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEditCityModal(activeMunicipalityData.m)}
+                    className="bg-white hover:bg-blue-100 text-blue-900 text-xs font-extrabold px-3 py-1.5 rounded-xl border border-blue-300 transition-all flex items-center gap-1 active:scale-95 shadow-sm cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5" />
+                    <span>Corrigir Dados</span>
+                  </button>
+                </div>
+
+                <p className="text-[11px] text-blue-900/80 leading-relaxed">
+                  Use o botão <strong>"🔄 Enriquecer CRM"</strong> na barra da cidade (no topo da página) para pesquisar/atualizar estes dados via IA em fontes oficiais (PNCP, TCE, INEP, IBGE). Depois, confira em campo e corrija manualmente o que for preciso.
+                </p>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
+                  <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                    <span className="text-slate-400 font-bold block text-[9px] uppercase">Escolas</span>
+                    <span className="font-extrabold text-slate-900">
+                      {activeMunicipalityData.m.educationalMetrics?.schoolsCount ?? '—'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                    <span className="text-slate-400 font-bold block text-[9px] uppercase">Estudantes</span>
+                    <span className="font-extrabold text-slate-900">
+                      {(activeMunicipalityData.m.educationalMetrics?.studentsCount ?? 0).toLocaleString('pt-BR')}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-blue-100 col-span-2">
+                    <span className="text-slate-400 font-bold block text-[9px] uppercase">Empresa Vencedora da Última Licitação</span>
+                    <span className="font-extrabold text-slate-900 truncate block">
+                      {activeMunicipalityData.m.buyingHistory?.[0]?.company || 'Não pesquisado ainda'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                    <span className="text-slate-400 font-bold block text-[9px] uppercase">Data do Contrato</span>
+                    <span className="font-extrabold text-slate-900">
+                      {activeMunicipalityData.m.buyingHistory?.[0]?.contractDate ||
+                        (activeMunicipalityData.m.buyingHistory?.[0]?.year ? `Ano ${activeMunicipalityData.m.buyingHistory[0].year}` : 'Não pesquisado')}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-blue-100 col-span-2 sm:col-span-1">
+                    <span className="text-slate-400 font-bold block text-[9px] uppercase">Contato Principal</span>
+                    <span className="font-extrabold text-slate-900 truncate block">
+                      {activeMunicipalityData.m.keyContacts?.[0]?.name || 'Não pesquisado'}
+                    </span>
+                  </div>
+                  <div className="bg-white p-2.5 rounded-xl border border-blue-100">
+                    <span className="text-slate-400 font-bold block text-[9px] uppercase">Telefone</span>
+                    <span className="font-extrabold text-slate-900">
+                      {activeMunicipalityData.m.keyContacts?.[0]?.phone || '—'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* PASSO 2 (continuação): ESTUDAR ESTRATÉGIA PARA A VISITA (IA) */}
               <div className="bg-purple-950 text-white p-4 rounded-2xl border border-purple-800/60 space-y-3">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-4 h-4 text-purple-400" />
                     <h4 className="font-extrabold text-xs uppercase text-purple-200">
-                      Roteiro de Abordagem Personalizado IA
+                      Passo 2 · Estudar Estratégia para a Visita (IA)
                     </h4>
                   </div>
                   <button
@@ -1166,16 +1223,16 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 )}
               </div>
 
-              {/* ACTION STEP 4: CARTÕES DE VISITA & HISTÓRICO DAS CONVERSAS ANTERIORES */}
+              {/* PASSO 3: CARTÃO DE VISITA & HISTÓRICO DE INTERAÇÕES */}
               <div className="space-y-4 pt-2 border-t border-slate-200">
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <h3 className="font-black text-base text-slate-900 uppercase tracking-wider flex items-center gap-2">
                       <Clock className="w-5 h-5 text-emerald-600" />
-                      <span>🎴 Cartões de Visita & Histórico de Conversas Anteriores ({activeMunicipalityData.mInteractions.length})</span>
+                      <span>Passo 3 · Cartão de Visita ({activeMunicipalityData.mInteractions.length})</span>
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">
-                      Veja tudo o que já foi conversado com a gestão de {activeMunicipalityData.m.name} em visitas presenciais, reuniões e chamadas.
+                      Registre cada interação (visita, ligação, e-mail, contrato...) com a gestão de {activeMunicipalityData.m.name}. Aqui fica o histórico completo.
                     </p>
                   </div>
 
@@ -1184,7 +1241,7 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                     className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs px-3.5 py-2 rounded-xl flex items-center gap-1.5 transition-all shadow-md shadow-emerald-900/20 active:scale-95 shrink-0"
                   >
                     <Plus className="w-4 h-4" />
-                    <span>🎴 Novo Cartão de Visita</span>
+                    <span>🎴 Abrir / Novo Cartão de Visita</span>
                   </button>
                 </div>
 
@@ -1452,9 +1509,9 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
           ) : (
             <div className="bg-white rounded-2xl border border-slate-200 p-12 text-center space-y-3 shadow-sm">
               <Navigation className="w-12 h-12 text-slate-300 mx-auto" />
-              <h3 className="text-base font-bold text-slate-700">Selecione uma cidade na lista ao lado</h3>
+              <h3 className="text-base font-bold text-slate-700">Passo 1 · Selecione uma cidade na lista ao lado</h3>
               <p className="text-xs text-slate-500 max-w-md mx-auto">
-                Clique em qualquer cidade da lista de {selectedState} para visualizar os dados completos, atualizar o estágio no funil, criar cartão de visita e monitorar o histórico.
+                Clique em qualquer cidade da lista de {selectedState} para conferir/corrigir os dados oficiais (Passo 2) e abrir o cartão de visita (Passo 3).
               </p>
             </div>
           )}
@@ -1733,6 +1790,24 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                 </div>
               </div>
 
+              {/* Estágio do Funil: atualizado junto com o cartão, direto pela negociação */}
+              <div className="bg-amber-50/70 p-3 rounded-2xl border border-amber-200/80">
+                <label className="block text-[10px] font-black text-amber-950 uppercase mb-1">
+                  Estágio do Funil Após esta Interação
+                </label>
+                <select
+                  value={visitFunnelStage}
+                  onChange={(e) => setVisitFunnelStage(e.target.value as FunnelStage)}
+                  className="w-full bg-white border border-amber-300 rounded-xl px-3 py-2 font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                >
+                  {FUNNEL_STAGES_CONFIG.map((stage) => (
+                    <option key={stage.id} value={stage.id}>
+                      {stage.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               {/* Contact Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1865,6 +1940,13 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
                       onAddCRMInteraction(tempInteraction);
                     }
 
+                    const matchedMuniForCalendar = municipalities.find(
+                      (m) => m.id === visitMuniId || (m.name || '').toLowerCase().trim() === visitMuniName.toLowerCase().trim()
+                    );
+                    if (matchedMuniForCalendar && onUpdateMunicipality && matchedMuniForCalendar.funnelStage !== visitFunnelStage) {
+                      onUpdateMunicipality({ ...matchedMuniForCalendar, funnelStage: visitFunnelStage });
+                    }
+
                     setIsVisitModalOpen(false);
                     setEditingInteraction(null);
                     openGoogleCalendar(tempInteraction);
@@ -1909,18 +1991,18 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
         }}
       />
 
-      {/* Modal para Editar Nome da Cidade & Dados Básicos */}
+      {/* Modal Passo 2: Corrigir Dados Oficiais da Cidade */}
       {isEditCityModalOpen && editingCityTarget && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl border border-amber-300 shadow-2xl max-w-md w-full p-6 space-y-4 my-auto animate-in fade-in zoom-in-95">
+          <div className="bg-white rounded-2xl border border-amber-300 shadow-2xl max-w-lg w-full p-6 space-y-4 my-auto animate-in fade-in zoom-in-95 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <div className="p-2 bg-amber-100 rounded-xl text-amber-900 font-bold">
                   <Pencil className="w-5 h-5 text-amber-800" />
                 </div>
                 <div>
-                  <h3 className="font-extrabold text-base text-slate-900">Editar Dados da Cidade</h3>
-                  <p className="text-xs text-slate-500 font-normal">Altere o nome oficial da prefeitura, estado e dados</p>
+                  <h3 className="font-extrabold text-base text-slate-900">Passo 2 · Corrigir Dados Oficiais</h3>
+                  <p className="text-xs text-slate-500 font-normal">Ajuste os dados pesquisados via IA com o que você confirmou em campo</p>
                 </div>
               </div>
               <button
@@ -1965,35 +2047,106 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
 
                 <div>
                   <label className="block font-bold text-slate-800 mb-1">
-                    Estágio no Funil
+                    Sistema Concorrente Atual
                   </label>
-                  <select
-                    value={editCityFunnel}
-                    onChange={(e) => setEditCityFunnel(e.target.value as FunnelStage)}
-                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="prospectado">1. Prospecção Inicial</option>
-                    <option value="primeiro_contato">2. Primeiro Contato Feito</option>
-                    <option value="reuniao">3. Reunião Agendada</option>
-                    <option value="demonstracao">4. Demonstração / Piloto</option>
-                    <option value="projeto_apresentado">5. Projeto Apresentado</option>
-                    <option value="processo_licitatorio">6. Processo Licitatório</option>
-                    <option value="homologacao">7. Homologação / Vencido</option>
-                  </select>
+                  <input
+                    type="text"
+                    value={editCitySystem}
+                    onChange={(e) => setEditCitySystem(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: Educar / Betha / Sem Sistema"
+                  />
                 </div>
               </div>
 
-              <div>
-                <label className="block font-bold text-slate-800 mb-1">
-                  Sistema Concorrente Atual
-                </label>
-                <input
-                  type="text"
-                  value={editCitySystem}
-                  onChange={(e) => setEditCitySystem(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-semibold focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  placeholder="Ex: Educar / Betha / Sem Sistema"
-                />
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <span className="block font-black text-slate-500 uppercase text-[10px] tracking-wider">Indicadores do Último Ano</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Número de Escolas</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editSchoolsCount}
+                      onChange={(e) => setEditSchoolsCount(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Ex: 130"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Número de Estudantes</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editStudentsCount}
+                      onChange={(e) => setEditStudentsCount(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Ex: 26000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <span className="block font-black text-slate-500 uppercase text-[10px] tracking-wider">Última Licitação / Contrato Vigente</span>
+                <div>
+                  <label className="block font-bold text-slate-800 mb-1">Empresa Vencedora da Última Licitação</label>
+                  <input
+                    type="text"
+                    value={editBuyingCompany}
+                    onChange={(e) => setEditBuyingCompany(e.target.value)}
+                    className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    placeholder="Ex: Educar Tecnologia Ltda"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Data do Contrato</label>
+                    <input
+                      type="date"
+                      value={editContractDate}
+                      onChange={(e) => setEditContractDate(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Valor do Contrato (R$)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      value={editContractValue}
+                      onChange={(e) => setEditContractValue(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Ex: 1850000"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 space-y-3">
+                <span className="block font-black text-slate-500 uppercase text-[10px] tracking-wider">Contato Principal</span>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Nome</label>
+                    <input
+                      type="text"
+                      value={editContactName}
+                      onChange={(e) => setEditContactName(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Ex: Dra. Maria das Graças"
+                    />
+                  </div>
+                  <div>
+                    <label className="block font-bold text-slate-800 mb-1">Telefone</label>
+                    <input
+                      type="text"
+                      value={editContactPhone}
+                      onChange={(e) => setEditContactPhone(e.target.value)}
+                      className="w-full bg-slate-50 border border-slate-300 rounded-xl p-2.5 text-slate-900 font-bold focus:outline-none focus:ring-2 focus:ring-amber-500"
+                      placeholder="Ex: (99) 3661-2200"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
@@ -2015,24 +2168,6 @@ export const FieldVisitsView: React.FC<FieldVisitsViewProps> = ({
           </div>
         </div>
       )}
-
-      {/* Google Calendar Hub Modal */}
-      <GoogleCalendarHubModal
-        isOpen={isCalendarHubOpen}
-        onClose={() => setIsCalendarHubOpen(false)}
-        interactions={crmInteractions}
-        onShowToast={(msg) => showToast(msg)}
-      />
-
-      {/* Business Card Formatter Modal */}
-      <BusinessCardFormatterModal
-        isOpen={isFormatterModalOpen}
-        onClose={() => setIsFormatterModalOpen(false)}
-        municipalities={municipalities}
-        onSaveInteraction={(newInter) => onAddCRMInteraction(newInter)}
-        onShowToast={(msg) => showToast(msg)}
-        initialMunicipalityId={activeCityId || selectedMunicipality?.id || undefined}
-      />
 
     </div>
   );

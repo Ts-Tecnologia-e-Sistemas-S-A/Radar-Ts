@@ -6,7 +6,7 @@ import {
   MOCK_COMPETITORS,
   MOCK_CRM_INTERACTIONS
 } from './data/mockData';
-import { Municipality, TenderNotice, CommercialAlert, FunnelStage, CRMInteraction } from './types';
+import { Municipality, TenderNotice, CommercialAlert, FunnelStage, CRMInteraction, CompetitorItem } from './types';
 import { Navbar } from './components/Navbar';
 import { Sidebar, ActiveTab } from './components/Sidebar';
 import { DashboardView } from './components/DashboardView';
@@ -20,9 +20,6 @@ import { CompetitorRadarView } from './components/CompetitorRadarView';
 import { IOScoreCalculatorView } from './components/IOScoreCalculatorView';
 import { EducationalCockpitBridge } from './components/EducationalCockpitBridge';
 import { FieldVisitsView } from './components/FieldVisitsView';
-import { BusinessCardsView } from './components/BusinessCardsView';
-import { TaskBasedCrmView } from './components/TaskBasedCrmView';
-import { SingleCityQueryView } from './components/SingleCityQueryView';
 import { MobileScrollNav } from './components/MobileScrollNav';
 import { DossierExportModal } from './components/DossierExportModal';
 import { SicapRadarCrmEnricherModal } from './components/SicapRadarCrmEnricherModal';
@@ -69,7 +66,7 @@ function deduplicateInteractions(list: CRMInteraction[]): CRMInteraction[] {
 }
 
 export default function App() {
-  const [activeTab, setActiveTab] = useState<ActiveTab>('single_city_query');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('field_visits');
   const [firebaseStatus, setFirebaseStatus] = useState<'connecting' | 'connected' | 'error'>('connecting');
   
   // App persistent state with Firebase Cloud & LocalStorage fallback
@@ -108,6 +105,15 @@ export default function App() {
       return deduplicateInteractions(raw);
     } catch (e) {
       return deduplicateInteractions(MOCK_CRM_INTERACTIONS);
+    }
+  });
+
+  const [competitors, setCompetitors] = useState<CompetitorItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('sicap_competitors_v1');
+      return saved ? JSON.parse(saved) : MOCK_COMPETITORS;
+    } catch (e) {
+      return MOCK_COMPETITORS;
     }
   });
 
@@ -179,6 +185,14 @@ export default function App() {
       console.error('Error saving crmInteractions to localStorage', e);
     }
   }, [crmInteractions]);
+
+  React.useEffect(() => {
+    try {
+      localStorage.setItem('sicap_competitors_v1', JSON.stringify(competitors));
+    } catch (e) {
+      console.error('Error saving competitors to localStorage', e);
+    }
+  }, [competitors]);
 
   React.useEffect(() => {
     try {
@@ -569,6 +583,26 @@ export default function App() {
     setActiveTab('crm');
   };
 
+  const handleAddCompetitor = (newCompetitor: CompetitorItem) => {
+    setCompetitors((prev) => [newCompetitor, ...prev]);
+  };
+
+  const handleMarkAlertAsRead = (alertId: string) => {
+    setAlerts((prev) => prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a)));
+  };
+
+  const handleOpenTenderDetail = (tender: TenderNotice) => {
+    const m = municipalities.find((item) => item.id === tender.municipalityId);
+    if (m) setSelectedMunicipality(m);
+    setActiveTab('intelligence');
+  };
+
+  const handleNavigateTenderToAI = (tender: TenderNotice) => {
+    const m = municipalities.find((item) => item.id === tender.municipalityId);
+    if (m) setSelectedMunicipality(m);
+    setActiveTab('ai_agent');
+  };
+
   const unreadAlertsCount = alerts.filter((a) => !a.isRead).length;
 
   const handleNavbarCitySearch = (queryOrMuni: string | Municipality) => {
@@ -581,11 +615,11 @@ export default function App() {
       if (match) {
         setSelectedMunicipality(match);
       }
-      setActiveTab('single_city_query');
+      setActiveTab('crm');
     } else {
       setSelectedMunicipality(queryOrMuni);
       setSearchQuery(queryOrMuni.name);
-      setActiveTab('single_city_query');
+      setActiveTab('crm');
     }
   };
 
@@ -626,19 +660,17 @@ export default function App() {
         <main className="flex-1 p-2 sm:p-4 md:p-6 lg:p-8 min-w-0 max-w-full w-full pb-32 sm:pb-24">
           
           {/* Active City 360º Commercial Context & Navigation Bar */}
-          {activeTab !== 'task_crm' && activeTab !== 'single_city_query' && (
-            <SelectedCityBar
-              municipalities={municipalities}
-              crmInteractions={crmInteractions}
-              selectedMunicipality={selectedMunicipality}
-              onSelectMunicipality={handleSelectMunicipality}
-              onUpdateMunicipality={handleUpdateMunicipality}
-              activeTab={activeTab}
-              onNavigateTab={setActiveTab}
-              onOpenExportModal={() => setShowExportModal(true)}
-              onOpenEnricherModal={() => setShowRadarEnricherModal(true)}
-            />
-          )}
+          <SelectedCityBar
+            municipalities={municipalities}
+            crmInteractions={crmInteractions}
+            selectedMunicipality={selectedMunicipality}
+            onSelectMunicipality={handleSelectMunicipality}
+            onUpdateMunicipality={handleUpdateMunicipality}
+            activeTab={activeTab}
+            onNavigateTab={setActiveTab}
+            onOpenExportModal={() => setShowExportModal(true)}
+            onOpenEnricherModal={() => setShowRadarEnricherModal(true)}
+          />
 
           {activeTab === 'field_visits' && (
             <FieldVisitsView
@@ -647,7 +679,6 @@ export default function App() {
               onAddCRMInteraction={handleAddCRMInteraction}
               onEditCRMInteraction={handleEditCRMInteraction}
               onDeleteCRMInteraction={handleDeleteCRMInteraction}
-              onUpdateFunnelStage={handleUpdateFunnelStage}
               onUpdateMunicipality={handleUpdateMunicipality}
               onSelectMunicipality={handleSelectMunicipality}
               onNavigateTab={(tab) => setActiveTab(tab as any)}
@@ -661,12 +692,17 @@ export default function App() {
               municipalities={municipalities}
               tenders={tenders}
               alerts={alerts}
+              competitors={competitors}
+              onAddCompetitor={handleAddCompetitor}
               selectedMunicipality={selectedMunicipality}
               onSelectMunicipality={handleSelectMunicipality}
               selectedStateFilter={selectedStateFilter}
               onStateFilterChange={setSelectedStateFilter}
               onNavigateTab={setActiveTab}
               onOpenAISystem={handleOpenAIForMuni}
+              onMarkAsReadAlert={handleMarkAlertAsRead}
+              onOpenTenderDetail={handleOpenTenderDetail}
+              onNavigateTenderToAI={handleNavigateTenderToAI}
             />
           )}
 
@@ -678,21 +714,9 @@ export default function App() {
               initialSubTab={activeTab === 'alerts' ? 'alerts' : 'tenders'}
               onSelectMunicipality={handleSelectMunicipality}
               onOpenAIStrategy={handleOpenAIForMuni}
-              onMarkAsReadAlert={(alertId) => {
-                setAlerts((prev) =>
-                  prev.map((a) => (a.id === alertId ? { ...a, isRead: true } : a))
-                );
-              }}
-              onOpenTenderDetail={(tender) => {
-                const m = municipalities.find((item) => item.id === tender.municipalityId);
-                if (m) setSelectedMunicipality(m);
-                setActiveTab('intelligence');
-              }}
-              onNavigateToAI={(tender) => {
-                const m = municipalities.find((item) => item.id === tender.municipalityId);
-                if (m) setSelectedMunicipality(m);
-                setActiveTab('ai_agent');
-              }}
+              onMarkAsReadAlert={handleMarkAlertAsRead}
+              onOpenTenderDetail={handleOpenTenderDetail}
+              onNavigateToAI={handleNavigateTenderToAI}
             />
           )}
 
@@ -706,6 +730,8 @@ export default function App() {
               crmInteractions={crmInteractions}
               onOpenCRM={handleOpenCRMForMuni}
               initialSubTab={activeTab}
+              competitors={competitors}
+              onAddCompetitor={handleAddCompetitor}
             />
           )}
 
@@ -737,52 +763,13 @@ export default function App() {
               selectedMunicipality={selectedMunicipality}
               onNavigateTab={setActiveTab}
               onOpenAIForMuni={handleOpenAIForMuni}
+              competitors={competitors}
+              onAddCompetitor={handleAddCompetitor}
               pendingSyncCount={pendingSyncCount}
               isSyncingData={isSyncingData}
               isOnline={isOnline}
               lastSyncTime={lastSyncTime}
               onTriggerSync={triggerAutoSaveSync}
-            />
-          )}
-
-          {activeTab === 'single_city_query' && (
-            <SingleCityQueryView
-              municipalities={municipalities}
-              crmInteractions={crmInteractions}
-              onAddCRMInteraction={handleAddCRMInteraction}
-              onEditCRMInteraction={handleEditCRMInteraction}
-              onDeleteCRMInteraction={handleDeleteCRMInteraction}
-              onAddMunicipality={handleAddMunicipality}
-              onUpdateMunicipality={handleUpdateMunicipality}
-              onSelectMunicipality={handleSelectMunicipality}
-              selectedMunicipality={selectedMunicipality}
-              onNavigateTab={(tab) => setActiveTab(tab as any)}
-            />
-          )}
-
-          {activeTab === 'task_crm' && (
-            <TaskBasedCrmView
-              municipalities={municipalities}
-              crmInteractions={crmInteractions}
-              onAddMunicipality={handleAddMunicipality}
-              onUpdateMunicipality={handleUpdateMunicipality}
-              onAddCRMInteraction={handleAddCRMInteraction}
-              selectedMunicipality={selectedMunicipality}
-              onSelectMunicipality={handleSelectMunicipality}
-            />
-          )}
-
-          {activeTab === 'business_cards' && (
-            <BusinessCardsView
-              municipalities={municipalities}
-              crmInteractions={crmInteractions}
-              onAddCRMInteraction={handleAddCRMInteraction}
-              onEditCRMInteraction={handleEditCRMInteraction}
-              onDeleteCRMInteraction={handleDeleteCRMInteraction}
-              onAddMunicipality={handleAddMunicipality}
-              onSelectMunicipality={handleSelectMunicipality}
-              onNavigateTab={(tab) => setActiveTab(tab as any)}
-              selectedMunicipality={selectedMunicipality}
             />
           )}
 

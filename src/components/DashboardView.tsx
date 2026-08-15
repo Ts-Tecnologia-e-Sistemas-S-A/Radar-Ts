@@ -1,41 +1,61 @@
-import React from 'react';
-import { Municipality, TenderNotice, CommercialAlert } from '../types';
+import React, { useState } from 'react';
+import { Municipality, TenderNotice, CommercialAlert, CompetitorItem } from '../types';
 import { BrazilMap } from './BrazilMap';
-import { 
-  Building2, 
-  TrendingUp, 
-  AlertTriangle, 
-  SearchCheck, 
-  Sparkles, 
-  ArrowUpRight, 
+import { TenderRadarView } from './TenderRadarView';
+import { IOScoreCalculatorView } from './IOScoreCalculatorView';
+import { CompetitorRadarView } from './CompetitorRadarView';
+import {
+  Building2,
+  TrendingUp,
+  AlertTriangle,
+  SearchCheck,
+  Sparkles,
+  ArrowUpRight,
   Calculator,
   ChevronRight,
-  ShieldCheck
+  ShieldCheck,
+  Swords,
+  Compass
 } from 'lucide-react';
+
+type OpportunitySubTab = 'geral' | 'editais' | 'score' | 'concorrentes';
 
 interface DashboardViewProps {
   municipalities: Municipality[];
   tenders: TenderNotice[];
   alerts: CommercialAlert[];
+  competitors: CompetitorItem[];
+  onAddCompetitor: (c: CompetitorItem) => void;
   selectedMunicipality: Municipality | null;
   onSelectMunicipality: (m: Municipality) => void;
   selectedStateFilter: string;
   onStateFilterChange: (st: string) => void;
   onNavigateTab: (tab: any) => void;
   onOpenAISystem: (m: Municipality) => void;
+  onMarkAsReadAlert?: (alertId: string) => void;
+  onOpenTenderDetail?: (tender: TenderNotice) => void;
+  onNavigateTenderToAI?: (tender: TenderNotice) => void;
+  initialSubTab?: OpportunitySubTab;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   municipalities,
   tenders,
   alerts,
+  competitors,
+  onAddCompetitor,
   selectedMunicipality,
   onSelectMunicipality,
   selectedStateFilter,
   onStateFilterChange,
   onNavigateTab,
   onOpenAISystem,
+  onMarkAsReadAlert,
+  onOpenTenderDetail,
+  onNavigateTenderToAI,
+  initialSubTab = 'geral',
 }) => {
+  const [activeSubTab, setActiveSubTab] = useState<OpportunitySubTab>(initialSubTab);
   const highIoMunicipalities = [...(municipalities || [])].sort((a, b) => ((b && b.ioScore) || 0) - ((a && a.ioScore) || 0));
   const criticalAlerts = (alerts || []).filter((a) => a && a.severity === 'critico');
 
@@ -47,7 +67,104 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-6">
-      
+
+      {/* Header & Sub-tab Navigation */}
+      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2 text-blue-600 font-bold text-xs uppercase tracking-wider">
+              <Compass className="w-4 h-4 text-blue-600" />
+              <span>Oportunidades · Onde Vender Primeiro</span>
+            </div>
+            <h2 className="text-xl font-extrabold text-slate-900 mt-1">
+              Encontrar Melhores Oportunidades
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Visão macro, editais e alertas, ranking por Score IO e inteligência de concorrentes — pra decidir onde vender primeiro.
+            </p>
+          </div>
+
+          <div className="bg-slate-100 p-1 rounded-xl flex flex-wrap items-center gap-1 border border-slate-200 shadow-inner shrink-0">
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('geral')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'geral'
+                  ? 'bg-blue-600 text-white shadow-md ring-1 ring-blue-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Building2 className="w-4 h-4" />
+              <span>Visão Geral</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('editais')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'editais'
+                  ? 'bg-orange-500 text-white shadow-md ring-1 ring-orange-400'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <SearchCheck className="w-4 h-4" />
+              <span>Editais & Alertas ({tenders.length + alerts.length})</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('score')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'score'
+                  ? 'bg-emerald-600 text-white shadow-md ring-1 ring-emerald-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Calculator className="w-4 h-4" />
+              <span>Score IO</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveSubTab('concorrentes')}
+              className={`flex items-center gap-2 px-3.5 py-2 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                activeSubTab === 'concorrentes'
+                  ? 'bg-rose-600 text-white shadow-md ring-1 ring-rose-500'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/80'
+              }`}
+            >
+              <Swords className="w-4 h-4" />
+              <span>Concorrentes ({competitors.length})</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {activeSubTab === 'editais' ? (
+        <TenderRadarView
+          tenders={tenders}
+          alerts={alerts}
+          municipalities={municipalities}
+          onSelectMunicipality={onSelectMunicipality}
+          onOpenAIStrategy={onOpenAISystem}
+          onMarkAsReadAlert={onMarkAsReadAlert}
+          onOpenTenderDetail={onOpenTenderDetail || (() => {})}
+          onNavigateToAI={onNavigateTenderToAI}
+        />
+      ) : activeSubTab === 'score' ? (
+        <IOScoreCalculatorView
+          municipalities={municipalities}
+          selectedMunicipality={selectedMunicipality}
+          onSelectMunicipality={onSelectMunicipality}
+        />
+      ) : activeSubTab === 'concorrentes' ? (
+        <CompetitorRadarView
+          competitors={competitors}
+          onAddCompetitor={onAddCompetitor}
+          selectedMunicipality={selectedMunicipality}
+        />
+      ) : (
+        <>
       {/* Top Banner Alert Ticker */}
       {criticalAlerts.length > 0 && (
         <div className="bg-gradient-to-r from-red-600 via-orange-600 to-amber-600 text-white p-4 rounded-xl shadow-md flex flex-wrap items-center justify-between gap-3">
@@ -329,6 +446,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
           </div>
         </div>
+      )}
+        </>
       )}
 
     </div>
