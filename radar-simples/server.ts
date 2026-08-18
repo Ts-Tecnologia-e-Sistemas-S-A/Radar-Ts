@@ -1,6 +1,7 @@
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
+import { buscarLicitacoesPncp } from './lib/pncpProxy';
 
 const app = express();
 const PORT = 3000;
@@ -11,36 +12,12 @@ app.use(express.json());
 // Contratações Públicas, Lei 14.133/2021) para evitar CORS no navegador.
 // Não inventa dado nenhum: se a chamada falhar, devolve erro explícito.
 app.get('/api/pncp/licitacoes', async (req, res) => {
-  const uf = ((req.query.uf as string) || '').toUpperCase();
-  const dataInicial = req.query.dataInicial as string;
-  const dataFinal = req.query.dataFinal as string;
-
-  if (!uf || !dataInicial || !dataFinal) {
-    return res.status(400).json({ erro: 'Parâmetros uf, dataInicial e dataFinal são obrigatórios.' });
-  }
-
-  const url =
-    `https://pncp.gov.br/api/consulta/v1/contratacoes/publicacao` +
-    `?dataInicial=${dataInicial}&dataFinal=${dataFinal}&uf=${uf}&pagina=1&tamanhoPagina=50`;
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 8000);
-    const response = await fetch(url, {
-      headers: { Accept: 'application/json' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      return res.status(502).json({ erro: `PNCP respondeu ${response.status}` });
-    }
-
-    const dados = await response.json();
-    return res.json({ data: Array.isArray(dados.data) ? dados.data : [] });
-  } catch (err: any) {
-    return res.status(502).json({ erro: err.message || 'Falha ao consultar o PNCP' });
-  }
+  const { status, body } = await buscarLicitacoesPncp(
+    req.query.uf as string | undefined,
+    req.query.dataInicial as string | undefined,
+    req.query.dataFinal as string | undefined
+  );
+  res.status(status).json(body);
 });
 
 async function startServer() {
