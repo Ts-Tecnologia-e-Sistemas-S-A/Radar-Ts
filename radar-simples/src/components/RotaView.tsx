@@ -3,7 +3,7 @@ import { buscarMunicipiosPorUf } from '../api/ibge';
 import { buscarOportunidadesEducacao } from '../api/pncp';
 import { Classificacao, calcularPotencial } from '../scoring';
 import { getMunicipiosCrm } from '../storage';
-import { ESTAGIOS_FUNIL, MunicipioIbge, Oportunidade, municipioCrmVazio } from '../types';
+import { ESTAGIOS_FUNIL, MunicipioCrm, MunicipioIbge, Oportunidade, municipioCrmVazio } from '../types';
 
 const UFS_DISPONIVEIS = ['PI', 'MA', 'CE'];
 
@@ -37,9 +37,11 @@ export default function RotaView({ onAbrirMunicipio }: RotaViewProps) {
   const [ufs, setUfs] = useState<string[]>(['PI']);
   const [municipios, setMunicipios] = useState<MunicipioIbge[]>([]);
   const [oportunidades, setOportunidades] = useState<Oportunidade[]>([]);
+  const [crmPorCodigo, setCrmPorCodigo] = useState<Record<number, MunicipioCrm>>({});
   const [carregando, setCarregando] = useState(false);
   const [erroIbge, setErroIbge] = useState<string | null>(null);
   const [erroPncp, setErroPncp] = useState<string | null>(null);
+  const [erroCrm, setErroCrm] = useState<string | null>(null);
   const [soComOportunidade, setSoComOportunidade] = useState(false);
 
   function alternarUf(uf: string) {
@@ -58,6 +60,7 @@ export default function RotaView({ onAbrirMunicipio }: RotaViewProps) {
       setCarregando(true);
       setErroIbge(null);
       setErroPncp(null);
+      setErroCrm(null);
 
       try {
         const listas = await Promise.all(ufs.map((uf) => buscarMunicipiosPorUf(uf)));
@@ -73,6 +76,13 @@ export default function RotaView({ onAbrirMunicipio }: RotaViewProps) {
         if (!cancelado) setErroPncp(e.message || 'Falha ao buscar licitações no PNCP');
       }
 
+      try {
+        const crm = await getMunicipiosCrm();
+        if (!cancelado) setCrmPorCodigo(crm);
+      } catch (e: any) {
+        if (!cancelado) setErroCrm(e.message || 'Falha ao carregar dados do CRM');
+      }
+
       if (!cancelado) setCarregando(false);
     }
 
@@ -84,7 +94,6 @@ export default function RotaView({ onAbrirMunicipio }: RotaViewProps) {
   }, [ufs.join(',')]);
 
   const linhas = useMemo(() => {
-    const crmPorCodigo = getMunicipiosCrm();
     return municipios
       .map((municipio) => {
         const crm = crmPorCodigo[municipio.codigoIbge] || municipioCrmVazio(municipio.codigoIbge);
@@ -97,7 +106,7 @@ export default function RotaView({ onAbrirMunicipio }: RotaViewProps) {
       )
       .filter((linha) => !soComOportunidade || linha.oportunidade)
       .sort((a, b) => b.potencial.pontos - a.potencial.pontos);
-  }, [municipios, oportunidades, soComOportunidade]);
+  }, [municipios, oportunidades, crmPorCodigo, soComOportunidade]);
 
   return (
     <div className="space-y-4">
@@ -123,6 +132,7 @@ export default function RotaView({ onAbrirMunicipio }: RotaViewProps) {
       {carregando && <p className="text-sm text-gray-500">Carregando municípios e licitações…</p>}
       {erroIbge && <p className="text-sm text-red-600">IBGE: {erroIbge}</p>}
       {erroPncp && <p className="text-sm text-red-600">PNCP: {erroPncp}</p>}
+      {erroCrm && <p className="text-sm text-red-600">CRM: {erroCrm}</p>}
 
       <div className="overflow-x-auto rounded-lg border border-gray-200">
         <table className="w-full text-sm">

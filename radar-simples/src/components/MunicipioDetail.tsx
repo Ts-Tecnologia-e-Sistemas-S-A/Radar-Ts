@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { addInteracao, getInteracoes, getMunicipiosCrm, saveMunicipioCrm } from '../storage';
+import { addInteracao, getInteracoes, getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import {
   ESTAGIOS_FUNIL,
   Interacao,
@@ -17,24 +17,57 @@ interface MunicipioDetailProps {
 export default function MunicipioDetail({ municipio }: MunicipioDetailProps) {
   const [crm, setCrm] = useState<MunicipioCrm>(municipioCrmVazio(municipio.codigoIbge));
   const [interacoes, setInteracoes] = useState<Interacao[]>([]);
+  const [carregando, setCarregando] = useState(true);
   const [salvo, setSalvo] = useState(false);
+  const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    const existente = getMunicipiosCrm()[municipio.codigoIbge];
-    setCrm(existente || municipioCrmVazio(municipio.codigoIbge));
-    setInteracoes(getInteracoes(municipio.codigoIbge));
-    setSalvo(false);
+    let cancelado = false;
+    setCarregando(true);
+    setErro(null);
+
+    Promise.all([getMunicipioCrm(municipio.codigoIbge), getInteracoes(municipio.codigoIbge)])
+      .then(([existente, interacoesCarregadas]) => {
+        if (cancelado) return;
+        setCrm(existente || municipioCrmVazio(municipio.codigoIbge));
+        setInteracoes(interacoesCarregadas);
+        setSalvo(false);
+      })
+      .catch((e: any) => {
+        if (!cancelado) setErro(e.message || 'Falha ao carregar dados do banco.');
+      })
+      .finally(() => {
+        if (!cancelado) setCarregando(false);
+      });
+
+    return () => {
+      cancelado = true;
+    };
   }, [municipio.codigoIbge]);
 
-  function salvar() {
-    saveMunicipioCrm(crm);
-    setSalvo(true);
+  async function salvar() {
+    try {
+      await saveMunicipioCrm(crm);
+      setSalvo(true);
+      setErro(null);
+    } catch (e: any) {
+      setErro(e.message || 'Falha ao salvar no banco.');
+    }
   }
 
-  function registrarInteracao(nova: Omit<Interacao, 'id' | 'codigoIbge'>) {
+  async function registrarInteracao(nova: Omit<Interacao, 'id' | 'codigoIbge'>) {
     const interacao: Interacao = { ...nova, id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge };
-    addInteracao(interacao);
-    setInteracoes(getInteracoes(municipio.codigoIbge));
+    try {
+      await addInteracao(interacao);
+      setInteracoes(await getInteracoes(municipio.codigoIbge));
+      setErro(null);
+    } catch (e: any) {
+      setErro(e.message || 'Falha ao registrar interação no banco.');
+    }
+  }
+
+  if (carregando) {
+    return <p className="text-sm text-gray-500">Carregando dados do banco…</p>;
   }
 
   return (
@@ -45,6 +78,8 @@ export default function MunicipioDetail({ municipio }: MunicipioDetailProps) {
           {municipio.uf} · código IBGE {municipio.codigoIbge}
         </p>
       </div>
+
+      {erro && <p className="text-sm text-red-600">{erro}</p>}
 
       <section className="rounded-lg border border-gray-200 p-4 space-y-4">
         <h3 className="font-medium text-gray-700">Dados do CRM</h3>

@@ -1,10 +1,16 @@
 # Prompt para reconstrução: Radar Comercial de Municípios (versão simples)
 
 > Este é o prompt original que guiou a implementação em `radar-simples/`.
-> Uma diferença consciente do que está escrito abaixo: a Tela 2 (CRM) só é
-> aberta a partir da Tela 1 (Rota) — não existe uma lista solta "Meus
-> municípios" fora dela, pra não precisar duplicar nome/UF do IBGE em outro
-> lugar só pra exibição. O resto foi implementado como descrito.
+> Duas diferenças conscientes do que está escrito abaixo:
+> 1. A Tela 2 (CRM) só é aberta a partir da Tela 1 (Rota) — não existe uma
+>    lista solta "Meus municípios" fora dela, pra não precisar duplicar
+>    nome/UF do IBGE em outro lugar só pra exibição.
+> 2. **Persistência não é mais localStorage.** O prompt original pedia "zero
+>    infraestrutura de nuvem"; isso foi revisto a pedido do usuário porque
+>    localStorage não compartilha dados entre vendedores/dispositivos — cada
+>    navegador via sua própria cópia isolada. Agora é Firestore (mesmo
+>    projeto do app principal, coleções próprias). Detalhes em README.md.
+> O resto foi implementado como descrito.
 
 Crie um aplicativo web chamado **"Radar Comercial de Municípios"**. É uma
 ferramenta interna para o time comercial de uma empresa que vende um sistema
