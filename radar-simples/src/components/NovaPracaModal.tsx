@@ -21,7 +21,7 @@ export default function NovaPracaModal({ onFechar, onAdicionado }: NovaPracaModa
   const [todos, setTodos] = useState<MunicipioIbge[] | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [salvando, setSalvando] = useState(false);
+  const [salvando, setSalvando] = useState<number | null>(null);
 
   async function carregarSeNecessario() {
     if (todos || carregando) return;
@@ -45,19 +45,20 @@ export default function NovaPracaModal({ onFechar, onAdicionado }: NovaPracaModa
   }, [todos, termo]);
 
   async function adicionar(municipio: MunicipioIbge) {
-    setSalvando(true);
+    setSalvando(municipio.codigoIbge);
+    setErro(null);
     try {
       await saveMunicipioCrm(municipioCrmVazio(municipio.codigoIbge));
       onAdicionado(municipio);
     } catch (e: any) {
-      setErro(e.message || 'Falha ao salvar no banco');
-      setSalvando(false);
+      setErro(e.message || 'Falha ao salvar no banco. Confira sua conexão e tente de novo.');
+      setSalvando(null);
     }
   }
 
   return (
     <div className="fixed inset-0 z-50 bg-primary/40 backdrop-blur-sm flex flex-col justify-end p-screen-margin-mobile">
-      <div className="bg-surface-container-lowest rounded-2xl p-card-padding shadow-xl flex flex-col gap-space-sm max-w-lg w-full mx-auto">
+      <div className="bg-surface-container-lowest rounded-2xl p-card-padding shadow-xl flex flex-col gap-space-sm max-w-lg w-full mx-auto max-h-[85vh] overflow-y-auto">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-secondary-container text-on-secondary-container flex items-center justify-center">
@@ -94,23 +95,32 @@ export default function NovaPracaModal({ onFechar, onAdicionado }: NovaPracaModa
         </div>
 
         {carregando && <p className="text-body-sm text-on-surface-variant">Consultando IBGE…</p>}
-        {erro && <p className="text-body-sm text-error">{erro}</p>}
+        {erro && (
+          <p className="text-body-sm text-error bg-error/10 rounded-lg p-2.5 font-medium">{erro}</p>
+        )}
 
         {resultados.length > 0 && (
           <div className="flex flex-col gap-1 max-h-64 overflow-y-auto">
-            {resultados.map((m) => (
-              <button
-                key={m.codigoIbge}
-                disabled={salvando}
-                onClick={() => adicionar(m)}
-                className="flex items-center justify-between p-2.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-left disabled:opacity-50"
-              >
-                <span className="text-label-md text-on-surface">
-                  {m.nome} <span className="text-on-surface-variant">— {m.uf}</span>
-                </span>
-                <Icon name="add_circle" size={18} className="text-secondary" />
-              </button>
-            ))}
+            {resultados.map((m) => {
+              const estaSalvandoEste = salvando === m.codigoIbge;
+              return (
+                <button
+                  key={m.codigoIbge}
+                  disabled={salvando !== null}
+                  onClick={() => adicionar(m)}
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-surface-container-low hover:bg-surface-container text-left disabled:opacity-50"
+                >
+                  <span className="text-label-md text-on-surface">
+                    {m.nome} <span className="text-on-surface-variant">— {m.uf}</span>
+                  </span>
+                  <Icon
+                    name={estaSalvandoEste ? 'sync' : 'add_circle'}
+                    size={18}
+                    className={`text-secondary ${estaSalvandoEste ? 'animate-spin' : ''}`}
+                  />
+                </button>
+              );
+            })}
           </div>
         )}
 
