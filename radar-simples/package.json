@@ -8,14 +8,16 @@
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit",
-    "test": "bun test src/scoring.test.ts src/storage.test.ts"
+    "test": "bun test src/storage.test.ts src/utils/urgencia.test.ts src/utils/rota.test.ts src/utils/forecast.test.ts"
   },
   "dependencies": {
+    "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
     "firebase": "^12.17.1",
+    "jspdf": "^3.0.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
     "vite": "^6.2.3"

@@ -1,22 +1,3 @@
-export type SistemaAtual = 'nenhum' | 'concorrente' | 'nosso_sistema';
-
-export type EstagioFunil =
-  | 'prospeccao'
-  | 'contato'
-  | 'proposta'
-  | 'negociacao'
-  | 'fechado_ganho'
-  | 'fechado_perdido';
-
-export const ESTAGIOS_FUNIL: { value: EstagioFunil; label: string }[] = [
-  { value: 'prospeccao', label: 'Prospecção' },
-  { value: 'contato', label: 'Contato Feito' },
-  { value: 'proposta', label: 'Proposta Enviada' },
-  { value: 'negociacao', label: 'Negociação' },
-  { value: 'fechado_ganho', label: 'Fechado — Ganho' },
-  { value: 'fechado_perdido', label: 'Fechado — Perdido' },
-];
-
 /** Município oficial (código/nome/UF vêm do IBGE — nunca editáveis). */
 export interface MunicipioIbge {
   codigoIbge: number;
@@ -24,28 +5,75 @@ export interface MunicipioIbge {
   uf: string;
 }
 
+export type EstagioFunilB2G =
+  | 'mapeamento'
+  | 'qualificacao'
+  | 'proposta'
+  | 'juridico'
+  | 'homologacao';
+
+export const ESTAGIOS_FUNIL_B2G: { value: EstagioFunilB2G; label: string; prazoMedio: string }[] = [
+  { value: 'mapeamento', label: 'Mapeamento & Contato Político', prazoMedio: '~14 dias' },
+  { value: 'qualificacao', label: 'Qualificação Técnica & PoC', prazoMedio: '~21 dias' },
+  { value: 'proposta', label: 'Apresentação & Minuta Técnica', prazoMedio: '~18 dias' },
+  { value: 'juridico', label: 'Trâmite Jurídico & Modalidade', prazoMedio: 'Fase crítica (Lei 14.133)' },
+  { value: 'homologacao', label: 'Homologação & Assinatura', prazoMedio: 'Garantia de receita' },
+];
+
+export interface Contato {
+  id: string;
+  nome: string;
+  cargo: string;
+  telefone?: string;
+  whatsapp?: string;
+}
+
+export type StatusSolucao = 'contato_inicial' | 'proposta_enviada' | 'em_negociacao' | 'contratado';
+
+export const STATUS_SOLUCAO: { value: StatusSolucao; label: string }[] = [
+  { value: 'contato_inicial', label: 'Contato Inicial' },
+  { value: 'proposta_enviada', label: 'Proposta Enviada' },
+  { value: 'em_negociacao', label: 'Em Negociação' },
+  { value: 'contratado', label: 'Contratado' },
+];
+
+export interface SolucaoOfertada {
+  id: string;
+  nome: string;
+  descricao: string;
+  status: StatusSolucao;
+}
+
 /**
- * Dados preenchidos manualmente pelo vendedor para um município.
- * Nada aqui vem de API ou de IA — é exatamente o que o CRM existe para registrar.
+ * Dados preenchidos manualmente pelo vendedor (mais o que a IA sugere e ele
+ * confirma) para um município. Nada aqui é fabricado sem confirmação humana.
  */
 export interface MunicipioCrm {
   codigoIbge: number;
-  sistemaAtual: SistemaAtual;
-  nomeSistemaAtual?: string;
-  contratoVencimento?: string; // YYYY-MM-DD
-  alunosRede?: number;
-  responsavelNome?: string;
-  responsavelTelefone?: string;
-  responsavelEmail?: string;
+  prioritario: boolean;
+  macrorregiao?: string;
+  escolasCount?: number;
+  alunosCount?: number;
+  contatos: Contato[];
+  solucoes: SolucaoOfertada[];
+  estagioFunil: EstagioFunilB2G;
+  valorAnual?: number;
+  proximaAcao?: {
+    data: string; // YYYY-MM-DD
+    hora?: string;
+    descricao: string;
+    presencial: boolean;
+  };
   observacoes?: string;
-  estagioFunil: EstagioFunil;
 }
 
 export function municipioCrmVazio(codigoIbge: number): MunicipioCrm {
   return {
     codigoIbge,
-    sistemaAtual: 'nenhum',
-    estagioFunil: 'prospeccao',
+    prioritario: false,
+    contatos: [],
+    solucoes: [],
+    estagioFunil: 'mapeamento',
   };
 }
 
@@ -62,20 +90,51 @@ export interface Oportunidade {
   linkPncp: string;
 }
 
-export type TipoInteracao = 'ligacao' | 'visita' | 'email' | 'reuniao';
+export type CategoriaDespesa = 'combustivel' | 'hospedagem' | 'alimentacao' | 'pedagio' | 'outros';
 
-export const TIPOS_INTERACAO: { value: TipoInteracao; label: string }[] = [
-  { value: 'ligacao', label: 'Ligação' },
-  { value: 'visita', label: 'Visita' },
-  { value: 'email', label: 'E-mail' },
-  { value: 'reuniao', label: 'Reunião' },
+export const CATEGORIAS_DESPESA: { value: CategoriaDespesa; label: string; icone: string }[] = [
+  { value: 'combustivel', label: 'Combustível', icone: 'local_gas_station' },
+  { value: 'hospedagem', label: 'Hospedagem', icone: 'hotel' },
+  { value: 'alimentacao', label: 'Alimentação', icone: 'restaurant' },
+  { value: 'pedagio', label: 'Pedágio', icone: 'toll' },
+  { value: 'outros', label: 'Outros', icone: 'more_horiz' },
 ];
 
-export interface Interacao {
+/** Uma despesa de campo, com ou sem origem em OCR de cupom. */
+export interface Despesa {
+  id: string;
+  codigoIbge?: number;
+  valor: number;
+  data: string; // YYYY-MM-DD
+  categoria: CategoriaDespesa;
+  descricao: string;
+  origemOcr: boolean;
+  latitude?: number;
+  longitude?: number;
+  criadaEm: string; // ISO datetime
+}
+
+export type TipoEventoTimeline = 'reuniao' | 'documento' | 'deslocamento';
+
+export interface AnexoEvento {
+  tipo: 'pdf' | 'audio';
+  nome: string;
+}
+
+/** Um evento na Memória da Conta de um município. */
+export interface EventoTimeline {
   id: string;
   codigoIbge: number;
+  tipo: TipoEventoTimeline;
   data: string; // YYYY-MM-DD
-  tipo: TipoInteracao;
+  local?: string;
+  participantes?: string;
   resumo: string;
-  proximoPasso?: string;
+  sinteseIA?: string;
+  proximoPassoIA?: string;
+  desfecho?: string;
+  anexos: AnexoEvento[];
+  /** Rótulo livre pra agrupar por mandato/gestão na timeline (ex: "2025–2028"). */
+  mandato: string;
+  mandatoAtivo: boolean;
 }

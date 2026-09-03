@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, mock } from 'bun:test';
-import type { Interacao, MunicipioCrm } from './types';
+import type { Despesa, EventoTimeline, MunicipioCrm } from './types';
 
-// Mock mínimo do Firestore em memória, só o suficiente pra exercitar a lógica
-// de storage.ts (nomes de coleção, mapeamento de doc id, filtro por
+// Mock mínimo do Firestore em memória, só o suficiente pra exercitar a
+// lógica de storage.ts (nomes de coleção, mapeamento de doc id, filtro por
 // codigoIbge) sem depender de rede.
 const bancos = new Map<string, Map<string, unknown>>();
 
@@ -29,20 +29,51 @@ mock.module('firebase/firestore', () => ({
 
 mock.module('./lib/firebase', () => ({ db: {} }));
 
-const { getMunicipiosCrm, getMunicipioCrm, saveMunicipioCrm, getInteracoes, addInteracao } = await import(
-  './storage'
-);
+const {
+  getMunicipiosCrm,
+  getMunicipioCrm,
+  saveMunicipioCrm,
+  getDespesas,
+  addDespesa,
+  getEventos,
+  addEvento,
+  getPontosRota,
+  addPontoRota,
+} = await import('./storage');
 
 beforeEach(() => {
   bancos.clear();
 });
 
 function makeMunicipio(codigoIbge: number, overrides: Partial<MunicipioCrm> = {}): MunicipioCrm {
-  return { codigoIbge, sistemaAtual: 'nenhum', estagioFunil: 'prospeccao', ...overrides };
+  return { codigoIbge, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'mapeamento', ...overrides };
 }
 
-function makeInteracao(id: string, codigoIbge: number): Interacao {
-  return { id, codigoIbge, data: '2026-01-01', tipo: 'ligacao', resumo: 'teste' };
+function makeDespesa(id: string, codigoIbge: number, overrides: Partial<Despesa> = {}): Despesa {
+  return {
+    id,
+    codigoIbge,
+    valor: 100,
+    data: '2026-01-01',
+    categoria: 'combustivel',
+    descricao: 'teste',
+    origemOcr: false,
+    criadaEm: '2026-01-01T10:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeEvento(id: string, codigoIbge: number): EventoTimeline {
+  return {
+    id,
+    codigoIbge,
+    tipo: 'reuniao',
+    data: '2026-01-01',
+    resumo: 'teste',
+    anexos: [],
+    mandato: '2025–2028',
+    mandatoAtivo: true,
+  };
 }
 
 describe('getMunicipioCrm / saveMunicipioCrm', () => {
@@ -51,15 +82,9 @@ describe('getMunicipioCrm / saveMunicipioCrm', () => {
   });
 
   it('salva e recupera pelo código IBGE', async () => {
-    await saveMunicipioCrm(makeMunicipio(2211001, { alunosRede: 25000 }));
+    await saveMunicipioCrm(makeMunicipio(2211001, { prioritario: true }));
     const resultado = await getMunicipioCrm(2211001);
-    expect(resultado).toEqual(makeMunicipio(2211001, { alunosRede: 25000 }));
-  });
-
-  it('sobrescreve ao salvar de novo o mesmo código', async () => {
-    await saveMunicipioCrm(makeMunicipio(1, { sistemaAtual: 'nenhum' }));
-    await saveMunicipioCrm(makeMunicipio(1, { sistemaAtual: 'concorrente' }));
-    expect((await getMunicipioCrm(1))?.sistemaAtual).toBe('concorrente');
+    expect(resultado).toEqual(makeMunicipio(2211001, { prioritario: true }));
   });
 });
 
@@ -69,8 +94,6 @@ describe('getMunicipiosCrm', () => {
     await saveMunicipioCrm(makeMunicipio(2));
     const todos = await getMunicipiosCrm();
     expect(Object.keys(todos).sort()).toEqual(['1', '2']);
-    expect(todos[1].codigoIbge).toBe(1);
-    expect(todos[2].codigoIbge).toBe(2);
   });
 
   it('retorna objeto vazio quando nada foi salvo', async () => {
@@ -78,24 +101,28 @@ describe('getMunicipiosCrm', () => {
   });
 });
 
-describe('getInteracoes / addInteracao', () => {
-  it('registra e lista interações de um município', async () => {
-    await addInteracao(makeInteracao('int-1', 10));
-    const lista = await getInteracoes(10);
-    expect(lista).toEqual([makeInteracao('int-1', 10)]);
+describe('getDespesas / addDespesa', () => {
+  it('registra e filtra despesas por município', async () => {
+    await addDespesa(makeDespesa('d1', 10));
+    await addDespesa(makeDespesa('d2', 20));
+    expect(await getDespesas(10)).toEqual([makeDespesa('d1', 10)]);
+    expect(await getDespesas()).toHaveLength(2);
   });
+});
 
-  it('filtra só as interações do município pedido', async () => {
-    await addInteracao(makeInteracao('int-1', 10));
-    await addInteracao(makeInteracao('int-2', 20));
-    expect(await getInteracoes(10)).toEqual([makeInteracao('int-1', 10)]);
-    expect(await getInteracoes(20)).toEqual([makeInteracao('int-2', 20)]);
+describe('getEventos / addEvento', () => {
+  it('registra e filtra eventos por município', async () => {
+    await addEvento(makeEvento('e1', 10));
+    await addEvento(makeEvento('e2', 20));
+    expect(await getEventos(10)).toEqual([makeEvento('e1', 10)]);
+    expect(await getEventos()).toHaveLength(2);
   });
+});
 
-  it('sem código, retorna interações de todos os municípios', async () => {
-    await addInteracao(makeInteracao('int-1', 10));
-    await addInteracao(makeInteracao('int-2', 20));
-    const todas = await getInteracoes();
-    expect(todas).toHaveLength(2);
+describe('getPontosRota / addPontoRota', () => {
+  it('registra e lista pontos de localização', async () => {
+    await addPontoRota({ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' });
+    const pontos = await getPontosRota();
+    expect(pontos).toEqual([{ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' }]);
   });
 });

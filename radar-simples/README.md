@@ -1,52 +1,64 @@
-# Radar Comercial de Municípios (versão simples)
+# GovTrack Brasil (radar-simples)
 
-App de 2 telas: **Rota** (lista de municípios priorizada por potencial, cruzando
-o IBGE com licitações reais do PNCP) e **CRM** (funil de vendas + registro de
-interações). Sem fila de sincronização, sem autenticação, sem backup/restore.
-Detalhes e decisões de escopo em [`PROMPT.md`](./PROMPT.md) (o prompt
-original) — a única mudança em relação ao que está lá é a persistência
-(ver abaixo).
+CRM de campo B2G mobile-first: 4 telas (**Radar**, **Pipeline**, **Ficha
+Municipal**, **Memória da Conta**) pra um vendedor gerenciar a prospecção de
+prefeituras — do primeiro contato até a homologação — com IA de campo real
+(síntese de anotações, transcrição de áudio, leitura de recibos, briefing e
+recomendações semanais), rota por GPS e exportação de PDF.
+
+O layout segue o design system em [`DESIGN.md`](./DESIGN.md) (tokens Material
+3, gerado com Google Stitch). O escopo original — 2 telas, sem IA — está em
+[`PROMPT.md`](./PROMPT.md) como registro histórico; foi substituído por este
+redesenho a pedido do usuário.
 
 ## Rodar localmente
 
 ```bash
 bun install
-bun run dev     # http://localhost:3000
+GEMINI_API_KEY=... bun run dev     # http://localhost:3000
 ```
+
+Sem `GEMINI_API_KEY`, o app funciona normalmente (Radar, Pipeline, Ficha,
+Memória, Firestore) mas qualquer ação de IA (registro rápido, transcrição de
+áudio, leitura de recibo, briefing, recomendações semanais) retorna erro
+explícito em vez de resultado inventado — ver `lib/iaCampo.ts`.
 
 ## Validar
 
 ```bash
 bun run lint    # tsc --noEmit
-bun run test    # bun test src/scoring.test.ts src/storage.test.ts
-bun run build   # gera dist/
+bun run test    # storage, urgência, rota, forecast
+bun run build   # vite build (client) + esbuild (server.ts -> dist/server.cjs)
 ```
 
-## Persistência: Firestore compartilhado, não localStorage
+## Persistência: Firestore compartilhado
 
-O `PROMPT.md` original pedia `localStorage` (zero infraestrutura). Isso
-mudou a pedido do usuário: dados só no navegador significam que cada
-vendedor via uma cópia isolada, sem compartilhar nada com o time. `src/storage.ts`
-agora grava em duas coleções do **mesmo projeto Firebase já usado pelo app
-principal** (`radar-ts`), só que em coleções próprias
-(`radar_simples_municipios`, `radar_simples_interacoes`) pra não misturar
-dados com o app anterior. Config em `firebase-applet-config.json` (é
-configuração pública de cliente, não segredo — a mesma já usada em
-`src/lib/firebase.ts` do app principal).
-
-Deliberadamente **sem** o que o app anterior tinha em cima do Firebase: sem
-fila de auto-save/retry, sem listeners em tempo real, sem modal de
-backup/restore. Só leitura e escrita direta — `getDoc`/`getDocs`/`setDoc`.
+`src/storage.ts` grava no mesmo projeto Firebase do app principal
+(`radar-ts`), em coleções próprias pra não colidir com dados de nenhum dos
+outros dois apps do repositório: `radar_simples_municipios`,
+`radar_simples_despesas`, `radar_simples_eventos`, `radar_simples_rota_pontos`.
+Config pública de cliente em `firebase-applet-config.json` (mesma usada em
+`src/lib/firebase.ts` do app principal — não é segredo).
 
 ## O que é real e o que é mock
 
-- **IBGE** (lista de municípios) e **PNCP** (licitações) são fontes reais —
-  chamadas diretas a `servicodados.ibge.gov.br` e, via proxy do backend
-  (`/api/pncp/licitacoes`), a `pncp.gov.br`. Nenhum dado é inventado; se a
-  fonte falhar, a tela mostra o erro em vez de um resultado fabricado.
-- O casamento entre uma licitação do PNCP e um município (`src/components/RotaView.tsx`,
-  `encontrarOportunidade`) é uma aproximação por nome (substring, sem acento)
-  — suficiente para sinalizar "tem edital", não uma correspondência garantida.
-- Tudo em `MunicipioCrm` (sistema atual, contrato, contatos, estágio do
-  funil) é preenchido manualmente pelo vendedor e salvo no Firestore — de
-  novo, nada de IA "adivinhando" esses dados.
+- **IBGE** (lista de municípios) é fonte real — `servicodados.ibge.gov.br`
+  direto do navegador. Nenhum dado de município é inventado.
+- **IA de campo** (`lib/iaCampo.ts`, modelo `gemini-3.6-flash` via
+  `@google/genai`) é real: síntese de nota de campo, transcrição de áudio de
+  reunião, extração de dados de recibo por imagem (OCR), briefing de conta e
+  recomendações semanais. Cada prompt instrui explicitamente a IA a nunca
+  inventar valor não presente na entrada; sem `GEMINI_API_KEY`, a chamada
+  falha com erro claro em vez de devolver um resultado fabricado.
+- **Rota por GPS** (`src/utils/rota.ts`) usa `navigator.geolocation` e a
+  fórmula de Haversine sobre os pontos efetivamente capturados enquanto a
+  aba ficou aberta — não é rastreamento contínuo em segundo plano (não é
+  confiável num web app), então "km rodados" reflete só a sessão do
+  navegador, não o trajeto completo do dia se o app foi fechado no meio.
+- **PDF** (`src/utils/pdf.ts`, via `jsPDF`) é gerado a partir dos dados reais
+  já carregados na tela (briefing de conta, balanço semanal) — texto, não
+  captura de tela — e compartilhado via Web Share API quando disponível,
+  com fallback pra download direto.
+- Tudo em `MunicipioCrm` (contatos, estágio do funil, soluções ofertadas,
+  valor anual estimado) é preenchido manualmente pelo vendedor e salvo no
+  Firestore.
