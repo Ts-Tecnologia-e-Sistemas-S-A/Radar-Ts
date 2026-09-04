@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { buscarLicitacoesPncp } from '../../lib/pncpProxy';
+import { buscarLicitacoesPncp } from '../../lib/pncpProxy.js';
 
 /**
  * Função serverless do Vercel — equivalente ao endpoint Express de

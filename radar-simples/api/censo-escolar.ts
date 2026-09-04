@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { buscarDadosEscolares } from '../lib/censoEscolarProxy';
+import { buscarDadosEscolares } from '../lib/censoEscolarProxy.js';
 
 /**
  * Função serverless do Vercel — equivalente ao endpoint Express de

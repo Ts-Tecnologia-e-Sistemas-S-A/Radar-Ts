@@ -4,7 +4,7 @@ import {
   gerarRecomendacoesSemana,
   sintetizarNota,
   transcreverAudio,
-} from './iaCampo';
+} from './iaCampo.js';
 
 export interface ResultadoIA {
   status: number;

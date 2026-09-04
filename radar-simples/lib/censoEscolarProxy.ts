@@ -9,7 +9,7 @@
  * Lógica compartilhada entre server.ts (dev local) e api/censo-escolar.ts
  * (Vercel), mesmo padrão de lib/pncpProxy.ts.
  */
-import { runBigQuery } from './bigQueryClient';
+import { runBigQuery } from './bigQueryClient.js';
 
 export interface DadosEscolares {
   ano: number;

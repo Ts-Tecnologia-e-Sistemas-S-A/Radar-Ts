@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'http';
-import { processarRequisicaoIA } from '../../lib/iaProxy';
+import { processarRequisicaoIA } from '../../lib/iaProxy.js';
 
 /**
  * Função serverless do Vercel — equivalente ao endpoint Express de
