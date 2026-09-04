@@ -1,4 +1,5 @@
 import { jsPDF } from 'jspdf';
+import { AchadoDiagnostico, Diagnostico, TipoAchado } from '../api/diagnostico';
 import { EventoTimeline, MunicipioCrm, MunicipioIbge } from '../types';
 
 function cabecalho(doc: jsPDF, titulo: string, subtitulo: string): number {
@@ -103,6 +104,100 @@ export function gerarPdfRelatorioSemanal(dados: DadosRelatorioSemanal): jsPDF {
       y = paragrafo(doc, `${r.titulo}: ${r.texto}`, y);
     }
   }
+
+  return doc;
+}
+
+const ORDEM_TIPOS_ACHADO: TipoAchado[] = ['escola_sem_matricula', 'escola_duplicada', 'variacao_matricula_atipica'];
+
+const TITULO_ACHADO: Record<TipoAchado, string> = {
+  escola_sem_matricula: 'Escola sem matrícula registrada',
+  escola_duplicada: 'Escola duplicada no cadastro',
+  variacao_matricula_atipica: 'Variação atípica de matrícula',
+};
+
+const EXPLICACAO_ACHADO: Record<TipoAchado, string> = {
+  escola_sem_matricula:
+    'Escolas sem matrícula registrada no Censo mais recente podem indicar erro de preenchimento — isso reduz o total considerado no cálculo do repasse do Fundeb.',
+  escola_duplicada: 'Um mesmo código de escola aparecendo mais de uma vez no mesmo ano geralmente indica duplicidade de cadastro.',
+  variacao_matricula_atipica:
+    'Uma variação grande de matrícula de um ano pro outro vale conferir — pode ser real (abertura ou fechamento de turma) ou um erro de digitação que afeta o repasse.',
+};
+
+/**
+ * Diagnóstico gratuito entregue pro próprio município — tom neutro e
+ * construtivo de propósito (não é munição de venda interna): explica de
+ * onde vêm os números, mostra o resumo da rede, e trata os achados como
+ * pontos que valem conferência, não acusação. Quando não há achado nenhum,
+ * diz isso de forma positiva em vez de omitir a seção.
+ */
+export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagnostico): jsPDF {
+  const doc = new jsPDF();
+  let y = cabecalho(doc, `Diagnóstico Gratuito — ${municipio.nome} / ${municipio.uf}`, 'Rede Municipal de Ensino');
+
+  y = paragrafo(
+    doc,
+    'Este diagnóstico usa dados públicos oficiais do Censo Escolar do INEP (via Base dos Dados), a mesma base que a FNDE usa pra calcular o repasse do Fundeb. O objetivo é ajudar o município a identificar pontos do cadastro que valem uma conferência, antes que afetem o repasse do próximo ano.',
+    y
+  );
+
+  y += 2;
+  doc.setFontSize(11);
+  doc.setTextColor(15, 41, 66);
+  doc.text('Resumo da Rede Municipal', 14, y);
+  y += 6;
+  if (diagnostico.resumo) {
+    y = paragrafo(doc, `Ano de referência: ${diagnostico.resumo.ano}`, y);
+    y = paragrafo(doc, `Escolas na rede municipal: ${diagnostico.resumo.escolas}`, y);
+    y = paragrafo(doc, `Matrículas totais: ${diagnostico.resumo.alunos}`, y);
+  } else {
+    y = paragrafo(doc, 'Sem dado do Censo Escolar publicado pra esse município ainda.', y);
+  }
+
+  y += 4;
+  doc.setFontSize(11);
+  doc.setTextColor(15, 41, 66);
+  doc.text('Pontos de Atenção', 14, y);
+  y += 6;
+
+  if (diagnostico.achados.length === 0) {
+    y = paragrafo(doc, 'Nenhuma inconsistência encontrada nos dados públicos disponíveis — cadastro consistente nos critérios avaliados.', y);
+  } else {
+    for (const tipo of ORDEM_TIPOS_ACHADO) {
+      const achadosDoTipo: AchadoDiagnostico[] = diagnostico.achados.filter((a) => a.tipo === tipo);
+      if (achadosDoTipo.length === 0) continue;
+      if (y > 250) {
+        doc.addPage();
+        y = 20;
+      }
+      doc.setFontSize(10);
+      doc.setTextColor(15, 41, 66);
+      doc.text(TITULO_ACHADO[tipo], 14, y);
+      y += 5;
+      y = paragrafo(doc, EXPLICACAO_ACHADO[tipo], y);
+      for (const achado of achadosDoTipo) {
+        if (y > 270) {
+          doc.addPage();
+          y = 20;
+        }
+        y = paragrafo(doc, `• ${achado.detalhe}`, y);
+      }
+      y += 2;
+    }
+  }
+
+  if (y > 260) {
+    doc.addPage();
+    y = 20;
+  }
+  y += 4;
+  doc.setFontSize(8);
+  doc.setTextColor(140, 140, 140);
+  const linhasRodape = doc.splitTextToSize(
+    'Fonte: Censo Escolar do INEP, via Base dos Dados (basedosdados.org). Gerado automaticamente — não substitui conferência oficial.',
+    182
+  );
+  doc.text(linhasRodape, 14, y);
 
   return doc;
 }

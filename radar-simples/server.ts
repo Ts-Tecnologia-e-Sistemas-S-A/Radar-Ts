@@ -4,6 +4,7 @@ import { createServer as createViteServer } from 'vite';
 import { buscarLicitacoesPncp } from './lib/pncpProxy';
 import { processarRequisicaoIA } from './lib/iaProxy';
 import { buscarDadosEscolares } from './lib/censoEscolarProxy';
+import { gerarDiagnostico } from './lib/diagnosticoProxy';
 
 const app = express();
 const PORT = 3000;
@@ -29,6 +30,14 @@ app.get('/api/pncp/licitacoes', async (req, res) => {
 app.get('/api/censo-escolar', async (req, res) => {
   const codigoIbge = req.query.codigoIbge ? Number(req.query.codigoIbge) : undefined;
   const { status, body } = await buscarDadosEscolares(codigoIbge);
+  res.status(status).json(body);
+});
+
+// Diagnóstico gratuito da rede municipal (resumo + pontos de atenção de
+// cadastro) — pensado pra virar um PDF entregue pro próprio município.
+app.get('/api/diagnostico', async (req, res) => {
+  const codigoIbge = req.query.codigoIbge ? Number(req.query.codigoIbge) : undefined;
+  const { status, body } = await gerarDiagnostico(codigoIbge);
   res.status(status).json(body);
 });
 

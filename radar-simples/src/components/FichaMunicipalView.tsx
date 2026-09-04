@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { buscarDadosEscolares } from '../api/censoEscolar';
+import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
 import { sintetizarNota } from '../api/ia';
 import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import {
@@ -13,6 +14,7 @@ import {
   StatusSolucao,
   municipioCrmVazio,
 } from '../types';
+import { compartilharOuBaixarPdf, gerarPdfDiagnostico } from '../utils/pdf';
 import Icon from './Icon';
 
 interface FichaMunicipalViewProps {
@@ -27,6 +29,10 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   const [salvo, setSalvo] = useState(false);
   const [atualizandoCenso, setAtualizandoCenso] = useState(false);
   const [avisoCenso, setAvisoCenso] = useState<string | null>(null);
+  const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null);
+  const [gerandoDiagnostico, setGerandoDiagnostico] = useState(false);
+  const [exportandoDiagnostico, setExportandoDiagnostico] = useState(false);
+  const [erroDiagnostico, setErroDiagnostico] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
@@ -68,6 +74,32 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       setAvisoCenso(e.message || 'Falha ao consultar o Censo Escolar.');
     } finally {
       setAtualizandoCenso(false);
+    }
+  }
+
+  async function gerarDiagnostico() {
+    setGerandoDiagnostico(true);
+    setErroDiagnostico(null);
+    try {
+      const resultado = await buscarDiagnostico(municipio.codigoIbge);
+      setDiagnostico(resultado);
+    } catch (e: any) {
+      setErroDiagnostico(e.message || 'Falha ao gerar diagnóstico.');
+    } finally {
+      setGerandoDiagnostico(false);
+    }
+  }
+
+  async function exportarDiagnostico() {
+    if (!diagnostico) return;
+    setExportandoDiagnostico(true);
+    try {
+      const doc = gerarPdfDiagnostico(municipio, diagnostico);
+      await compartilharOuBaixarPdf(doc, `diagnostico-${municipio.nome.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+    } catch (e: any) {
+      setErroDiagnostico(e.message || 'Falha ao gerar PDF.');
+    } finally {
+      setExportandoDiagnostico(false);
     }
   }
 
@@ -156,6 +188,53 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         </div>
         {avisoCenso && <p className="text-label-sm text-on-surface-variant">{avisoCenso}</p>}
       </section>
+
+      <div className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3">
+        <div className="flex items-center justify-between pb-1">
+          <div className="flex items-center gap-1.5 text-primary">
+            <Icon name="fact_check" size={18} />
+            <h3 className="text-label-lg">Diagnóstico Gratuito</h3>
+          </div>
+          {!diagnostico && (
+            <button
+              disabled={gerandoDiagnostico}
+              onClick={gerarDiagnostico}
+              className="text-label-sm text-secondary font-semibold flex items-center gap-1 disabled:opacity-50"
+            >
+              <Icon name={gerandoDiagnostico ? 'sync' : 'fact_check'} size={14} className={gerandoDiagnostico ? 'animate-spin' : ''} />
+              {gerandoDiagnostico ? 'Analisando…' : 'Gerar'}
+            </button>
+          )}
+        </div>
+        <p className="text-body-sm text-on-surface-variant">
+          Relatório em PDF pra entregar pro município — dados oficiais do Censo Escolar, com pontos de atenção sobre o cadastro que podem afetar o repasse do Fundeb.
+        </p>
+        {erroDiagnostico && <p className="text-body-sm text-error">{erroDiagnostico}</p>}
+        {diagnostico && (
+          <>
+            <div className="space-y-1.5">
+              {diagnostico.achados.length === 0 ? (
+                <p className="text-body-sm text-on-surface-variant">Nenhuma inconsistência encontrada nos critérios avaliados.</p>
+              ) : (
+                diagnostico.achados.map((a, idx) => (
+                  <div key={idx} className="flex items-start gap-1.5 text-body-sm">
+                    <Icon name="info" size={14} className="text-secondary flex-shrink-0 mt-0.5" />
+                    <span className="text-on-surface-variant">{a.detalhe}</span>
+                  </div>
+                ))
+              )}
+            </div>
+            <button
+              disabled={exportandoDiagnostico}
+              onClick={exportarDiagnostico}
+              className="w-full h-10 rounded-lg bg-primary text-on-primary text-label-md flex items-center justify-center gap-2 disabled:opacity-60"
+            >
+              <Icon name={exportandoDiagnostico ? 'sync' : 'share'} size={16} className={exportandoDiagnostico ? 'animate-spin' : ''} />
+              {exportandoDiagnostico ? 'Gerando PDF…' : 'Baixar / Compartilhar PDF'}
+            </button>
+          </>
+        )}
+      </div>
 
       <div className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3">
         <div className="flex items-center justify-between pb-1">
