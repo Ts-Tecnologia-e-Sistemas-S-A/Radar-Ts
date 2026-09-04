@@ -111,11 +111,16 @@ export default function App() {
 
       {overlay === 'nova-praca' && (
         <NovaPracaModal
+          municipiosExistentes={municipios}
           onFechar={() => setOverlay(null)}
           onAdicionado={(m) => {
             setOverlay(null);
             recarregarMunicipios();
             abrirMunicipio(m);
+          }}
+          onAdicionadosEmLote={() => {
+            setOverlay(null);
+            recarregarMunicipios();
           }}
         />
       )}
