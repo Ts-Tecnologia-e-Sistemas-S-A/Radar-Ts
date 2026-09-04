@@ -35,6 +35,9 @@ export async function buscarDadosEscolares(codigoIbge: number | undefined): Prom
 
   try {
     const idMunicipio = String(codigoIbge);
+    // rede = código de dependência administrativa do INEP (TP_DEPENDENCIA),
+    // não texto: 1=Federal, 2=Estadual, 3=Municipal, 4=Privada — confirmado
+    // rodando SELECT DISTINCT direto no BigQuery (não é 'municipal' string).
     const rows = await runBigQuery<AgregadoRow>(
       `SELECT
          dados.ano,
@@ -42,10 +45,10 @@ export async function buscarDadosEscolares(codigoIbge: number | undefined): Prom
          SUM(dados.quantidade_matricula_educacao_basica) AS alunos
        FROM \`basedosdados.br_inep_censo_escolar.escola\` AS dados
        WHERE dados.id_municipio = @idMunicipio
-         AND LOWER(dados.rede) = 'municipal'
+         AND dados.rede = '3'
          AND dados.ano = (
            SELECT MAX(ano) FROM \`basedosdados.br_inep_censo_escolar.escola\`
-           WHERE id_municipio = @idMunicipio AND LOWER(rede) = 'municipal'
+           WHERE id_municipio = @idMunicipio AND rede = '3'
          )
        GROUP BY dados.ano`,
       { idMunicipio }
