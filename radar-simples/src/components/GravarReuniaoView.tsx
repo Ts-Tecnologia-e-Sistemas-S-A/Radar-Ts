@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react';
-import { transcreverAudio } from '../api/ia';
-import { addEvento } from '../storage';
-import { MunicipioIbge } from '../types';
+import { ContatoDetectado, transcreverAudio } from '../api/ia';
+import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
+import { Contato, MunicipioIbge, municipioCrmVazio } from '../types';
 import Icon from './Icon';
 
 type Estado = 'pronto' | 'gravando' | 'processando' | 'resultado' | 'erro';
@@ -27,6 +27,9 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
   const [estado, setEstado] = useState<Estado>('pronto');
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ transcricao: string; combinado: string; proximoPasso: string } | null>(null);
+  const [contatoSugerido, setContatoSugerido] = useState<ContatoDetectado | null>(null);
+  const [salvandoContato, setSalvandoContato] = useState(false);
+  const [contatoSalvo, setContatoSalvo] = useState(false);
   const [segundos, setSegundos] = useState(0);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
@@ -68,6 +71,9 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
       const base64 = await blobParaBase64(blob);
       const dados = await transcreverAudio(base64, mimeType);
       setResultado(dados);
+      if (dados.contatoDetectado?.nome || dados.contatoDetectado?.telefone) {
+        setContatoSugerido(dados.contatoDetectado);
+      }
       await addEvento({
         id: crypto.randomUUID(),
         codigoIbge: municipio.codigoIbge,
@@ -84,6 +90,30 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
     } catch (e: any) {
       setErro(e.message || 'Falha ao transcrever com IA');
       setEstado('erro');
+    }
+  }
+
+  // GravarReuniaoView não recebe o CRM do município (App.tsx não carrega
+  // isso globalmente — cada tela lê o que precisa direto do Firestore), por
+  // isso lê e grava aqui mesmo, só quando o vendedor confirma o contato.
+  async function confirmarContato() {
+    if (!contatoSugerido) return;
+    setSalvandoContato(true);
+    try {
+      const crmAtual = (await getMunicipioCrm(municipio.codigoIbge)) || municipioCrmVazio(municipio.codigoIbge);
+      const novo: Contato = {
+        id: crypto.randomUUID(),
+        nome: contatoSugerido.nome || 'Novo contato',
+        cargo: contatoSugerido.cargo || '',
+        telefone: contatoSugerido.telefone || undefined,
+      };
+      await saveMunicipioCrm({ ...crmAtual, contatos: [...crmAtual.contatos, novo] });
+      setContatoSugerido(null);
+      setContatoSalvo(true);
+    } catch (e: any) {
+      setErro(e.message || 'Falha ao salvar o contato');
+    } finally {
+      setSalvandoContato(false);
     }
   }
 
@@ -165,6 +195,37 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
               <span className="text-label-sm uppercase font-bold text-primary">Próximo passo</span>
               <p className="text-body-md text-on-surface">{resultado.proximoPasso}</p>
             </div>
+            {contatoSugerido && (
+              <div className="rounded-lg bg-primary-container/40 p-3 space-y-2">
+                <div className="flex items-center gap-1.5 text-primary">
+                  <Icon name="person_add" size={16} />
+                  <span className="text-label-sm uppercase tracking-wider font-semibold">Contato detectado na gravação</span>
+                </div>
+                <p className="text-body-md text-on-surface">
+                  {contatoSugerido.nome || 'Sem nome identificado'}
+                  {contatoSugerido.cargo ? ` — ${contatoSugerido.cargo}` : ''}
+                  {contatoSugerido.telefone ? ` — ${contatoSugerido.telefone}` : ''}
+                </p>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setContatoSugerido(null)} className="flex-1 h-10 rounded-lg bg-surface-container-lowest text-on-surface-variant text-label-sm font-semibold">
+                    Ignorar
+                  </button>
+                  <button
+                    disabled={salvandoContato}
+                    onClick={confirmarContato}
+                    className="flex-1 h-10 rounded-lg bg-primary text-on-primary text-label-sm font-semibold disabled:opacity-60"
+                  >
+                    {salvandoContato ? 'Salvando…' : 'Salvar em Contatos-Chave'}
+                  </button>
+                </div>
+              </div>
+            )}
+            {contatoSalvo && (
+              <p className="text-label-sm text-secondary text-center flex items-center justify-center gap-1">
+                <Icon name="check_circle" size={16} />
+                Contato salvo em Contatos-Chave da Praça.
+              </p>
+            )}
             <button onClick={onFechar} className="h-12 rounded-xl bg-primary text-on-primary text-label-lg mt-2">
               Voltar à Memória
             </button>

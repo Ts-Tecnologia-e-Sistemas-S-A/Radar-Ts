@@ -33,15 +33,28 @@ async function gerarJson<T>(parts: unknown[], instrucao: string): Promise<T> {
   return JSON.parse(texto) as T;
 }
 
+export interface ContatoDetectado {
+  nome: string | null;
+  cargo: string | null;
+  telefone: string | null;
+}
+
 export interface SinteseNota {
   combinado: string;
   proximoPasso: string;
+  /** Nome/cargo/telefone de uma pessoa de contato mencionada na nota, se
+   *  houver — null quando a nota não identifica ninguém. Vira sugestão pro
+   *  vendedor confirmar antes de gravar em Contatos-Chave (nunca some
+   *  direto: nome/telefone é dado estruturado que o vendedor edita à mão
+   *  em outro lugar, e a IA pode entender errado). */
+  contatoDetectado: ContatoDetectado | null;
 }
 
 const INSTRUCAO_SINTESE = `Você é o assistente de campo de um vendedor B2G (vendas para prefeituras) no Brasil.
 Recebe uma anotação rápida de reunião (texto ditado ou digitado em campo) e devolve APENAS um JSON válido:
-{"combinado": "frase objetiva do que ficou combinado/decidido", "proximoPasso": "próxima ação concreta sugerida, com prazo se possível"}
-Não invente nomes, valores ou fatos que não estejam no texto — se faltar informação, deixe genérico em vez de inventar.`;
+{"combinado": "frase objetiva do que ficou combinado/decidido", "proximoPasso": "próxima ação concreta sugerida, com prazo se possível", "contatoDetectado": {"nome": "...", "cargo": "...", "telefone": "..."} ou null}
+Preencha "contatoDetectado" só se a anotação mencionar claramente uma pessoa de contato (nome e/ou telefone) — cada campo que não aparecer no texto fica null, e o objeto inteiro fica null se nenhuma pessoa for identificável.
+Não invente nomes, valores ou fatos que não estejam no texto — se faltar informação, deixe genérico/null em vez de inventar.`;
 
 export async function sintetizarNota(texto: string): Promise<SinteseNota> {
   return gerarJson<SinteseNota>([{ text: `Anotação: ${texto}` }], INSTRUCAO_SINTESE);
@@ -53,7 +66,8 @@ export interface TranscricaoReuniao extends SinteseNota {
 
 const INSTRUCAO_AUDIO = `Você é o assistente de campo de um vendedor B2G (vendas para prefeituras) no Brasil.
 Recebe um áudio de uma reunião ou ditado rápido pós-reunião. Devolva APENAS um JSON válido:
-{"transcricao": "transcrição literal do áudio", "combinado": "síntese objetiva do que ficou combinado", "proximoPasso": "próxima ação concreta sugerida"}
+{"transcricao": "transcrição literal do áudio", "combinado": "síntese objetiva do que ficou combinado", "proximoPasso": "próxima ação concreta sugerida", "contatoDetectado": {"nome": "...", "cargo": "...", "telefone": "..."} ou null}
+Preencha "contatoDetectado" só se o áudio mencionar claramente uma pessoa de contato (nome e/ou telefone) — cada campo que não aparecer fica null, e o objeto inteiro fica null se nenhuma pessoa for identificável.
 Transcreva fielmente o que foi dito — não invente conteúdo que não está no áudio.`;
 
 export async function transcreverAudio(audioBase64: string, mimeType: string): Promise<TranscricaoReuniao> {

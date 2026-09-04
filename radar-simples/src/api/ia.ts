@@ -16,9 +16,16 @@ async function chamarIA<T>(modo: string, payload: Record<string, unknown>): Prom
   return json.dados as T;
 }
 
+export interface ContatoDetectado {
+  nome: string | null;
+  cargo: string | null;
+  telefone: string | null;
+}
+
 export interface SinteseNota {
   combinado: string;
   proximoPasso: string;
+  contatoDetectado: ContatoDetectado | null;
 }
 
 export function sintetizarNota(texto: string): Promise<SinteseNota> {

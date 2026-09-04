@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { buscarDadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
-import { sintetizarNota } from '../api/ia';
+import { ContatoDetectado, sintetizarNota } from '../api/ia';
 import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import {
   Contato,
@@ -105,6 +105,19 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
 
   function adicionarContato() {
     const novo: Contato = { id: crypto.randomUUID(), nome: 'Novo contato', cargo: '' };
+    salvar({ ...crm, contatos: [...crm.contatos, novo] });
+  }
+
+  // Confirmado pelo vendedor a partir de um contato que a IA detectou numa
+  // nota/gravação — nunca grava sozinho, sempre passa pela revisão humana
+  // primeiro (ver RegistroRapidoIA).
+  function adicionarContatoDetectado(dados: ContatoDetectado) {
+    const novo: Contato = {
+      id: crypto.randomUUID(),
+      nome: dados.nome || 'Novo contato',
+      cargo: dados.cargo || '',
+      telefone: dados.telefone || undefined,
+    };
     salvar({ ...crm, contatos: [...crm.contatos, novo] });
   }
 
@@ -400,7 +413,12 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         </div>
       </div>
 
-      <RegistroRapidoIA municipio={municipio} crm={crm} onEventoSalvo={() => setSalvo(true)} />
+      <RegistroRapidoIA
+        municipio={municipio}
+        crm={crm}
+        onEventoSalvo={() => setSalvo(true)}
+        onContatoDetectado={adicionarContatoDetectado}
+      />
 
       {salvo && <p className="text-label-sm text-green-600 text-center">Salvo.</p>}
     </div>
@@ -454,15 +472,18 @@ function RegistroRapidoIA({
   municipio,
   crm,
   onEventoSalvo,
+  onContatoDetectado,
 }: {
   municipio: MunicipioIbge;
   crm: MunicipioCrm;
   onEventoSalvo: () => void;
+  onContatoDetectado: (contato: ContatoDetectado) => void;
 }) {
   const [nota, setNota] = useState('');
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ combinado: string; proximoPasso: string } | null>(null);
+  const [contatoSugerido, setContatoSugerido] = useState<ContatoDetectado | null>(null);
 
   async function processar() {
     if (!nota.trim()) return;
@@ -471,6 +492,9 @@ function RegistroRapidoIA({
     try {
       const sintese = await sintetizarNota(nota.trim());
       setResultado(sintese);
+      if (sintese.contatoDetectado?.nome || sintese.contatoDetectado?.telefone) {
+        setContatoSugerido(sintese.contatoDetectado);
+      }
       await addEvento({
         id: crypto.randomUUID(),
         codigoIbge: municipio.codigoIbge,
@@ -490,6 +514,12 @@ function RegistroRapidoIA({
     } finally {
       setProcessando(false);
     }
+  }
+
+  function confirmarContato() {
+    if (!contatoSugerido) return;
+    onContatoDetectado(contatoSugerido);
+    setContatoSugerido(null);
   }
 
   return (
@@ -532,6 +562,27 @@ function RegistroRapidoIA({
           <div className="p-2.5 rounded-lg bg-surface-container-lowest space-y-1">
             <span className="text-label-sm uppercase font-bold text-primary">Próximo passo sugerido:</span>
             <p className="text-body-md text-on-surface">{resultado.proximoPasso}</p>
+          </div>
+        </div>
+      )}
+      {contatoSugerido && (
+        <div className="rounded-xl bg-primary-container/40 p-3.5 space-y-2.5">
+          <div className="flex items-center gap-1.5 text-primary">
+            <Icon name="person_add" size={16} />
+            <span className="text-label-sm uppercase tracking-wider font-semibold">Contato detectado na nota</span>
+          </div>
+          <p className="text-body-md text-on-surface">
+            {contatoSugerido.nome || 'Sem nome identificado'}
+            {contatoSugerido.cargo ? ` — ${contatoSugerido.cargo}` : ''}
+            {contatoSugerido.telefone ? ` — ${contatoSugerido.telefone}` : ''}
+          </p>
+          <div className="flex items-center gap-2">
+            <button onClick={() => setContatoSugerido(null)} className="flex-1 h-10 rounded-lg bg-surface-container-lowest text-on-surface-variant text-label-sm font-semibold">
+              Ignorar
+            </button>
+            <button onClick={confirmarContato} className="flex-1 h-10 rounded-lg bg-primary text-on-primary text-label-sm font-semibold">
+              Salvar em Contatos-Chave
+            </button>
           </div>
         </div>
       )}
