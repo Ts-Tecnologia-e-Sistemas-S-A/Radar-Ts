@@ -59,6 +59,19 @@ Config pública de cliente em `firebase-applet-config.json` (mesma usada em
   já carregados na tela (briefing de conta, balanço semanal) — texto, não
   captura de tela — e compartilhado via Web Share API quando disponível,
   com fallback pra download direto.
+- **Rede Escolar / Matrículas Totais** (`lib/censoEscolarProxy.ts`) vêm do
+  Censo Escolar do INEP, consultado via Base dos Dados (BigQuery) — tabela
+  pública `basedosdados.br_inep_censo_escolar.escola`, filtrada por rede
+  municipal e sempre o ano mais recente publicado pra aquele município. Só
+  agrega contagens (nº de escolas, soma de matrículas); nunca lê dado de
+  aluno individual. Busca automática ao vincular um município novo
+  (silenciosa — se falhar ou não houver dado publicado, os campos ficam
+  editáveis manualmente, sem bloquear nada) e um botão "Atualizar do Censo"
+  na Ficha Municipal pra rebuscar depois. Exige `GOOGLE_CLOUD_CREDENTIALS_JSON`
+  (service account com papel BigQuery Job User); sem ela, esses dois campos
+  ficam só de preenchimento manual — mesmo comportamento de antes.
 - Tudo em `MunicipioCrm` (contatos, estágio do funil, soluções ofertadas,
   valor anual estimado) é preenchido manualmente pelo vendedor e salvo no
-  Firestore.
+  Firestore, exceto Rede Escolar/Matrículas quando vêm do Censo Escolar
+  (acima) — mesmo assim, sempre editável por cima se o vendedor tiver
+  informação mais atual.

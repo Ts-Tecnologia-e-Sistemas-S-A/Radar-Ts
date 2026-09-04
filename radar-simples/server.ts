@@ -3,6 +3,7 @@ import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import { buscarLicitacoesPncp } from './lib/pncpProxy';
 import { processarRequisicaoIA } from './lib/iaProxy';
+import { buscarDadosEscolares } from './lib/censoEscolarProxy';
 
 const app = express();
 const PORT = 3000;
@@ -19,6 +20,15 @@ app.get('/api/pncp/licitacoes', async (req, res) => {
     req.query.dataInicial as string | undefined,
     req.query.dataFinal as string | undefined
   );
+  res.status(status).json(body);
+});
+
+// Rede escolar municipal (nº de escolas + matrículas) via Censo Escolar do
+// INEP (Base dos Dados/BigQuery). Sem GOOGLE_CLOUD_CREDENTIALS_JSON, devolve
+// erro explícito em vez de fabricar números.
+app.get('/api/censo-escolar', async (req, res) => {
+  const codigoIbge = req.query.codigoIbge ? Number(req.query.codigoIbge) : undefined;
+  const { status, body } = await buscarDadosEscolares(codigoIbge);
   res.status(status).json(body);
 });
 

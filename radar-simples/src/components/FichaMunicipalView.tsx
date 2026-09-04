@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { buscarDadosEscolares } from '../api/censoEscolar';
 import { sintetizarNota } from '../api/ia';
 import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import {
@@ -24,6 +25,8 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
+  const [atualizandoCenso, setAtualizandoCenso] = useState(false);
+  const [avisoCenso, setAvisoCenso] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelado = false;
@@ -48,6 +51,23 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       setTimeout(() => setSalvo(false), 2000);
     } catch (e: any) {
       setErro(e.message || 'Falha ao salvar no banco');
+    }
+  }
+
+  async function atualizarCensoEscolar() {
+    setAtualizandoCenso(true);
+    setAvisoCenso(null);
+    try {
+      const dados = await buscarDadosEscolares(crm.codigoIbge);
+      if (dados) {
+        await salvar({ ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano });
+      } else {
+        setAvisoCenso('Sem dado do Censo Escolar publicado pra esse município.');
+      }
+    } catch (e: any) {
+      setAvisoCenso(e.message || 'Falha ao consultar o Censo Escolar.');
+    } finally {
+      setAtualizandoCenso(false);
     }
   }
 
@@ -110,15 +130,31 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             label="Rede Escolar"
             valor={crm.escolasCount}
             sufixo="escolas"
-            onSalvar={(v) => salvar({ ...crm, escolasCount: v })}
+            onSalvar={(v) => salvar({ ...crm, escolasCount: v, censoEscolarAno: undefined })}
           />
           <CampoEditavel
             label="Matrículas Totais"
             valor={crm.alunosCount}
             sufixo="alunos"
-            onSalvar={(v) => salvar({ ...crm, alunosCount: v })}
+            onSalvar={(v) => salvar({ ...crm, alunosCount: v, censoEscolarAno: undefined })}
           />
         </div>
+        <div className="flex items-center justify-between px-0.5">
+          <span className="text-label-sm text-on-surface-variant">
+            {crm.censoEscolarAno
+              ? `Fonte: Censo Escolar INEP ${crm.censoEscolarAno} (rede municipal)`
+              : 'Números digitados manualmente'}
+          </span>
+          <button
+            disabled={atualizandoCenso}
+            onClick={atualizarCensoEscolar}
+            className="text-label-sm text-secondary font-semibold flex items-center gap-1 disabled:opacity-50"
+          >
+            <Icon name={atualizandoCenso ? 'sync' : 'cloud_download'} size={14} className={atualizandoCenso ? 'animate-spin' : ''} />
+            {atualizandoCenso ? 'Buscando…' : 'Atualizar do Censo'}
+          </button>
+        </div>
+        {avisoCenso && <p className="text-label-sm text-on-surface-variant">{avisoCenso}</p>}
       </section>
 
       <div className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3">

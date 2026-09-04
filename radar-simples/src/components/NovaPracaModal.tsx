@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
+import { buscarDadosEscolares } from '../api/censoEscolar';
 import { buscarTodosMunicipios } from '../api/ibge';
 import { saveMunicipioCrm } from '../storage';
-import { MunicipioIbge, municipioCrmVazio } from '../types';
+import { MunicipioCrm, MunicipioIbge, municipioCrmVazio } from '../types';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -48,11 +49,30 @@ export default function NovaPracaModal({ onFechar, onAdicionado }: NovaPracaModa
     setSalvando(municipio.codigoIbge);
     setErro(null);
     try {
-      await saveMunicipioCrm(municipioCrmVazio(municipio.codigoIbge));
+      const crmVazio = municipioCrmVazio(municipio.codigoIbge);
+      await saveMunicipioCrm(crmVazio);
+      await tentarEnriquecerComCensoEscolar(crmVazio);
       onAdicionado(municipio);
     } catch (e: any) {
       setErro(e.message || 'Falha ao salvar no banco. Confira sua conexão e tente de novo.');
       setSalvando(null);
+    }
+  }
+
+  // Busca real do Censo Escolar (INEP) como bônus — nunca impede vincular o
+  // município se falhar ou demorar; o vendedor sempre pode atualizar depois
+  // na Ficha Municipal.
+  async function tentarEnriquecerComCensoEscolar(crm: MunicipioCrm) {
+    try {
+      const dados = await Promise.race([
+        buscarDadosEscolares(crm.codigoIbge),
+        new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+      ]);
+      if (dados) {
+        await saveMunicipioCrm({ ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano });
+      }
+    } catch {
+      // silencioso — enriquecimento é bônus, não crítico
     }
   }
 

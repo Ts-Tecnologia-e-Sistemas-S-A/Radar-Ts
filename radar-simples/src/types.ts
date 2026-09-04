@@ -54,6 +54,10 @@ export interface MunicipioCrm {
   macrorregiao?: string;
   escolasCount?: number;
   alunosCount?: number;
+  /** Ano do Censo Escolar (INEP) de onde escolasCount/alunosCount vieram —
+   *  ausente quando os números foram digitados manualmente pelo vendedor
+   *  ou ainda não preenchidos. */
+  censoEscolarAno?: number;
   contatos: Contato[];
   solucoes: SolucaoOfertada[];
   estagioFunil: EstagioFunilB2G;

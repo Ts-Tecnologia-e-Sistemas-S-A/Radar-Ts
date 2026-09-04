@@ -11,6 +11,7 @@
     "test": "bun test src/storage.test.ts src/utils/urgencia.test.ts src/utils/rota.test.ts src/utils/forecast.test.ts"
   },
   "dependencies": {
+    "@google-cloud/bigquery": "^7.9.1",
     "@google/genai": "^2.4.0",
     "@tailwindcss/vite": "^4.1.14",
     "@vitejs/plugin-react": "^5.0.4",
