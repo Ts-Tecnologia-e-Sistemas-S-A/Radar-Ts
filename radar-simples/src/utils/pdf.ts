@@ -116,12 +116,48 @@ const TITULO_ACHADO: Record<TipoAchado, string> = {
   variacao_matricula_atipica: 'Variação atípica de matrícula',
 };
 
-const EXPLICACAO_ACHADO: Record<TipoAchado, string> = {
-  escola_sem_matricula:
-    'Escolas sem matrícula registrada no Censo mais recente podem indicar erro de preenchimento — isso reduz o total considerado no cálculo do repasse do Fundeb.',
-  escola_duplicada: 'Um mesmo código de escola aparecendo mais de uma vez no mesmo ano geralmente indica duplicidade de cadastro.',
-  variacao_matricula_atipica:
-    'Uma variação grande de matrícula de um ano pro outro vale conferir — pode ser real (abertura ou fechamento de turma) ou um erro de digitação que afeta o repasse.',
+interface SubsecaoExplicacao {
+  titulo?: string;
+  texto: string;
+}
+
+// escola_sem_matricula detalha causa-e-efeito por categoria (financeiro,
+// fiscalização, pessoal, indicadores) em vez de só constatar o fato — é o
+// achado com mais peso prático pro gestor, então merece explicar por que
+// importa de verdade, não só "confira isso". Os outros dois ficam num
+// parágrafo só, sem sub-título.
+const EXPLICACAO_ACHADO: Record<TipoAchado, SubsecaoExplicacao[]> = {
+  escola_sem_matricula: [
+    {
+      titulo: 'Impacto financeiro',
+      texto:
+        'O repasse do Fundeb é calculado sobre a matrícula declarada no Censo Escolar do ano anterior — escola com matrícula zero não gera cota de participação, reduzindo a receita educacional do município. Programas federais como PNAE (merenda escolar), PNATE (transporte escolar), PDDE (dinheiro direto na escola) e PNLD (livros didáticos) também usam matrícula ativa como critério de envio de verba e material. Além disso, manter o prédio cadastrado e operacional sem estudantes gera custo fixo ocioso: energia, água, segurança e manutenção predial.',
+    },
+    {
+      titulo: 'Fiscalização e responsabilidade fiscal',
+      texto:
+        'Estrutura mantida sem atendimento a estudantes pode atrair apontamento do Tribunal de Contas por ineficiência na gestão do patrimônio público, e a atenção do Ministério Público sobre fechamento de fato de uma escola sem o processo formal de desativação — especialmente em unidades rurais ou periféricas.',
+    },
+    {
+      titulo: 'Gestão de pessoal',
+      texto:
+        'Professores, diretor e demais servidores formalmente lotados numa escola sem aluno geram inconformidade de lotação, e distorcem o índice de aplicação dos 70% do Fundeb destinados à remuneração dos profissionais do magistério.',
+    },
+    {
+      titulo: 'Indicadores e próximo passo',
+      texto:
+        'Também distorce as estatísticas do INEP/MEC (taxa de ocupação da rede, custo-aluno, capacidade). Se a unidade realmente não tem mais demanda, o caminho correto é formalizar a paralisação temporária ou a desativação definitiva junto ao Conselho Municipal de Educação, com o remanejamento da demanda pra unidades vizinhas garantindo transporte escolar.',
+    },
+  ],
+  escola_duplicada: [
+    { texto: 'Um mesmo código de escola aparecendo mais de uma vez no mesmo ano geralmente indica duplicidade de cadastro.' },
+  ],
+  variacao_matricula_atipica: [
+    {
+      texto:
+        'Uma variação grande de matrícula de um ano pro outro vale conferir — pode ser real (abertura ou fechamento de turma) ou um erro de digitação que afeta o repasse.',
+    },
+  ],
 };
 
 /**
@@ -174,7 +210,19 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
       doc.setTextColor(15, 41, 66);
       doc.text(TITULO_ACHADO[tipo], 14, y);
       y += 5;
-      y = paragrafo(doc, EXPLICACAO_ACHADO[tipo], y);
+      for (const sub of EXPLICACAO_ACHADO[tipo]) {
+        if (y > 250) {
+          doc.addPage();
+          y = 20;
+        }
+        if (sub.titulo) {
+          doc.setFontSize(9);
+          doc.setTextColor(70, 70, 70);
+          doc.text(sub.titulo, 14, y);
+          y += 4.5;
+        }
+        y = paragrafo(doc, sub.texto, y);
+      }
       for (const achado of achadosDoTipo) {
         if (y > 270) {
           doc.addPage();
