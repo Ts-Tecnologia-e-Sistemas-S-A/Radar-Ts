@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ContatoDetectado, transcreverAudio } from '../api/ia';
 import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import { Contato, MunicipioIbge, municipioCrmVazio } from '../types';
@@ -34,11 +34,29 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<Blob[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const montado = useRef(true);
+  const streamRef = useRef<MediaStream | null>(null);
+  useEffect(() => {
+    montado.current = true;
+    return () => {
+      montado.current = false;
+      if (timerRef.current) clearInterval(timerRef.current);
+      const recorder = mediaRecorderRef.current;
+      if (recorder) {
+        recorder.onstop = null;
+        recorder.ondataavailable = null;
+        if (recorder.state !== 'inactive') recorder.stop();
+      }
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+    };
+  }, []);
 
   async function iniciarGravacao() {
     setErro(null);
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      if (!montado.current) { stream.getTracks().forEach((t) => t.stop()); return; }
+      streamRef.current = stream;
       const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : 'audio/mp4';
       const recorder = new MediaRecorder(stream, { mimeType });
       chunksRef.current = [];
@@ -56,6 +74,7 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
       setEstado('gravando');
     } catch (e: any) {
       setErro('Não foi possível acessar o microfone: ' + (e.message || 'permissão negada'));
+      streamRef.current?.getTracks().forEach((t) => t.stop());
       setEstado('erro');
     }
   }

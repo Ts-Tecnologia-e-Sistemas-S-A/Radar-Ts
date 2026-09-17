@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, mock } from 'bun:test';
+import { Readable } from 'node:stream';
 import { prepararTextoPlanilha, validarRelatorioPlanilha } from '../src/utils/relatorioPlanilha';
 
 const relatorio = { titulo: 'Matrículas por escola', resumo: 'Duas escolas informadas.', achados: ['Escola A: 120 matrículas.'], limitacoes: ['Ano não informado.'], proximosPassos: ['Informar o ano.'] };
 const gerar = mock(async (_req: unknown) => ({ text: JSON.stringify(relatorio) }));
 mock.module('@google/genai', () => ({ GoogleGenAI: class { models = { generateContent: gerar }; } }));
 const { processarRequisicaoIA } = await import('./iaProxy');
+const { default: handler } = await import('../api/ia/processar');
 const chaveAnterior = process.env.GEMINI_API_KEY;
 afterEach(() => {
   if (chaveAnterior === undefined) delete process.env.GEMINI_API_KEY;
@@ -14,6 +16,27 @@ afterEach(() => {
 });
 
 describe('análise de texto de planilha', () => {
+  it('aceita corpo pré-processado pelo Vercel e stream JSON bruto', async () => {
+    process.env.GEMINI_API_KEY = 'chave-ficticia-teste';
+    const body = { modo: 'analisar_planilha', texto: 'Escola\tAlunos\nA\t10' };
+    for (const preProcessado of [true, false]) {
+      const req = Object.assign(Readable.from(preProcessado ? [] : [JSON.stringify(body)]), { method: 'POST', ...(preProcessado ? { body } : {}) });
+      let resposta = '';
+      const res = { statusCode: 0, setHeader() {}, end(texto: string) { resposta = texto; } };
+      await handler(req as any, res as any);
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(resposta).dados).toEqual(relatorio);
+    }
+  });
+  it('rejeita GET, JSON inválido e null sem chamar o provedor', async () => {
+    for (const [method, raw, status] of [['GET', '', 405], ['POST', '{', 400], ['POST', 'null', 400], ['POST', '[]', 400]] as const) {
+      const req = Object.assign(Readable.from([raw]), { method });
+      const res = { statusCode: 0, setHeader() {}, end() {} };
+      await handler(req as any, res as any);
+      expect(res.statusCode).toBe(status);
+    }
+    expect(gerar).not.toHaveBeenCalled();
+  });
   it('sugere tarefa com data de referência e valida retorno', async () => {
     process.env.GEMINI_API_KEY = 'chave-ficticia-teste';
     const sugestao = { tipo: 'ligar', descricao: 'Confirmar a visita', data: '2026-09-18', hora: '10:00' };

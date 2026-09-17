@@ -32,3 +32,8 @@ export function tarefaAtrasada(t: Tarefa, agora = new Date()): boolean {
   const hoje = dataLocal(agora);
   return t.data < hoje || (t.data === hoje && Boolean(t.hora) && t.hora < `${String(agora.getHours()).padStart(2, '0')}:${String(agora.getMinutes()).padStart(2, '0')}`);
 }
+
+export function proximaTarefa(tarefas: Tarefa[], codigoIbge: number): Tarefa | undefined {
+  return tarefas.filter((t) => t.codigoIbge === codigoIbge && t.status === 'pendente')
+    .sort((a, b) => `${a.data} ${a.hora || '23:59'}`.localeCompare(`${b.data} ${b.hora || '23:59'}`))[0];
+}

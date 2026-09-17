@@ -1,8 +1,19 @@
 import { describe, expect, it } from 'bun:test';
-import { dataLocal, dataValida, tarefaAtrasada, validarSugestaoTarefa, type Tarefa } from './agenda';
+import { dataLocal, dataValida, proximaTarefa, tarefaAtrasada, validarSugestaoTarefa, type Tarefa } from './agenda';
 const tarefa: Tarefa = { id: 't1', codigoIbge: 10, tipo: 'ligar', descricao: 'Confirmar visita', data: '2026-09-17', hora: '', status: 'pendente', origem: 'ia', criadaEm: '2026-09-16T12:00:00Z' };
 
 describe('agenda', () => {
+  it('Radar seleciona a primeira pendência do município, ignorando concluídas', () => {
+    const tarefas: Tarefa[] = [
+      { ...tarefa, id: 'outro', codigoIbge: 20, data: '2026-09-01' },
+      { ...tarefa, id: 'feita', status: 'concluida', data: '2026-09-01' },
+      { ...tarefa, id: 'sem-hora' },
+      { ...tarefa, id: 'com-hora', hora: '10:00' },
+    ];
+    expect(proximaTarefa(tarefas, 10)?.id).toBe('com-hora');
+    expect(proximaTarefa(tarefas, 99)).toBeUndefined();
+    expect(tarefas[0].id).toBe('outro');
+  });
   it('valida dias reais e anos bissextos', () => {
     expect(dataValida('2026-02-30')).toBe(false);
     expect(dataValida('2026-02-29')).toBe(false);

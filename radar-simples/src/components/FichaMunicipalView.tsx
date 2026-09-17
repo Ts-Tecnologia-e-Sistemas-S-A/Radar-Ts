@@ -27,6 +27,8 @@ interface FichaMunicipalViewProps {
 export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }: FichaMunicipalViewProps) {
   const [crm, setCrm] = useState<MunicipioCrm>(municipioCrmVazio(municipio.codigoIbge));
   const [carregando, setCarregando] = useState(true);
+  const [falhaCarga, setFalhaCarga] = useState(false);
+  const [revisaoCarga, setRevisaoCarga] = useState(0);
   const [erro, setErro] = useState<string | null>(null);
   const [salvo, setSalvo] = useState(false);
   const [atualizandoCenso, setAtualizandoCenso] = useState(false);
@@ -39,6 +41,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   useEffect(() => {
     let cancelado = false;
     setCarregando(true);
+    setFalhaCarga(false);
     setDiagnostico(null);
     Promise.all([getMunicipioCrm(municipio.codigoIbge), getResultadosMunicipio(municipio.codigoIbge)])
       .then(([existente, resultados]) => {
@@ -46,12 +49,12 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         setCrm(existente || municipioCrmVazio(municipio.codigoIbge));
         setDiagnostico(resultados.diagnostico ?? null);
       })
-      .catch((e: any) => !cancelado && setErro(e.message || 'Falha ao carregar dados do banco'))
+      .catch((e: any) => { if (!cancelado) { setFalhaCarga(true); setErro(e.message || 'Falha ao carregar dados do banco'); } })
       .finally(() => !cancelado && setCarregando(false));
     return () => {
       cancelado = true;
     };
-  }, [municipio.codigoIbge]);
+  }, [municipio.codigoIbge, revisaoCarga]);
 
   async function salvar(atualizado: MunicipioCrm, otimista = true) {
     setSalvo(false);
@@ -144,6 +147,10 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     salvar({ ...crm, solucoes: crm.solucoes.map((s) => (s.id === id ? { ...s, ...campos } : s)) });
   }
 
+  if (falhaCarga && !carregando) return <div className="pt-space-xs space-y-3">
+    <p role="alert" className="text-error">{erro}</p>
+    <button className="text-primary" onClick={() => setRevisaoCarga((v) => v + 1)}>Tentar carregar novamente</button>
+  </div>;
   if (carregando) {
     return <p className="text-body-sm text-on-surface-variant pt-space-xs">Carregando dados do banco…</p>;
   }

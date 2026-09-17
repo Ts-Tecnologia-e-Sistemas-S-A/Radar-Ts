@@ -7,8 +7,8 @@ import {
   sintetizarNota,
   transcreverAudio,
 } from './iaCampo.js';
-import { prepararTextoPlanilha } from '../src/utils/relatorioPlanilha';
-import { dataValida } from '../src/utils/agenda';
+import { prepararTextoPlanilha } from '../src/utils/relatorioPlanilha.js';
+import { dataValida } from '../src/utils/agenda.js';
 
 export interface ResultadoIA {
   status: number;

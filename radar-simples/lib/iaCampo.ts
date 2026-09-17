@@ -1,6 +1,6 @@
 import { GoogleGenAI } from '@google/genai';
-import { validarSugestaoTarefa, type SugestaoTarefa } from '../src/utils/agenda';
-import { prepararTextoPlanilha, validarRelatorioPlanilha, type RelatorioPlanilha } from '../src/utils/relatorioPlanilha';
+import { validarSugestaoTarefa, type SugestaoTarefa } from '../src/utils/agenda.js';
+import { prepararTextoPlanilha, validarRelatorioPlanilha, type RelatorioPlanilha } from '../src/utils/relatorioPlanilha.js';
 
 /**
  * Integração real com Gemini pra IA de campo: sintetizar notas, transcrever
