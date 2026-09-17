@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Teste de conexão — Firestore</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 0 auto; padding: 20px; background: #0f172a; color: #e2e8f0; }
+  h1 { font-size: 18px; }
+  .linha { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border-radius: 10px; margin-bottom: 8px; background: #1e293b; }
+  .icone { font-size: 20px; flex-shrink: 0; width: 24px; text-align: center; }
+  .texto { flex: 1; font-size: 14px; line-height: 1.4; }
+  .titulo { font-weight: 600; }
+  .detalhe { color: #94a3b8; font-size: 12px; margin-top: 3px; word-break: break-word; white-space: pre-wrap; }
+  .ok { color: #4ade80; }
+  .erro { color: #f87171; }
+  .espera { color: #facc15; }
+  pre { background: #020617; padding: 10px; border-radius: 8px; font-size: 11px; overflow-x: auto; }
+</style>
+</head>
+<body>
+<h1>Teste isolado de conexão com o Firestore</h1>
+<p style="color:#94a3b8; font-size:13px;">Página independente do app — sem React, sem o resto do código. Só testa se este navegador consegue falar com o banco.</p>
+<div id="log"></div>
+
+<script type="module">
+  const log = document.getElementById('log');
+  function linha(icone, cor, titulo, detalhe) {
+    const el = document.createElement('div');
+    el.className = 'linha';
+    el.innerHTML = `<div class="icone ${cor}">${icone}</div><div class="texto"><div class="titulo">${titulo}</div>${detalhe ? `<div class="detalhe">${detalhe}</div>` : ''}</div>`;
+    log.appendChild(el);
+    return el;
+  }
+  function comTimeout(promessa, ms, rotulo) {
+    return Promise.race([
+      promessa.then((v) => ({ ok: true, v })).catch((e) => ({ ok: false, e })),
+      new Promise((resolve) => setTimeout(() => resolve({ ok: false, timeout: true }), ms)),
+    ]);
+  }
+
+  linha('⏳', 'espera', 'Carregando SDK do Firebase (CDN)…');
+  let appMod, fsMod;
+  try {
+    [appMod, fsMod] = await Promise.all([
+      import('https://www.gstatic.com/firebasejs/12.18.0/firebase-app.js'),
+      import('https://www.gstatic.com/firebasejs/12.18.0/firebase-firestore.js'),
+    ]);
+    log.lastChild.remove();
+    linha('✅', 'ok', 'SDK do Firebase carregado.');
+  } catch (e) {
+    log.lastChild.remove();
+    linha('❌', 'erro', 'Não consegui nem carregar o SDK do Firebase pelo CDN.', String(e));
+    throw e;
+  }
+
+  const config = {
+    projectId: 'sicap-radar',
+    appId: '1:134776085527:web:ccfd8d6c87d0f1cf0e9052',
+    apiKey: 'AIzaSyDTUPo4PXh9yiJospwOcAXSLMgzp0eic5Q',
+    authDomain: 'sicap-radar.firebaseapp.com',
+    storageBucket: 'sicap-radar.firebasestorage.app',
+    messagingSenderId: '134776085527',
+  };
+  linha('ℹ️', '', 'Config usada:', `projectId: ${config.projectId}\nauthDomain: ${config.authDomain}\norigin desta página: ${location.origin}`);
+
+  const app = appMod.initializeApp(config);
+  const db = fsMod.getFirestore(app);
+  linha('✅', 'ok', 'App e Firestore inicializados (isso é só local, não prova conexão ainda).');
+
+  linha('⏳', 'espera', 'Gravando um documento de teste (limite de 10s)…');
+  const inicioEscrita = Date.now();
+  const resultadoEscrita = await comTimeout(
+    fsMod.setDoc(fsMod.doc(db, 'radar_simples_conexao_teste', 'teste'), {
+      testadoEm: new Date().toISOString(),
+      origin: location.origin,
+      userAgent: navigator.userAgent,
+    }),
+    10000
+  );
+  log.lastChild.remove();
+  const msEscrita = Date.now() - inicioEscrita;
+  if (resultadoEscrita.timeout) {
+    linha('⏱️', 'espera', `TIMEOUT na escrita após 10s — não conectou nem deu erro.`, 'Isso indica bloqueio de rede/config, não bug do app (nenhum app consegue escrever nessas condições).');
+  } else if (resultadoEscrita.ok) {
+    linha('✅', 'ok', `Escrita funcionou em ${msEscrita}ms.`);
+  } else {
+    linha('❌', 'erro', `Escrita falhou em ${msEscrita}ms.`, `${resultadoEscrita.e?.code || ''} ${resultadoEscrita.e?.message || String(resultadoEscrita.e)}`);
+  }
+
+  linha('⏳', 'espera', 'Lendo de volta (limite de 10s)…');
+  const inicioLeitura = Date.now();
+  const resultadoLeitura = await comTimeout(
+    fsMod.getDoc(fsMod.doc(db, 'radar_simples_conexao_teste', 'teste')),
+    10000
+  );
+  log.lastChild.remove();
+  const msLeitura = Date.now() - inicioLeitura;
+  if (resultadoLeitura.timeout) {
+    linha('⏱️', 'espera', `TIMEOUT na leitura após 10s.`);
+  } else if (resultadoLeitura.ok) {
+    linha('✅', 'ok', `Leitura funcionou em ${msLeitura}ms.`, JSON.stringify(resultadoLeitura.v.data()));
+  } else {
+    linha('❌', 'erro', `Leitura falhou em ${msLeitura}ms.`, `${resultadoLeitura.e?.code || ''} ${resultadoLeitura.e?.message || String(resultadoLeitura.e)}`);
+  }
+
+  linha('🏁', '', 'Teste concluído. Manda um print desta tela inteira.');
+</script>
+</body>
+</html>
