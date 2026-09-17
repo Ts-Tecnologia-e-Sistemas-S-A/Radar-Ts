@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { gerarBriefing } from '../api/ia';
-import { getEventos, getMunicipioCrm } from '../storage';
+import { getEventos, getMunicipioCrm, getResultadosMunicipio, saveResultadosMunicipio } from '../storage';
 import { EventoTimeline, MunicipioCrm, MunicipioIbge, TipoEventoTimeline, municipioCrmVazio } from '../types';
 import Icon from './Icon';
+import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
 
 const ICONE_TIPO: Record<TipoEventoTimeline, string> = {
   reuniao: 'groups',
@@ -14,9 +15,10 @@ interface MemoriaContaViewProps {
   municipio: MunicipioIbge;
   onGravarReuniao: () => void;
   onExportarPdf: () => void;
+  revisao?: number;
 }
 
-export default function MemoriaContaView({ municipio, onGravarReuniao, onExportarPdf }: MemoriaContaViewProps) {
+export default function MemoriaContaView({ municipio, onGravarReuniao, onExportarPdf, revisao = 0 }: MemoriaContaViewProps) {
   const [crm, setCrm] = useState<MunicipioCrm>(municipioCrmVazio(municipio.codigoIbge));
   const [eventos, setEventos] = useState<EventoTimeline[]>([]);
   const [carregando, setCarregando] = useState(true);
@@ -28,10 +30,11 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
     let cancelado = false;
     setCarregando(true);
     setBriefing(null);
-    Promise.all([getMunicipioCrm(municipio.codigoIbge), getEventos(municipio.codigoIbge)])
-      .then(([crmCarregado, eventosCarregados]) => {
+    Promise.all([getMunicipioCrm(municipio.codigoIbge), getEventos(municipio.codigoIbge), getResultadosMunicipio(municipio.codigoIbge)])
+      .then(([crmCarregado, eventosCarregados, resultados]) => {
         if (cancelado) return;
         setCrm(crmCarregado || municipioCrmVazio(municipio.codigoIbge));
+        setBriefing(resultados.briefing ?? null);
         setEventos([...eventosCarregados].sort((a, b) => b.data.localeCompare(a.data)));
       })
       .catch((e: any) => !cancelado && setErro(e.message || 'Falha ao carregar dados do banco'))
@@ -39,7 +42,7 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
     return () => {
       cancelado = true;
     };
-  }, [municipio.codigoIbge]);
+  }, [municipio.codigoIbge, revisao]);
 
   const grupos = useMemo(() => {
     const porMandato = new Map<string, EventoTimeline[]>();
@@ -61,9 +64,10 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
         .join(' | ') || 'nenhum evento registrado ainda';
       const contexto = `Município: ${municipio.nome}/${municipio.uf}. Contatos: ${contatos}. Últimos eventos: ${ultimosEventos}.`;
       const resultado = await gerarBriefing(contexto);
+      await saveResultadosMunicipio(municipio.codigoIbge, { briefing: resultado.diretriz });
       setBriefing(resultado.diretriz);
     } catch (e: any) {
-      setErro(e.message || 'Falha ao gerar briefing com IA');
+      setErro(`Não foi possível gerar ou salvar o briefing: ${e.message || 'tente novamente'}`);
     } finally {
       setGerandoBriefing(false);
     }
@@ -190,6 +194,19 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           <span className="text-label-sm text-on-surface-variant">Próximo passo</span>
                           <span className="text-label-sm text-primary font-semibold">{ev.proximoPassoIA}</span>
                         </div>
+                      )}
+                      {ev.transcricao && (
+                        <details className="text-body-sm text-on-surface-variant">
+                          <summary className="cursor-pointer text-primary">Transcrição completa</summary>
+                          <p className="pt-space-xs whitespace-pre-wrap">{ev.transcricao}</p>
+                        </details>
+                      )}
+                      {ev.relatorioPlanilha && <RelatorioPlanilhaCard relatorio={ev.relatorioPlanilha} />}
+                      {ev.textoPlanilha && (
+                        <details className="text-body-sm text-on-surface-variant">
+                          <summary className="cursor-pointer text-primary">Dados usados no relatório</summary>
+                          <pre className="overflow-x-auto pt-space-xs">{ev.textoPlanilha}</pre>
+                        </details>
                       )}
                     </div>
                   </div>

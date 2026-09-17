@@ -5,17 +5,27 @@ import { processarRequisicaoIA } from '../../lib/iaProxy.js';
  * Função serverless do Vercel — equivalente ao endpoint Express de
  * server.ts (usado no dev local).
  */
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
-  const chunks: Buffer[] = [];
-  for await (const chunk of req) chunks.push(chunk as Buffer);
-  const bodyRaw = Buffer.concat(chunks).toString('utf-8');
-
-  let body: any = {};
+export default async function handler(req: IncomingMessage & { body?: unknown }, res: ServerResponse) {
+  res.setHeader('Content-Type', 'application/json');
+  if (req.method !== 'POST') {
+    res.statusCode = 405;
+    res.setHeader('Allow', 'POST');
+    res.end(JSON.stringify({ sucesso: false, erro: 'Use POST para processar com IA.' }));
+    return;
+  }
+  let body: any = req.body;
   try {
-    body = bodyRaw ? JSON.parse(bodyRaw) : {};
+    // Vercel pode entregar o corpo já interpretado e o stream consumido.
+    if (body === undefined) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk));
+      body = Buffer.concat(chunks).toString('utf-8');
+    }
+    if (Buffer.isBuffer(body)) body = body.toString('utf-8');
+    if (typeof body === 'string') body = JSON.parse(body);
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('invalid body');
   } catch {
     res.statusCode = 400;
-    res.setHeader('Content-Type', 'application/json');
     res.end(JSON.stringify({ sucesso: false, erro: 'Corpo da requisição não é um JSON válido.' }));
     return;
   }
@@ -23,6 +33,5 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const { modo, ...payload } = body;
   const { status, body: responseBody } = await processarRequisicaoIA(modo, payload);
   res.statusCode = status;
-  res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(responseBody));
 }

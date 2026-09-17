@@ -1,4 +1,5 @@
 import { MunicipioCrm } from '../types';
+import { dataLocal } from './agenda';
 
 /**
  * Um município é urgente quando a próxima ação registrada já passou da data
@@ -8,6 +9,8 @@ import { MunicipioCrm } from '../types';
  */
 export function isUrgente(municipio: MunicipioCrm, hoje: Date = new Date()): boolean {
   if (!municipio.proximaAcao) return false;
-  const hojeISO = hoje.toISOString().slice(0, 10);
-  return municipio.proximaAcao.data < hojeISO;
+  const hojeISO = dataLocal(hoje);
+  const hora = `${String(hoje.getHours()).padStart(2, '0')}:${String(hoje.getMinutes()).padStart(2, '0')}`;
+  return municipio.proximaAcao.data < hojeISO ||
+    (municipio.proximaAcao.data === hojeISO && Boolean(municipio.proximaAcao.hora) && municipio.proximaAcao.hora! < hora);
 }

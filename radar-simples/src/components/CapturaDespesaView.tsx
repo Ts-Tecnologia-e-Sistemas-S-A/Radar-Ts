@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { extrairDespesa } from '../api/ia';
 import { addDespesa } from '../storage';
 import { CATEGORIAS_DESPESA, CategoriaDespesa, MunicipioIbge } from '../types';
@@ -61,11 +61,17 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
   const [categoria, setCategoria] = useState<CategoriaDespesa>('combustivel');
   const [descricao, setDescricao] = useState('');
 
-  navigator.geolocation?.getCurrentPosition(
-    (pos) => setLocalizacao({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
-    () => {},
-    { timeout: 5000 }
-  );
+  useEffect(() => {
+    let cancelado = false;
+    navigator.geolocation?.getCurrentPosition(
+      (pos) => { if (!cancelado) setLocalizacao({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }); },
+      () => {},
+      { timeout: 5000 }
+    );
+    return () => { cancelado = true; };
+  }, []);
+
+  useEffect(() => () => { if (previaUrl) URL.revokeObjectURL(previaUrl); }, [previaUrl]);
 
   async function aoSelecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];

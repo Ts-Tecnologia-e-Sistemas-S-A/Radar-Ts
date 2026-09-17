@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { getDespesas, getMunicipiosCrm, getPontosRota } from '../storage';
+import { getDespesas, getMunicipiosCrm, getPontosRota, getTarefas } from '../storage';
+import { proximaTarefa } from '../utils/agenda';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
@@ -37,9 +38,13 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
     setCarregando(true);
     setErro(null);
 
-    Promise.all([getMunicipiosCrm(), getDespesas(), getPontosRota()])
-      .then(([crm, despesas, pontos]) => {
+    Promise.all([getMunicipiosCrm(), getDespesas(), getPontosRota(), getTarefas()])
+      .then(([crm, despesas, pontos, tarefas]) => {
         if (cancelado) return;
+        for (const municipio of Object.values(crm)) {
+          const proxima = proximaTarefa(tarefas, municipio.codigoIbge);
+          if (proxima) municipio.proximaAcao = { data: proxima.data, hora: proxima.hora, descricao: proxima.descricao, presencial: proxima.tipo === 'visitar' };
+        }
         setCrmPorCodigo(crm);
         const hojeISO = new Date().toISOString().slice(0, 10);
         setDespesasHoje(despesas.filter((d) => d.data === hojeISO).reduce((soma, d) => soma + d.valor, 0));
