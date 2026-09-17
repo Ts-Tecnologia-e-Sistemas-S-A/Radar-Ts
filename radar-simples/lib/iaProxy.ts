@@ -1,10 +1,14 @@
 import {
+  analisarPlanilha,
+  sugerirTarefa,
   extrairDespesa,
   gerarBriefing,
   gerarRecomendacoesSemana,
   sintetizarNota,
   transcreverAudio,
 } from './iaCampo.js';
+import { prepararTextoPlanilha } from '../src/utils/relatorioPlanilha';
+import { dataValida } from '../src/utils/agenda';
 
 export interface ResultadoIA {
   status: number;
@@ -19,6 +23,17 @@ export interface ResultadoIA {
 export async function processarRequisicaoIA(modo: string, payload: any): Promise<ResultadoIA> {
   try {
     switch (modo) {
+      case 'sugerir_tarefa': {
+        if (typeof payload?.contexto !== 'string' || !payload.contexto.trim() || payload.contexto.length > 60000 ||
+            typeof payload.hoje !== 'string' || !dataValida(payload.hoje)) return erro400('Informe contexto de até 60.000 caracteres e a data de hoje.');
+        return ok(await sugerirTarefa(payload.contexto, payload.hoje));
+      }
+      case 'analisar_planilha': {
+        let texto: string;
+        try { texto = prepararTextoPlanilha(payload?.texto); }
+        catch (e: any) { return erro400(e.message); }
+        return ok(await analisarPlanilha(texto));
+      }
       case 'sintetizar_nota': {
         if (!payload?.texto) return erro400('Campo "texto" é obrigatório.');
         return ok(await sintetizarNota(payload.texto));

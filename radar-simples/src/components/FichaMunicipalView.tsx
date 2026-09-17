@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import { buscarDadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
-import { ContatoDetectado, sintetizarNota } from '../api/ia';
-import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
+import { analisarPlanilha, ContatoDetectado, sintetizarNota } from '../api/ia';
+import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
+import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
+import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, getResultadosMunicipio, saveResultadosMunicipio } from '../storage';
 import {
   Contato,
   ESTAGIOS_FUNIL_B2G,
@@ -37,9 +39,12 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   useEffect(() => {
     let cancelado = false;
     setCarregando(true);
-    getMunicipioCrm(municipio.codigoIbge)
-      .then((existente) => {
-        if (!cancelado) setCrm(existente || municipioCrmVazio(municipio.codigoIbge));
+    setDiagnostico(null);
+    Promise.all([getMunicipioCrm(municipio.codigoIbge), getResultadosMunicipio(municipio.codigoIbge)])
+      .then(([existente, resultados]) => {
+        if (cancelado) return;
+        setCrm(existente || municipioCrmVazio(municipio.codigoIbge));
+        setDiagnostico(resultados.diagnostico ?? null);
       })
       .catch((e: any) => !cancelado && setErro(e.message || 'Falha ao carregar dados do banco'))
       .finally(() => !cancelado && setCarregando(false));
@@ -48,15 +53,19 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     };
   }, [municipio.codigoIbge]);
 
-  async function salvar(atualizado: MunicipioCrm) {
-    setCrm(atualizado);
+  async function salvar(atualizado: MunicipioCrm, otimista = true) {
+    setSalvo(false);
+    if (otimista) setCrm(atualizado);
     try {
       await saveMunicipioCrm(atualizado);
+      if (!otimista) setCrm(atualizado);
       setSalvo(true);
       setErro(null);
       setTimeout(() => setSalvo(false), 2000);
+      return true;
     } catch (e: any) {
       setErro(e.message || 'Falha ao salvar no banco');
+      return false;
     }
   }
 
@@ -82,6 +91,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     setErroDiagnostico(null);
     try {
       const resultado = await buscarDiagnostico(municipio.codigoIbge);
+      await saveResultadosMunicipio(municipio.codigoIbge, { diagnostico: resultado });
       setDiagnostico(resultado);
     } catch (e: any) {
       setErroDiagnostico(e.message || 'Falha ao gerar diagnóstico.');
@@ -111,14 +121,14 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   // Confirmado pelo vendedor a partir de um contato que a IA detectou numa
   // nota/gravação — nunca grava sozinho, sempre passa pela revisão humana
   // primeiro (ver RegistroRapidoIA).
-  function adicionarContatoDetectado(dados: ContatoDetectado) {
+  async function adicionarContatoDetectado(dados: ContatoDetectado) {
     const novo: Contato = {
       id: crypto.randomUUID(),
       nome: dados.nome || 'Novo contato',
       cargo: dados.cargo || '',
       telefone: dados.telefone || undefined,
     };
-    salvar({ ...crm, contatos: [...crm.contatos, novo] });
+    return await salvar({ ...crm, contatos: [...crm.contatos, novo] }, false);
   }
 
   function atualizarContato(id: string, campos: Partial<Contato>) {
@@ -414,6 +424,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       </div>
 
       <RegistroRapidoIA
+        key={municipio.codigoIbge}
         municipio={municipio}
         crm={crm}
         onEventoSalvo={() => setSalvo(true)}
@@ -477,36 +488,68 @@ function RegistroRapidoIA({
   municipio: MunicipioIbge;
   crm: MunicipioCrm;
   onEventoSalvo: () => void;
-  onContatoDetectado: (contato: ContatoDetectado) => void;
+  onContatoDetectado: (contato: ContatoDetectado) => Promise<boolean>;
 }) {
   const [nota, setNota] = useState('');
+  const [modo, setModo] = useState<'nota' | 'planilha'>('nota');
+  const [relatorio, setRelatorio] = useState<RelatorioPlanilha | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [resultado, setResultado] = useState<{ combinado: string; proximoPasso: string } | null>(null);
   const [contatoSugerido, setContatoSugerido] = useState<ContatoDetectado | null>(null);
+  const [salvandoContato, setSalvandoContato] = useState(false);
+  const [carregandoResultado, setCarregandoResultado] = useState(true);
+
+  useEffect(() => {
+    let cancelado = false;
+    getEventos(municipio.codigoIbge).then((eventos) => {
+      if (cancelado) return;
+      const ultimo = eventos.filter((e) => e.sinteseIA)
+        .sort((a, b) => (b.criadaEm || b.data).localeCompare(a.criadaEm || a.data))[0];
+      if (ultimo) setResultado({ combinado: ultimo.sinteseIA!, proximoPasso: ultimo.proximoPassoIA || '' });
+      const ultimoRelatorio = eventos.filter((e) => e.relatorioPlanilha)
+        .sort((a, b) => (b.criadaEm || b.data).localeCompare(a.criadaEm || a.data))[0];
+      if (ultimoRelatorio?.relatorioPlanilha) setRelatorio(ultimoRelatorio.relatorioPlanilha);
+    }).catch((e) => !cancelado && setErro(e.message || 'Falha ao recuperar a síntese salva'))
+      .finally(() => !cancelado && setCarregandoResultado(false));
+    return () => { cancelado = true; };
+  }, [municipio.codigoIbge]);
 
   async function processar() {
     if (!nota.trim()) return;
     setProcessando(true);
     setErro(null);
     try {
-      const sintese = await sintetizarNota(nota.trim());
-      setResultado(sintese);
-      if (sintese.contatoDetectado?.nome || sintese.contatoDetectado?.telefone) {
-        setContatoSugerido(sintese.contatoDetectado);
+      if (modo === 'planilha') {
+        const texto = prepararTextoPlanilha(nota);
+        const analise = await analisarPlanilha(texto);
+        await addEvento({
+          id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge, tipo: 'documento',
+          data: new Date().toISOString().slice(0, 10), criadaEm: new Date().toISOString(),
+          resumo: analise.titulo, textoPlanilha: texto, relatorioPlanilha: analise,
+          anexos: [], mandato: 'Atual', mandatoAtivo: true,
+        });
+        setRelatorio(analise);
+        onEventoSalvo();
+        setNota('');
+        return;
       }
+      const sintese = await sintetizarNota(nota.trim());
       await addEvento({
         id: crypto.randomUUID(),
         codigoIbge: municipio.codigoIbge,
         tipo: 'reuniao',
         data: new Date().toISOString().slice(0, 10),
         resumo: nota.trim(),
+        criadaEm: new Date().toISOString(),
         sinteseIA: sintese.combinado,
         proximoPassoIA: sintese.proximoPasso,
         anexos: [],
         mandato: 'Atual',
         mandatoAtivo: true,
       });
+      setResultado(sintese);
+      setContatoSugerido(sintese.contatoDetectado?.nome || sintese.contatoDetectado?.telefone ? sintese.contatoDetectado : null);
       onEventoSalvo();
       setNota('');
     } catch (e: any) {
@@ -516,10 +559,14 @@ function RegistroRapidoIA({
     }
   }
 
-  function confirmarContato() {
-    if (!contatoSugerido) return;
-    onContatoDetectado(contatoSugerido);
-    setContatoSugerido(null);
+  async function confirmarContato() {
+    if (!contatoSugerido || salvandoContato) return;
+    setSalvandoContato(true);
+    try {
+      if (await onContatoDetectado(contatoSugerido)) setContatoSugerido(null);
+    } finally {
+      setSalvandoContato(false);
+    }
   }
 
   return (
@@ -531,24 +578,39 @@ function RegistroRapidoIA({
         </div>
       </div>
       <div className="space-y-2">
-        <label className="text-label-sm text-on-surface-variant block">O que aconteceu na conversa?</label>
+        <label className="text-label-sm text-on-surface-variant block" htmlFor="tipo-registro">Tipo de registro</label>
+        <select id="tipo-registro" disabled={processando} value={modo} onChange={(e) => setModo(e.target.value as 'nota' | 'planilha')}
+          className="w-full rounded-lg bg-surface-container-low p-2 text-primary">
+          <option value="nota">Nota de reunião</option>
+          <option value="planilha">Dados de planilha — gerar relatório</option>
+        </select>
+        <label htmlFor="texto-registro" className="text-label-sm text-on-surface-variant block">
+          {modo === 'planilha' ? 'Cole os cabeçalhos e as linhas da planilha' : 'O que aconteceu na conversa?'}
+        </label>
         <textarea
+          id="texto-registro"
+          disabled={processando}
           className="w-full rounded-lg bg-surface-container-low p-3 text-body-md text-primary focus:outline-none resize-none"
-          placeholder="Ex: Reunião com Secretário Herbert. Interessado no módulo do Censo, pediu demonstração na próxima terça..."
-          rows={3}
+          placeholder={modo === 'planilha' ? 'Ex: Escola\tMatrículas\nEscola A\t120\nEscola B\t85' : 'Ex: Reunião com o secretário. Pediu demonstração na próxima terça...'}
+          rows={modo === 'planilha' ? 7 : 3}
           value={nota}
           onChange={(e) => setNota(e.target.value)}
+          onPaste={(e) => {
+            if (e.clipboardData.getData('text/plain').includes('\t')) setModo('planilha');
+          }}
         />
+        {modo === 'planilha' && <p className="text-label-sm text-on-surface-variant">Inclua unidades e período nos cabeçalhos. O relatório ficará salvo na Memória da Conta.</p>}
       </div>
       <button
-        disabled={processando || !nota.trim()}
+        disabled={carregandoResultado || processando || !nota.trim()}
         onClick={processar}
         className="w-full h-12 rounded-lg bg-primary text-on-primary text-label-lg flex items-center justify-center gap-2 disabled:opacity-50"
       >
         <Icon name={processando ? 'sync' : 'bolt'} size={18} className={processando ? 'animate-spin' : ''} />
-        <span>{processando ? 'Sintetizando com IA...' : 'Salvar e Processar com IA'}</span>
+        <span>{processando ? 'Processando e salvando...' : modo === 'planilha' ? 'Gerar e salvar relatório com IA' : 'Salvar e Processar com IA'}</span>
       </button>
       {erro && <p className="text-body-sm text-error">{erro}</p>}
+      {relatorio && <RelatorioPlanilhaCard relatorio={relatorio} />}
       {resultado && (
         <div className="rounded-xl bg-secondary-container/30 p-3.5 space-y-2.5">
           <div className="flex items-center gap-1.5 text-secondary">
@@ -580,8 +642,8 @@ function RegistroRapidoIA({
             <button onClick={() => setContatoSugerido(null)} className="flex-1 h-10 rounded-lg bg-surface-container-lowest text-on-surface-variant text-label-sm font-semibold">
               Ignorar
             </button>
-            <button onClick={confirmarContato} className="flex-1 h-10 rounded-lg bg-primary text-on-primary text-label-sm font-semibold">
-              Salvar em Contatos-Chave
+            <button disabled={salvandoContato} onClick={confirmarContato} className="flex-1 h-10 rounded-lg bg-primary text-on-primary text-label-sm font-semibold disabled:opacity-50">
+              {salvandoContato ? 'Salvando…' : 'Salvar em Contatos-Chave'}
             </button>
           </div>
         </div>

@@ -1,10 +1,11 @@
 import Icon from './Icon';
 
-export type Aba = 'radar' | 'pipeline' | 'ficha' | 'memoria';
+export type Aba = 'radar' | 'pipeline' | 'ficha' | 'memoria' | 'agenda';
 
 const ITENS: { aba: Aba; label: string; icone: string }[] = [
   { aba: 'radar', label: 'Radar', icone: 'radar' },
   { aba: 'pipeline', label: 'Pipeline', icone: 'view_kanban' },
+  { aba: 'agenda', label: 'Agenda', icone: 'event' },
   { aba: 'ficha', label: 'Ficha', icone: 'description' },
   { aba: 'memoria', label: 'Memória', icone: 'history_edu' },
 ];

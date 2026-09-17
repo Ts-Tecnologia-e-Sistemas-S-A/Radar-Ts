@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { gerarRecomendacoesSemana } from '../api/ia';
-import { getDespesas, getEventos, getMunicipiosCrm, getPontosRota } from '../storage';
+import { getDespesas, getEventos, getMunicipiosCrm, getPontosRota, getRecomendacoesSemana, saveRecomendacoesSemana } from '../storage';
 import { CATEGORIAS_DESPESA, CategoriaDespesa, Despesa, EventoTimeline, MunicipioCrm, MunicipioIbge } from '../types';
 import { calcularKmPeriodo } from '../utils/rota';
 import { compartilharOuBaixarPdf, gerarPdfRelatorioSemanal } from '../utils/pdf';
@@ -32,12 +32,13 @@ export default function RelatoriosView({ municipios, onFechar }: RelatoriosViewP
 
   useEffect(() => {
     let cancelado = false;
-    Promise.all([getEventos(), getDespesas(), getMunicipiosCrm(), getPontosRota()])
-      .then(([eventosCarregados, despesasCarregadas, crm, pontos]) => {
+    Promise.all([getEventos(), getDespesas(), getMunicipiosCrm(), getPontosRota(), getRecomendacoesSemana(inicio, fim)])
+      .then(([eventosCarregados, despesasCarregadas, crm, pontos, recomendacoesSalvas]) => {
         if (cancelado) return;
         setEventos(eventosCarregados.filter((e) => e.data >= inicio && e.data <= fim));
         setDespesas(despesasCarregadas.filter((d) => d.data >= inicio && d.data <= fim));
         setCrmPorCodigo(crm);
+        setRecomendacoes(recomendacoesSalvas);
         setKmRodados(calcularKmPeriodo(pontos, inicio, fim));
       })
       .catch((e: any) => !cancelado && setErro(e.message || 'Falha ao carregar dados do banco'))
@@ -64,6 +65,7 @@ export default function RelatoriosView({ municipios, onFechar }: RelatoriosViewP
         .map((m) => `${m.nome}=${crmPorCodigo[m.codigoIbge]?.estagioFunil || 'sem dados'}`)
         .join(', ')}. Despesas totais: R$ ${despesasTotais.toFixed(2)}.`;
       const resultado = await gerarRecomendacoesSemana(contexto);
+      await saveRecomendacoesSemana(inicio, fim, resultado.recomendacoes);
       setRecomendacoes(resultado.recomendacoes);
     } catch (e: any) {
       setErro(e.message || 'Falha ao gerar recomendações com IA');
@@ -167,7 +169,7 @@ export default function RelatoriosView({ municipios, onFechar }: RelatoriosViewP
               <h3 className="text-headline-sm text-primary font-bold">Recomendações Estratégicas (IA)</h3>
             </div>
             <button
-              disabled={gerandoRecomendacoes}
+              disabled={carregando || gerandoRecomendacoes}
               onClick={gerarRecomendacoes}
               className="text-label-sm text-secondary font-semibold flex items-center gap-1 disabled:opacity-50"
             >

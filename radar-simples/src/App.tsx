@@ -11,6 +11,7 @@ import NovaPracaModal from './components/NovaPracaModal';
 import PipelineView from './components/PipelineView';
 import RadarView from './components/RadarView';
 import RelatoriosView from './components/RelatoriosView';
+import AgendaView from './components/AgendaView';
 import { getEventos, getMunicipioCrm, getMunicipiosCrm } from './storage';
 import { MunicipioIbge, municipioCrmVazio } from './types';
 import { compartilharOuBaixarPdf, gerarPdfBriefing } from './utils/pdf';
@@ -22,12 +23,14 @@ const TITULOS: Record<Aba, string> = {
   pipeline: 'Pipeline B2G',
   ficha: 'Ficha Municipal',
   memoria: 'Memória da Conta',
+  agenda: 'Agenda de tarefas',
 };
 
 export default function App() {
   const [aba, setAba] = useState<Aba>('radar');
   const [municipioAtivo, setMunicipioAtivo] = useState<MunicipioIbge | null>(null);
   const [overlay, setOverlay] = useState<Overlay>(null);
+  const [revisaoMemoria, setRevisaoMemoria] = useState(0);
   const [municipios, setMunicipios] = useState<MunicipioIbge[]>([]);
   const [carregandoMunicipios, setCarregandoMunicipios] = useState(true);
   const [erroMunicipios, setErroMunicipios] = useState<string | null>(null);
@@ -88,15 +91,18 @@ export default function App() {
         {aba === 'pipeline' && (
           <PipelineView municipios={municipios} onAbrirMunicipio={abrirMunicipio} onVerRelatorio={() => setOverlay('relatorio')} />
         )}
+        {aba === 'agenda' && <AgendaView municipios={municipios} municipioAtivo={municipioAtivo} />}
         {aba === 'ficha' &&
           (municipioAtivo ? (
-            <FichaMunicipalView municipio={municipioAtivo} onDespesaCliqueAnexar={() => setOverlay('despesa')} />
+            <FichaMunicipalView key={municipioAtivo.codigoIbge} municipio={municipioAtivo} onDespesaCliqueAnexar={() => setOverlay('despesa')} />
           ) : (
             <EstadoVazio texto="Selecione um município no Radar ou no Pipeline pra ver a ficha." />
           ))}
         {aba === 'memoria' &&
           (municipioAtivo ? (
             <MemoriaContaView
+              key={municipioAtivo.codigoIbge}
+              revisao={revisaoMemoria}
               municipio={municipioAtivo}
               onGravarReuniao={() => setOverlay('gravar-reuniao')}
               onExportarPdf={exportarBriefing}
@@ -126,7 +132,10 @@ export default function App() {
       )}
       {overlay === 'despesa' && <CapturaDespesaView municipioSugerido={municipioAtivo} onFechar={() => setOverlay(null)} />}
       {overlay === 'gravar-reuniao' && municipioAtivo && (
-        <GravarReuniaoView municipio={municipioAtivo} onFechar={() => setOverlay(null)} />
+        <GravarReuniaoView municipio={municipioAtivo} onFechar={() => {
+          setOverlay(null);
+          setRevisaoMemoria((v) => v + 1);
+        }} />
       )}
       {overlay === 'relatorio' && <RelatoriosView municipios={municipios} onFechar={() => setOverlay(null)} />}
     </div>

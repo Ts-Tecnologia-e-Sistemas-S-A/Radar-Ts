@@ -135,6 +135,10 @@ export interface EventoTimeline {
   participantes?: string;
   resumo: string;
   sinteseIA?: string;
+  transcricao?: string;
+  textoPlanilha?: string;
+  relatorioPlanilha?: import('./utils/relatorioPlanilha').RelatorioPlanilha;
+  criadaEm?: string;
   proximoPassoIA?: string;
   desfecho?: string;
   anexos: AnexoEvento[];

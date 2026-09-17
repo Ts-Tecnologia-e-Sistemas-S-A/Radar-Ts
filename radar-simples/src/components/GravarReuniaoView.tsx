@@ -80,6 +80,8 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
         tipo: 'reuniao',
         data: new Date().toISOString().slice(0, 10),
         resumo: dados.transcricao.slice(0, 120),
+        transcricao: dados.transcricao,
+        criadaEm: new Date().toISOString(),
         sinteseIA: dados.combinado,
         proximoPassoIA: dados.proximoPasso,
         anexos: [{ tipo: 'audio', nome: `Gravação ${new Date().toLocaleString('pt-BR')}` }],
@@ -226,6 +228,7 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
                 Contato salvo em Contatos-Chave da Praça.
               </p>
             )}
+            {erro && <p className="text-body-sm text-error">{erro}</p>}
             <button onClick={onFechar} className="h-12 rounded-xl bg-primary text-on-primary text-label-lg mt-2">
               Voltar à Memória
             </button>

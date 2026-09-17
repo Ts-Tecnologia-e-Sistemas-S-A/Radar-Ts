@@ -36,11 +36,37 @@ bun run build   # vite build (client) + esbuild (server.ts -> dist/server.cjs)
 `src/storage.ts` grava no mesmo projeto Firebase do app principal
 (`radar-ts`), em coleções próprias pra não colidir com dados de nenhum dos
 outros dois apps do repositório: `radar_simples_municipios`,
-`radar_simples_despesas`, `radar_simples_eventos`, `radar_simples_rota_pontos`.
+`radar_simples_despesas`, `radar_simples_eventos`, `radar_simples_rota_pontos`
+e `radar_simples_resultados`.
 Config pública de cliente em `firebase-applet-config.json` (mesma usada em
 `src/lib/firebase.ts` do app principal — não é segredo).
 
+`radar_simples_resultados/{codigoIbge}` guarda o briefing e o diagnóstico;
+`radar_simples_resultados/semana-{inicio}-{fim}` guarda as recomendações do
+período. Esses resultados são recuperados ao reabrir as telas e não são
+sobrescritos por edições do CRM. As regras do banco precisam permitir o
+mesmo acesso a essa coleção (as regras versionadas já a abrangem).
+Síntese, próximo passo e transcrição completa ficam nos eventos da conta.
+Resultados que nunca chegaram ao banco antes desta correção precisam ser
+gerados novamente; transcrições antigas só têm o trecho que foi salvo.
+
 ## O que é real e o que é mock
+
+A aba **Agenda** permite criar, editar/reagendar, concluir, cancelar e reabrir
+tarefas por município. Os registros ficam em `radar_simples_tarefas`.
+Os filtros Hoje/Atrasadas usam a data e o horário locais do dispositivo;
+tarefas sem horário vencem após o fim do dia. **Sugerir próxima ação com IA**
+usa o contexto informado e os cinco últimos eventos da conta. A sugestão
+preenche o formulário e só é gravada ao clicar em **Salvar tarefa**; data
+é obrigatória, horário é opcional. Essa agenda registra tarefas dentro do
+app, sem enviar mensagens nem criar notificações ou eventos externos.
+
+No Registro Rápido de Campo, selecione **Dados de planilha — gerar relatório**
+e cole cabeçalhos e linhas (até 60.000 caracteres). Colagens com tabulações
+selecionam esse modo automaticamente. A IA gera resumo, achados, limitações
+e próximos passos. O texto original e o relatório ficam em um evento do tipo
+documento na Memória da Conta; não são contabilizados como reunião. Se houver
+falha na IA ou na gravação, o texto permanece no campo para nova tentativa.
 
 - **IBGE** (lista de municípios) é fonte real — `servicodados.ibge.gov.br`
   direto do navegador. Nenhum dado de município é inventado.
