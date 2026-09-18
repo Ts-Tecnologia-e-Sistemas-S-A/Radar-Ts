@@ -1,8 +1,50 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedInWithVerifiedEmail() {
+      return request.auth != null
+        && request.auth.token.email is string
+        && request.auth.token.email_verified == true;
+    }
+
+    function initialAdmin() {
+      return signedInWithVerifiedEmail()
+        && request.auth.token.email == 'jbadotti@gmail.com';
+    }
+
+    function authorizedUser() {
+      return signedInWithVerifiedEmail()
+        && (initialAdmin()
+          || (exists(/databases/$(database)/documents/usuarios_autorizados/$(request.auth.token.email))
+            && get(/databases/$(database)/documents/usuarios_autorizados/$(request.auth.token.email)).data.ativo == true));
+    }
+
+    function administrator() {
+      return initialAdmin()
+        || (authorizedUser()
+          && get(/databases/$(database)/documents/usuarios_autorizados/$(request.auth.token.email)).data.perfil == 'admin');
+    }
+
+    match /usuarios_autorizados/{email} {
+      allow get: if signedInWithVerifiedEmail()
+        && (email == request.auth.token.email || administrator());
+      allow list: if administrator();
+      allow create: if administrator()
+        && request.resource.data.email == email
+        && request.resource.data.ativo is bool
+        && request.resource.data.perfil in ['admin', 'usuario'];
+      allow update: if administrator()
+        && request.resource.data.email == resource.data.email
+        && request.resource.data.email == email
+        && request.resource.data.ativo is bool
+        && request.resource.data.perfil in ['admin', 'usuario']
+        && (email != 'jbadotti@gmail.com'
+          || (request.resource.data.ativo == true && request.resource.data.perfil == 'admin'));
+      allow delete: if administrator() && email != 'jbadotti@gmail.com';
+    }
+
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if authorizedUser();
     }
   }
 }

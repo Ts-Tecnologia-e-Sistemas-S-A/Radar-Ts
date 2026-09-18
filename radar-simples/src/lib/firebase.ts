@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 /**
@@ -24,3 +25,5 @@ export const db =
   cfg.firestoreDatabaseId && cfg.firestoreDatabaseId !== '(default)'
     ? getFirestore(app, cfg.firestoreDatabaseId)
     : getFirestore(app);
+
+export const auth = getAuth(app);
