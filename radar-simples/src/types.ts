@@ -116,6 +116,10 @@ export interface Despesa {
   latitude?: number;
   longitude?: number;
   criadaEm: string; // ISO datetime
+  comprovante?: {
+    mimeType: 'image/jpeg';
+    base64: string;
+  };
 }
 
 export type TipoEventoTimeline = 'reuniao' | 'documento' | 'deslocamento';

@@ -1,5 +1,9 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
-import { getFirestore } from 'firebase/firestore';
+import {
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import firebaseConfig from '../../firebase-applet-config.json';
 
@@ -21,9 +25,19 @@ const cfg = firebaseConfig as Record<string, string>;
  * leitura/escrita falha com "Database '(default)' not found" (silencioso:
  * a promise nem resolve nem rejeita, então parece só travado).
  */
-export const db =
+// Mantém no aparelho tudo que o usuário já abriu e também enfileira escritas
+// feitas sem conexão. O Firestore sincroniza a fila automaticamente quando a
+// rede volta. A autenticação e as regras continuam valendo normalmente.
+export const db = initializeFirestore(
+  app,
+  {
+    localCache: persistentLocalCache({
+      tabManager: persistentMultipleTabManager(),
+    }),
+  },
   cfg.firestoreDatabaseId && cfg.firestoreDatabaseId !== '(default)'
-    ? getFirestore(app, cfg.firestoreDatabaseId)
-    : getFirestore(app);
+    ? cfg.firestoreDatabaseId
+    : '(default)',
+);
 
 export const auth = getAuth(app);
