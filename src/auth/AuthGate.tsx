@@ -37,7 +37,14 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   async function login() {
     setState('loading'); setMessage('');
     try { await signInWithPopup(auth, new GoogleAuthProvider()); }
-    catch (error: any) { setState('signed-out'); setMessage(error?.code === 'auth/popup-closed-by-user' ? 'Login cancelado.' : 'Não foi possível entrar com Google.'); }
+    catch (error: any) {
+      setState('signed-out');
+      setMessage(error?.code === 'auth/popup-closed-by-user'
+        ? 'Login cancelado.'
+        : error?.code === 'auth/unauthorized-domain'
+          ? 'Este endereço ainda não foi autorizado no Firebase Authentication.'
+          : 'Não foi possível entrar com Google.');
+    }
   }
 
   if (state !== 'allowed' || !user) return <AccessScreen state={state} message={message} email={user?.email} onLogin={login} onLogout={() => signOut(auth)} />;
