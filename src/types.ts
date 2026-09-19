@@ -58,6 +58,10 @@ export interface EducationalMetrics {
   schoolsCount: number;
   studentsCount: number;
   teachersCount: number;
+  /** Legacy aliases still consumed by export views. */
+  studentCount?: number;
+  schoolCount?: number;
+  educacensoStatus?: string;
   fundebBudget: number; // R$
   mainPains: string[];
 }
@@ -87,6 +91,8 @@ export interface Municipality {
   latitude?: number;
   longitude?: number;
   notes?: string;
+  keyFeatures?: string[];
+  contractExpirationDays?: number;
   dataVerificationStatus?: string;
   verifiedSources?: string[];
   auditNotes?: string;
