@@ -1,0 +1,9 @@
+{
+  "name": "Radar TS — GovTrack",
+  "short_name": "Radar TS",
+  "description": "Gestão comercial municipal com trabalho offline",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f7f8fc",
+  "theme_color": "#002f4b"
+}

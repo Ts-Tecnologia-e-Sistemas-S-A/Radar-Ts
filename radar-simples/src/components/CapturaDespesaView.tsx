@@ -15,8 +15,9 @@ interface CapturaDespesaViewProps {
 // código (erro "Request Entity Too Large", que o navegador tenta ler como
 // JSON e quebra). Reduz pra no máximo 1600px no lado maior e reexporta como
 // JPEG comprimido — sobra resolução de sobra pra IA ler texto de cupom.
-const MAX_DIMENSAO_PX = 1600;
-const QUALIDADE_JPEG = 0.7;
+const MAX_DIMENSAO_PX = 1400;
+const QUALIDADE_JPEG = 0.68;
+const MAX_BASE64_CHARS = 600_000;
 
 function comprimirImagem(file: File): Promise<{ base64: string; mimeType: string }> {
   return new Promise((resolve, reject) => {
@@ -36,8 +37,18 @@ function comprimirImagem(file: File): Promise<{ base64: string; mimeType: string
         return;
       }
       ctx.drawImage(img, 0, 0, largura, altura);
-      const dataUrl = canvas.toDataURL('image/jpeg', QUALIDADE_JPEG);
-      resolve({ base64: dataUrl.split(',')[1] || '', mimeType: 'image/jpeg' });
+      let qualidade = QUALIDADE_JPEG;
+      let dataUrl = canvas.toDataURL('image/jpeg', qualidade);
+      while ((dataUrl.split(',')[1]?.length || 0) > MAX_BASE64_CHARS && qualidade > 0.32) {
+        qualidade -= 0.08;
+        dataUrl = canvas.toDataURL('image/jpeg', qualidade);
+      }
+      const base64 = dataUrl.split(',')[1] || '';
+      if (base64.length > MAX_BASE64_CHARS) {
+        reject(new Error('A imagem do comprovante ficou muito grande. Tire outra foto mais próxima do recibo.'));
+        return;
+      }
+      resolve({ base64, mimeType: 'image/jpeg' });
     };
     img.onerror = () => {
       URL.revokeObjectURL(url);
@@ -55,6 +66,7 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
   const [salvando, setSalvando] = useState(false);
   const [salvo, setSalvo] = useState(false);
   const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
+  const [comprovante, setComprovante] = useState<{ base64: string; mimeType: 'image/jpeg' } | null>(null);
 
   const [valor, setValor] = useState('');
   const [data, setData] = useState(new Date().toISOString().slice(0, 10));
@@ -81,6 +93,7 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
     setErro(null);
     try {
       const { base64, mimeType } = await comprimirImagem(file);
+      setComprovante({ base64, mimeType: 'image/jpeg' });
       const extraido = await extrairDespesa(base64, mimeType);
       if (extraido.valor !== null) setValor(String(extraido.valor));
       if (extraido.data) setData(extraido.data);
@@ -113,6 +126,7 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
         latitude: localizacao?.latitude,
         longitude: localizacao?.longitude,
         criadaEm: new Date().toISOString(),
+        comprovante: comprovante || undefined,
       });
       setSalvo(true);
       setTimeout(onFechar, 900);

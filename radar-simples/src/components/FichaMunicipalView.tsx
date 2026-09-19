@@ -527,6 +527,21 @@ function RegistroRapidoIA({
     setProcessando(true);
     setErro(null);
     try {
+      if (!navigator.onLine) {
+        const texto = nota.trim();
+        await addEvento({
+          id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge,
+          tipo: modo === 'planilha' ? 'documento' : 'reuniao',
+          data: new Date().toISOString().slice(0, 10), criadaEm: new Date().toISOString(),
+          resumo: modo === 'planilha' ? 'Planilha registrada offline — análise pendente' : texto,
+          textoPlanilha: modo === 'planilha' ? prepararTextoPlanilha(texto) : undefined,
+          anexos: [], mandato: 'Atual', mandatoAtivo: true,
+        });
+        setErro('Registro salvo no aparelho. A análise da IA poderá ser feita quando a conexão voltar.');
+        onEventoSalvo();
+        setNota('');
+        return;
+      }
       if (modo === 'planilha') {
         const texto = prepararTextoPlanilha(nota);
         const analise = await analisarPlanilha(texto);

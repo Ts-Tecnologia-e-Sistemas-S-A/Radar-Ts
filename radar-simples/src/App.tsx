@@ -12,11 +12,13 @@ import PipelineView from './components/PipelineView';
 import RadarView from './components/RadarView';
 import RelatoriosView from './components/RelatoriosView';
 import AgendaView from './components/AgendaView';
+import OfflineStatus from './components/OfflineStatus';
 import { getEventos, getMunicipioCrm, getMunicipiosCrm } from './storage';
 import { MunicipioIbge, municipioCrmVazio } from './types';
 import { compartilharOuBaixarPdf, gerarPdfBriefing } from './utils/pdf';
 
 type Overlay = null | 'nova-praca' | 'despesa' | 'gravar-reuniao' | 'relatorio';
+const MUNICIPIOS_OFFLINE_KEY = 'radar_ts_municipios_offline_v1';
 
 const TITULOS: Record<Aba, string> = {
   radar: 'Radar de Praças',
@@ -39,9 +41,19 @@ export default function App() {
     setCarregandoMunicipios(true);
     setErroMunicipios(null);
     try {
-      const [crm, todos] = await Promise.all([getMunicipiosCrm(), buscarTodosMunicipios()]);
+      const crm = await getMunicipiosCrm();
       const codigos = new Set(Object.keys(crm).map(Number));
-      setMunicipios(todos.filter((m) => codigos.has(m.codigoIbge)));
+      let selecionados: MunicipioIbge[];
+      try {
+        const todos = await buscarTodosMunicipios();
+        selecionados = todos.filter((m) => codigos.has(m.codigoIbge));
+        localStorage.setItem(MUNICIPIOS_OFFLINE_KEY, JSON.stringify(selecionados));
+      } catch (error) {
+        const cache = localStorage.getItem(MUNICIPIOS_OFFLINE_KEY);
+        selecionados = cache ? JSON.parse(cache) as MunicipioIbge[] : [];
+        if (selecionados.length === 0) throw error;
+      }
+      setMunicipios(selecionados);
     } catch (e: any) {
       setErroMunicipios(e.message || 'Falha ao carregar municípios');
     } finally {
@@ -78,6 +90,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-surface flex flex-col">
+      <OfflineStatus />
       <Header titulo={TITULOS[aba]} />
       <main className="flex-1 px-screen-margin-mobile pt-16 pb-safe bg-surface">
         {carregandoMunicipios && municipios.length === 0 && (
