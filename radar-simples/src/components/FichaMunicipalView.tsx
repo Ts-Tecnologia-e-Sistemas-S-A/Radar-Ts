@@ -497,6 +497,7 @@ function RegistroRapidoIA({
   onEventoSalvo: () => void;
   onContatoDetectado: (contato: ContatoDetectado) => Promise<boolean>;
 }) {
+  const draftKey = `radar_ts_registro_rapido_${municipio.codigoIbge}`;
   const [nota, setNota] = useState('');
   const [modo, setModo] = useState<'nota' | 'planilha'>('nota');
   const [relatorio, setRelatorio] = useState<RelatorioPlanilha | null>(null);
@@ -506,6 +507,31 @@ function RegistroRapidoIA({
   const [contatoSugerido, setContatoSugerido] = useState<ContatoDetectado | null>(null);
   const [salvandoContato, setSalvandoContato] = useState(false);
   const [carregandoResultado, setCarregandoResultado] = useState(true);
+
+  useEffect(() => {
+    try {
+      const rascunho = localStorage.getItem(draftKey);
+      if (!rascunho) return;
+      const dados = JSON.parse(rascunho) as { nota?: string; modo?: 'nota' | 'planilha' };
+      if (dados.nota) setNota(dados.nota);
+      if (dados.modo === 'nota' || dados.modo === 'planilha') setModo(dados.modo);
+    } catch {
+      localStorage.removeItem(draftKey);
+    }
+  }, [draftKey]);
+
+  useEffect(() => {
+    if (!nota.trim()) {
+      localStorage.removeItem(draftKey);
+      return;
+    }
+    localStorage.setItem(draftKey, JSON.stringify({ nota, modo }));
+  }, [draftKey, nota, modo]);
+
+  function limparRascunho() {
+    localStorage.removeItem(draftKey);
+    setNota('');
+  }
 
   useEffect(() => {
     let cancelado = false;
@@ -539,7 +565,7 @@ function RegistroRapidoIA({
         });
         setErro('Registro salvo no aparelho. A análise da IA poderá ser feita quando a conexão voltar.');
         onEventoSalvo();
-        setNota('');
+        limparRascunho();
         return;
       }
       if (modo === 'planilha') {
@@ -553,7 +579,7 @@ function RegistroRapidoIA({
         });
         setRelatorio(analise);
         onEventoSalvo();
-        setNota('');
+        limparRascunho();
         return;
       }
       const sintese = await sintetizarNota(nota.trim());
@@ -573,7 +599,7 @@ function RegistroRapidoIA({
       setResultado(sintese);
       setContatoSugerido(sintese.contatoDetectado?.nome || sintese.contatoDetectado?.telefone ? sintese.contatoDetectado : null);
       onEventoSalvo();
-      setNota('');
+      limparRascunho();
     } catch (e: any) {
       setErro(e.message || 'Falha ao processar com IA');
     } finally {

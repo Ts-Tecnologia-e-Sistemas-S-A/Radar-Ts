@@ -91,7 +91,13 @@ export default function App() {
   return (
     <div className="min-h-screen bg-surface flex flex-col">
       <OfflineStatus />
-      <Header titulo={TITULOS[aba]} />
+      <Header
+        titulo={TITULOS[aba]}
+        onVoltar={aba === 'radar' ? undefined : () => {
+          setOverlay(null);
+          setAba('radar');
+        }}
+      />
       <main className="flex-1 px-screen-margin-mobile pt-16 pb-safe bg-surface">
         {carregandoMunicipios && municipios.length === 0 && (
           <p className="text-body-sm text-on-surface-variant pt-space-xs">Carregando praças…</p>
