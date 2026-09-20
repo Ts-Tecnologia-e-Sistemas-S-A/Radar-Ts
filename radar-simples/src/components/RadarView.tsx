@@ -32,6 +32,8 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<'todos' | 'urgentes'>('todos');
+  const [ordenacao, setOrdenacao] = useState('tarefa');
+  const [visitasPorCodigo, setVisitasPorCodigo] = useState<Record<number, { data: string; hora?: string }>>({});
 
   useEffect(() => {
     let cancelado = false;
@@ -41,10 +43,15 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
     Promise.all([getMunicipiosCrm(), getDespesas(), getPontosRota(), getTarefas()])
       .then(([crm, despesas, pontos, tarefas]) => {
         if (cancelado) return;
+        const visitas: Record<number, { data: string; hora?: string }> = {};
         for (const municipio of Object.values(crm)) {
+          const visita = proximaTarefa(tarefas.filter((t) => t.tipo === 'visitar'), municipio.codigoIbge);
+          if (visita) visitas[municipio.codigoIbge] = visita;
+          else if (municipio.proximaAcao?.presencial) visitas[municipio.codigoIbge] = municipio.proximaAcao;
           const proxima = proximaTarefa(tarefas, municipio.codigoIbge);
           if (proxima) municipio.proximaAcao = { data: proxima.data, hora: proxima.hora, descricao: proxima.descricao, presencial: proxima.tipo === 'visitar' };
         }
+        setVisitasPorCodigo(visitas);
         setCrmPorCodigo(crm);
         const hojeISO = new Date().toISOString().slice(0, 10);
         setDespesasHoje(despesas.filter((d) => d.data === hojeISO).reduce((soma, d) => soma + d.valor, 0));
@@ -70,10 +77,16 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
       .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
       .sort((a, b) => {
-        if (a.crm.prioritario !== b.crm.prioritario) return a.crm.prioritario ? -1 : 1;
-        return a.municipio.nome.localeCompare(b.municipio.nome);
+        if (ordenacao !== 'nome') {
+          const dataA = ordenacao === 'visita' ? visitasPorCodigo[a.municipio.codigoIbge] : a.crm.proximaAcao;
+          const dataB = ordenacao === 'visita' ? visitasPorCodigo[b.municipio.codigoIbge] : b.crm.proximaAcao;
+          const chave = (acao?: { data: string; hora?: string }) => acao?.data ? `${acao.data} ${acao.hora || '23:59'}` : '9999-12-31 23:59';
+          const diferenca = chave(dataA).localeCompare(chave(dataB));
+          if (diferenca) return diferenca;
+        }
+        return a.municipio.nome.localeCompare(b.municipio.nome, 'pt-BR') || a.municipio.uf.localeCompare(b.municipio.uf);
       });
-  }, [municipios, crmPorCodigo, busca, filtro]);
+  }, [municipios, crmPorCodigo, busca, filtro, ordenacao, visitasPorCodigo]);
 
   const urgentesCount = useMemo(
     () => municipios.filter((m) => crmPorCodigo[m.codigoIbge] && isUrgente(crmPorCodigo[m.codigoIbge])).length,
@@ -105,6 +118,20 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
           onChange={(e) => setBusca(e.target.value)}
         />
       </div>
+
+      <label className="flex flex-col gap-1 text-label-md text-on-surface-variant">
+        Ordenar cidades por
+        <select
+          value={ordenacao}
+          onChange={(e) => setOrdenacao(e.target.value)}
+          className="w-full h-12 px-3 rounded-xl bg-surface-container-lowest text-on-surface shadow-sm"
+        >
+          <option value="tarefa">Data da tarefa</option>
+          <option value="visita">Data da visita</option>
+          <option value="nome">Nome (A–Z)</option>
+        </select>
+        {ordenacao !== 'nome' && <span className="text-label-sm">Pendências mais antigas primeiro; cidades sem data ao final.</span>}
+      </label>
 
       <button
         onClick={onNovaDespesa}
@@ -256,6 +283,13 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
                 </div>
               ) : (
                 <p className="text-body-sm text-on-surface-variant">Sem próxima ação agendada.</p>
+              )}
+              {ordenacao === 'visita' && (
+                <p className="text-body-sm text-on-surface-variant">
+                  {visitasPorCodigo[municipio.codigoIbge]
+                    ? `Visita agendada: ${visitasPorCodigo[municipio.codigoIbge].data.split('-').reverse().join('/')}${visitasPorCodigo[municipio.codigoIbge].hora ? ` às ${visitasPorCodigo[municipio.codigoIbge].hora}` : ''}`
+                    : 'Sem visita agendada.'}
+                </p>
               )}
             </article>
           );
