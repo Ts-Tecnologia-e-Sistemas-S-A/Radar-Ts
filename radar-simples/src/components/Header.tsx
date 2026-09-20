@@ -10,7 +10,7 @@ export default function Header({ titulo, onVoltar }: HeaderProps) {
     <header className="fixed top-0 inset-x-0 z-50 bg-surface/80 backdrop-blur-xl shadow-[0_1px_8px_rgba(0,0,0,0.04)] pt-safe">
       <div className="h-16 px-screen-margin-mobile flex items-center justify-between gap-space-sm">
         <div className="flex items-center gap-space-xs min-w-0">
-          {onVoltar && (
+          {onVoltar ? (
             <button
               aria-label="Voltar"
               className="w-11 h-11 -ml-space-xs flex items-center justify-center rounded-lg text-primary hover:bg-surface-container transition-colors"
@@ -18,6 +18,10 @@ export default function Header({ titulo, onVoltar }: HeaderProps) {
             >
               <Icon name="arrow_back" size={22} />
             </button>
+          ) : (
+            <div className="w-11 h-11 -ml-space-xs flex items-center justify-center" aria-hidden="true">
+              <Icon name="radar" size={22} className="text-secondary" />
+            </div>
           )}
           <div className="flex flex-col min-w-0">
             <div className="flex items-center gap-space-2xs text-on-surface-variant text-label-sm leading-none">
