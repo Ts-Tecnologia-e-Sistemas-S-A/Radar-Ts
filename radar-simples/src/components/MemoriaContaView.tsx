@@ -157,7 +157,7 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                       <div className="flex items-start justify-between gap-space-xs">
                         <div>
                           <div className="flex items-center gap-1.5 text-on-surface-variant text-label-sm">
-                            <span className="font-bold text-primary">{ev.data.split('-').reverse().join('/')}</span>
+                            <span className="font-bold text-primary">{ev.data ? ev.data.split('-').reverse().join('/') : 'Data não informada'}</span>
                             {ev.local && (
                               <>
                                 <span>•</span>
@@ -194,6 +194,12 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           <span className="text-label-sm text-on-surface-variant">Próximo passo</span>
                           <span className="text-label-sm text-primary font-semibold">{ev.proximoPassoIA}</span>
                         </div>
+                      )}
+                      {ev.historicoImportado && (
+                        <details className="text-body-sm text-on-surface-variant">
+                          <summary className="cursor-pointer text-primary">Histórico completo da planilha</summary>
+                          <p className="pt-space-xs whitespace-pre-wrap break-words">{ev.resumo}</p>
+                        </details>
                       )}
                       {ev.transcricao && (
                         <details className="text-body-sm text-on-surface-variant">

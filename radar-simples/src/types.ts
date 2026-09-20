@@ -149,4 +149,6 @@ export interface EventoTimeline {
   /** Rótulo livre pra agrupar por mandato/gestão na timeline (ex: "2025–2028"). */
   mandato: string;
   mandatoAtivo: boolean;
+  /** Na importação, data vazia significa que a fonte não informou a data. */
+  historicoImportado?: { fonte: string; visitaRegistrada: boolean };
 }

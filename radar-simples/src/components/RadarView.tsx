@@ -22,9 +22,10 @@ interface RadarViewProps {
   municipios: MunicipioIbge[];
   onAbrirMunicipio: (municipio: MunicipioIbge) => void;
   onNovaDespesa: () => void;
+  onVerRelatorio: () => void;
 }
 
-export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa }: RadarViewProps) {
+export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa, onVerRelatorio }: RadarViewProps) {
   const [crmPorCodigo, setCrmPorCodigo] = useState<Record<number, MunicipioCrm>>({});
   const [despesasHoje, setDespesasHoje] = useState(0);
   const [kmHoje, setKmHoje] = useState(0);
@@ -132,6 +133,10 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa 
         </select>
         {ordenacao !== 'nome' && <span className="text-label-sm">Pendências mais antigas primeiro; cidades sem data ao final.</span>}
       </label>
+
+      <button onClick={onVerRelatorio} className="w-full min-h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center gap-2 px-3">
+        <Icon name="summarize" size={20} /> Relatório para a gestão
+      </button>
 
       <button
         onClick={onNovaDespesa}

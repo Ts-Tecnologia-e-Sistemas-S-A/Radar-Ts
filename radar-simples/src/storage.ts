@@ -1,6 +1,7 @@
-import { collection, doc, getDoc, getDocs, setDoc } from 'firebase/firestore';
-import { db } from './lib/firebase';
-import { Despesa, EventoTimeline, MunicipioCrm } from './types';
+import { collection, doc, getDoc, getDocs, runTransaction, setDoc } from 'firebase/firestore';
+import { auth, db } from './lib/firebase';
+import { Despesa, EventoTimeline, MunicipioCrm, municipioCrmVazio } from './types';
+import { idHistoricoImportado, validarPacoteHistorico, type PacoteHistorico } from './utils/importarHistorico';
 import type { Diagnostico } from './api/diagnostico';
 import { validarSugestaoTarefa, type Tarefa } from './utils/agenda';
 
@@ -10,6 +11,33 @@ const EVENTOS_COLLECTION = 'radar_simples_eventos';
 const ROTA_PONTOS_COLLECTION = 'radar_simples_rota_pontos';
 const RESULTADOS_COLLECTION = 'radar_simples_resultados';
 const TAREFAS_COLLECTION = 'radar_simples_tarefas';
+
+/** Transações online, IDs estáveis e criação apenas: não substitui CRM ou histórico existente. */
+export async function importarHistorico(pacote: PacoteHistorico) {
+  if (!auth.currentUser) throw new Error('Entre com uma conta autorizada para importar o histórico.');
+  const validado = validarPacoteHistorico(JSON.stringify(pacote));
+  let inseridos = 0;
+  let existentes = 0;
+  for (const registro of validado.registros) {
+    const id = await idHistoricoImportado(validado.fonte, registro);
+    const criado = await runTransaction(db, async (transaction) => {
+      const eventoRef = doc(db, EVENTOS_COLLECTION, id);
+      const crmRef = doc(db, MUNICIPIOS_COLLECTION, String(registro.codigoIbge));
+      const [evento, crm] = await Promise.all([transaction.get(eventoRef), transaction.get(crmRef)]);
+      if (evento.exists()) return false;
+      if (!crm.exists()) transaction.set(crmRef, municipioCrmVazio(registro.codigoIbge));
+      transaction.set(eventoRef, {
+        id, codigoIbge: registro.codigoIbge, tipo: 'documento', data: registro.data,
+        resumo: registro.texto, criadaEm: new Date().toISOString(),
+        anexos: [], mandato: 'Histórico anterior ao Radar', mandatoAtivo: true,
+        historicoImportado: { fonte: validado.fonte, visitaRegistrada: registro.visitaRegistrada },
+      } satisfies EventoTimeline);
+      return true;
+    });
+    if (criado) inseridos++; else existentes++;
+  }
+  return { inseridos, existentes };
+}
 
 export async function getTarefas(): Promise<Tarefa[]> {
   const snapshot = await getDocs(collection(db, TAREFAS_COLLECTION));
