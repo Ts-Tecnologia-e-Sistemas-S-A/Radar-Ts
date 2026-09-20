@@ -56,7 +56,7 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
             className="flex items-center gap-1 px-2.5 py-1.5 rounded-full bg-surface-container text-primary text-label-sm font-semibold shadow-sm"
           >
             <Icon name="summarize" size={14} />
-            <span>Balanço da Rota</span>
+            <span>Relatório para a gestão</span>
           </button>
         </div>
 

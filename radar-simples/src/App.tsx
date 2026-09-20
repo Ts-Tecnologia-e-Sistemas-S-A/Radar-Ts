@@ -10,7 +10,7 @@ import MemoriaContaView from './components/MemoriaContaView';
 import NovaPracaModal from './components/NovaPracaModal';
 import PipelineView from './components/PipelineView';
 import RadarView from './components/RadarView';
-import RelatoriosView from './components/RelatoriosView';
+import RelatorioGestaoView from './components/RelatorioGestaoView';
 import AgendaView from './components/AgendaView';
 import OfflineStatus from './components/OfflineStatus';
 import { getEventos, getMunicipioCrm, getMunicipiosCrm } from './storage';
@@ -105,7 +105,7 @@ export default function App() {
         {erroMunicipios && <p className="text-body-sm text-error pt-space-xs">{erroMunicipios}</p>}
 
         {aba === 'radar' && (
-          <RadarView municipios={municipios} onAbrirMunicipio={abrirMunicipio} onNovaDespesa={() => setOverlay('despesa')} />
+          <RadarView municipios={municipios} onAbrirMunicipio={abrirMunicipio} onNovaDespesa={() => setOverlay('despesa')} onVerRelatorio={() => setOverlay('relatorio')} />
         )}
         {aba === 'pipeline' && (
           <PipelineView municipios={municipios} onAbrirMunicipio={abrirMunicipio} onVerRelatorio={() => setOverlay('relatorio')} />
@@ -156,7 +156,7 @@ export default function App() {
           setRevisaoMemoria((v) => v + 1);
         }} />
       )}
-      {overlay === 'relatorio' && <RelatoriosView municipios={municipios} onFechar={() => setOverlay(null)} />}
+      {overlay === 'relatorio' && <RelatorioGestaoView municipios={municipios} onFechar={() => setOverlay(null)} onImportado={() => { recarregarMunicipios(); setRevisaoMemoria((r) => r + 1); }} />}
     </div>
   );
 }

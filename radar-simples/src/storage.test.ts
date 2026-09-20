@@ -18,6 +18,19 @@ function colecao(nome: string) {
 }
 
 mock.module('firebase/firestore', () => ({
+  runTransaction: async (_db: unknown, callback: (t: any) => Promise<unknown>) => {
+    const escritas: { ref: { __colecao: string; __id: string }; data: object }[] = [];
+    const resultado = await callback({
+      get: async (ref: { __colecao: string; __id: string }) => {
+        const dado = colecao(ref.__colecao).get(ref.__id);
+        return { exists: () => dado !== undefined, data: () => dado };
+      },
+      set: (ref: { __colecao: string; __id: string }, data: object) => { validarFirestore(data); escritas.push({ ref, data }); },
+    });
+    if (falharGravacao) throw new Error('permission-denied');
+    for (const { ref, data } of escritas) colecao(ref.__colecao).set(ref.__id, structuredClone(data));
+    return resultado;
+  },
   collection: (_db: unknown, nome: string) => ({ __colecao: nome }),
   doc: (_db: unknown, nome: string, id: string) => ({ __colecao: nome, __id: id }),
   getDoc: async (ref: { __colecao: string; __id: string }) => {
@@ -36,7 +49,7 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-mock.module('./lib/firebase', () => ({ db: {} }));
+mock.module('./lib/firebase', () => ({ db: {}, auth: { currentUser: { uid: 'teste' } } }));
 
 const {
   getMunicipiosCrm,
@@ -55,7 +68,26 @@ const {
   getTarefas,
   saveTarefa,
   setStatusTarefa,
+  importarHistorico,
 } = await import('./storage');
+
+describe('importação de histórico', () => {
+  it('preserva a ficha atual e importa o texto integral uma única vez', async () => {
+    const crm = makeMunicipio(2103000, { estagioFunil: 'juridico', contatos: [{ id: '1', nome: 'Contato atual', cargo: 'Gestor' }] });
+    await saveMunicipioCrm(crm);
+    const pacote = { versao: 1 as const, fonte: 'Fonte de teste', registros: [{ codigoIbge: 2103000, cidade: 'Caxias / MA', data: '', texto: 'Relato completo\nSegunda visita e contato.', visitaRegistrada: false }] };
+    expect(await importarHistorico(pacote)).toEqual({ inseridos: 1, existentes: 0 });
+    expect(await importarHistorico(pacote)).toEqual({ inseridos: 0, existentes: 1 });
+    expect(await getMunicipioCrm(2103000)).toEqual(crm);
+    const eventos = await getEventos(2103000);
+    expect(eventos).toHaveLength(1); expect(eventos[0].data).toBe(''); expect(eventos[0].resumo).toBe(pacote.registros[0].texto);
+  });
+  it('não grava nada quando a transação falha', async () => {
+    falharGravacao = true;
+    await expect(importarHistorico({ versao: 1, fonte: 'Teste', registros: [{ codigoIbge: 2103000, cidade: 'Caxias / MA', data: '', texto: 'Histórico', visitaRegistrada: false }] })).rejects.toThrow('permission-denied');
+    expect(await getMunicipioCrm(2103000)).toBeNull(); expect(await getEventos()).toHaveLength(0);
+  });
+});
 
 beforeEach(() => {
   bancos.clear();
