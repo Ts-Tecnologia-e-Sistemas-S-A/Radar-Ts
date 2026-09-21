@@ -122,7 +122,7 @@ function urlDeAudioDoRadar(texto: string): URL {
 async function esperarArquivoAtivo(nome: string) {
   const ai = getCliente();
   for (let tentativa = 0; tentativa < 120; tentativa++) {
-    const arquivo = await ai.files.get({ name });
+    const arquivo = await ai.files.get({ name: nome });
     if (arquivo.state === 'ACTIVE') return arquivo;
     if (arquivo.state === 'FAILED') throw new Error(`Não foi possível preparar o áudio: ${arquivo.error?.message || 'formato não aceito'}.`);
     await new Promise((resolve) => setTimeout(resolve, 1000));
