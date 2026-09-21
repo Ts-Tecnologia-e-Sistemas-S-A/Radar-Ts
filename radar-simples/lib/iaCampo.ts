@@ -1,4 +1,10 @@
 import { GoogleGenAI } from '@google/genai';
+import { createWriteStream } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { basename, extname, join } from 'node:path';
+import { pipeline } from 'node:stream/promises';
+import { Readable } from 'node:stream';
 import { validarSugestaoTarefa, type SugestaoTarefa } from '../src/utils/agenda.js';
 import { prepararTextoPlanilha, validarRelatorioPlanilha, type RelatorioPlanilha } from '../src/utils/relatorioPlanilha.js';
 
@@ -86,16 +92,74 @@ Retorne APENAS JSON válido: {"titulo":"...","resumo":"...","achados":["..."],"l
 
 export interface TranscricaoReuniao extends SinteseNota {
   transcricao: string;
+  analise: string;
+  acoes: Array<{ acao: string; responsavel: string | null; prazo: string | null; origem: 'combinada' | 'sugerida' }>;
 }
 
 const INSTRUCAO_AUDIO = `Você é o assistente de campo de um vendedor B2G (vendas para prefeituras) no Brasil.
 Recebe um áudio de uma reunião ou ditado rápido pós-reunião. Devolva APENAS um JSON válido:
-{"transcricao": "transcrição literal do áudio", "combinado": "síntese objetiva do que ficou combinado", "proximoPasso": "próxima ação concreta sugerida", "contatoDetectado": {"nome": "...", "cargo": "...", "telefone": "..."} ou null}
+{"transcricao": "transcrição literal do áudio", "analise": "síntese fiel: assuntos, decisões explícitas e pendências", "combinado": "somente o que foi decidido explicitamente", "proximoPasso": "próxima ação recomendada", "acoes": [{"acao":"...", "responsavel":"... ou null", "prazo":"... ou null", "origem":"combinada ou sugerida"}], "contatoDetectado": {"nome": "...", "cargo": "...", "telefone": "..."} ou null}
 Preencha "contatoDetectado" só se o áudio mencionar claramente uma pessoa de contato (nome e/ou telefone) — cada campo que não aparecer fica null, e o objeto inteiro fica null se nenhuma pessoa for identificável.
-Transcreva fielmente o que foi dito — não invente conteúdo que não está no áudio.`;
+Transcreva fielmente o que foi dito. Na análise, use somente fatos do áudio. Uma ação é "combinada" apenas se foi assumida explicitamente na reunião; se for uma sugestão sua, marque "sugerida". Não invente responsáveis, prazos, decisões ou contatos. Use lista vazia se nenhuma ação puder ser identificada.`;
 
 export async function transcreverAudio(audioBase64: string, mimeType: string): Promise<TranscricaoReuniao> {
   return gerarJson<TranscricaoReuniao>([{ inlineData: { mimeType, data: audioBase64 } }], INSTRUCAO_AUDIO);
+}
+
+const LIMITE_AUDIO_BYTES = 500 * 1024 * 1024;
+
+function urlDeAudioDoRadar(texto: string): URL {
+  let url: URL;
+  try { url = new URL(texto); } catch { throw new Error('Referência do áudio inválida.'); }
+  const caminho = decodeURIComponent(url.pathname);
+  if (url.protocol !== 'https:' || url.hostname !== 'firebasestorage.googleapis.com'
+    || !caminho.startsWith('/v0/b/sicap-radar.firebasestorage.app/o/reunioes/')) {
+    throw new Error('O áudio precisa estar no armazenamento privado do Radar.');
+  }
+  return url;
+}
+
+async function esperarArquivoAtivo(nome: string) {
+  const ai = getCliente();
+  for (let tentativa = 0; tentativa < 120; tentativa++) {
+    const arquivo = await ai.files.get({ name });
+    if (arquivo.state === 'ACTIVE') return arquivo;
+    if (arquivo.state === 'FAILED') throw new Error(`Não foi possível preparar o áudio: ${arquivo.error?.message || 'formato não aceito'}.`);
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+  throw new Error('O áudio foi recebido, mas ainda está sendo preparado. Tente processá-lo novamente em alguns minutos.');
+}
+
+/**
+ * O arquivo original já foi salvo no Firebase Storage pelo celular. Aqui ele
+ * é baixado uma única vez para o serviço de IA e removido do servidor logo
+ * depois; a cópia permanente continua no Storage do Radar.
+ */
+export async function transcreverAudioArquivo(arquivoUrl: string, mimeType: string, nome: string): Promise<TranscricaoReuniao> {
+  if (!mimeType.startsWith('audio/')) throw new Error('Formato de áudio não aceito.');
+  const url = urlDeAudioDoRadar(arquivoUrl);
+  const resposta = await fetch(url);
+  if (!resposta.ok || !resposta.body) throw new Error('Não foi possível abrir o áudio salvo.');
+  const tamanho = Number(resposta.headers.get('content-length') || 0);
+  if (tamanho > LIMITE_AUDIO_BYTES) throw new Error('O áudio excede o limite de 500 MB para processamento.');
+  const pasta = await mkdtemp(join(tmpdir(), 'radar-reuniao-'));
+  const extensao = extname(basename(nome)).replace(/[^.a-z0-9]/gi, '').slice(0, 10) || '.audio';
+  const arquivoLocal = join(pasta, `audio${extensao}`);
+  let arquivoGemini: { name?: string; uri?: string; mimeType?: string } | undefined;
+  try {
+    await pipeline(Readable.fromWeb(resposta.body as never), createWriteStream(arquivoLocal));
+    const ai = getCliente();
+    arquivoGemini = await ai.files.upload({ file: arquivoLocal, config: { mimeType, displayName: nome.slice(0, 180) } });
+    if (!arquivoGemini.name) throw new Error('A IA não confirmou o recebimento do áudio.');
+    const ativo = await esperarArquivoAtivo(arquivoGemini.name);
+    if (!ativo.uri) throw new Error('A IA não disponibilizou o áudio para transcrição.');
+    return gerarJson<TranscricaoReuniao>([
+      { fileData: { fileUri: ativo.uri, mimeType: ativo.mimeType || mimeType } },
+    ], INSTRUCAO_AUDIO);
+  } finally {
+    await rm(pasta, { recursive: true, force: true });
+    if (arquivoGemini?.name) await getCliente().files.delete({ name: arquivoGemini.name }).catch(() => undefined);
+  }
 }
 
 export interface DespesaExtraida {

@@ -43,7 +43,7 @@ export default function AuthGate({ children }: { children: ReactNode }) {
   }
   if (state !== 'allowed' || !user) return <AccessScreen state={state} message={message} email={user?.email} onLogin={login} onLogout={() => signOut(auth)} />;
   return <>
-    <div className="fixed right-3 top-3 z-[100] flex gap-2 rounded-lg bg-white/95 px-3 py-2 text-xs shadow-lg border border-outline-variant">
+    <div className="fixed right-3 top-3 z-40 flex gap-2 rounded-lg bg-white/95 px-3 py-2 text-xs shadow-lg border border-outline-variant">
       <span className="max-w-44 truncate">{user.email}</span>{admin && <button className="font-semibold text-primary" onClick={() => setManaging(true)}>Usuários</button>}<button onClick={() => signOut(auth)}>Sair</button>
     </div>
     {children}{managing && <UsersPanel current={user} onClose={() => setManaging(false)} />}

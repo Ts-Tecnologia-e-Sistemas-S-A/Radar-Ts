@@ -127,6 +127,19 @@ export type TipoEventoTimeline = 'reuniao' | 'documento' | 'deslocamento';
 export interface AnexoEvento {
   tipo: 'pdf' | 'audio';
   nome: string;
+  /** Referência privada do arquivo no Firebase Storage. */
+  caminho?: string;
+  /** URL de leitura gerada para o usuário autenticado. */
+  url?: string;
+  mimeType?: string;
+  tamanho?: number;
+}
+
+export interface AcaoReuniao {
+  acao: string;
+  responsavel: string | null;
+  prazo: string | null;
+  origem: 'combinada' | 'sugerida';
 }
 
 /** Um evento na Memória da Conta de um município. */
@@ -151,4 +164,9 @@ export interface EventoTimeline {
   mandatoAtivo: boolean;
   /** Na importação, data vazia significa que a fonte não informou a data. */
   historicoImportado?: { fonte: string; visitaRegistrada: boolean };
+  /** Situação do processamento do áudio; o original continua salvo se a IA falhar. */
+  processamentoAudio?: 'pendente' | 'concluido' | 'erro';
+  erroProcessamentoAudio?: string;
+  analiseReuniao?: string;
+  acoesReuniao?: AcaoReuniao[];
 }

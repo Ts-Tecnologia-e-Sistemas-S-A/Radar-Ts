@@ -6,6 +6,7 @@ import {
   gerarRecomendacoesSemana,
   sintetizarNota,
   transcreverAudio,
+  transcreverAudioArquivo,
 } from './iaCampo.js';
 import { prepararTextoPlanilha } from '../src/utils/relatorioPlanilha.js';
 import { dataValida } from '../src/utils/agenda.js';
@@ -41,6 +42,13 @@ export async function processarRequisicaoIA(modo: string, payload: any): Promise
       case 'transcrever_audio': {
         if (!payload?.audioBase64 || !payload?.mimeType) return erro400('Campos "audioBase64" e "mimeType" são obrigatórios.');
         return ok(await transcreverAudio(payload.audioBase64, payload.mimeType));
+      }
+      case 'transcrever_audio_arquivo': {
+        if (typeof payload?.arquivoUrl !== 'string' || typeof payload?.mimeType !== 'string' || typeof payload?.nome !== 'string') {
+          return erro400('Informe a referência, o tipo e o nome do áudio.');
+        }
+        if (payload.arquivoUrl.length > 3000 || payload.nome.length > 180) return erro400('Referência ou nome do áudio inválido.');
+        return ok(await transcreverAudioArquivo(payload.arquivoUrl, payload.mimeType, payload.nome));
       }
       case 'ocr_despesa': {
         if (!payload?.imagemBase64 || !payload?.mimeType) return erro400('Campos "imagemBase64" e "mimeType" são obrigatórios.');

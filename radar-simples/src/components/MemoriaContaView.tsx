@@ -11,6 +11,10 @@ const ICONE_TIPO: Record<TipoEventoTimeline, string> = {
   deslocamento: 'directions_car',
 };
 
+function tamanhoAudio(bytes: number) {
+  return bytes >= 1024 * 1024 ? `${(bytes / 1024 / 1024).toFixed(1)} MB` : `${Math.ceil(bytes / 1024)} KB`;
+}
+
 interface MemoriaContaViewProps {
   municipio: MunicipioIbge;
   onGravarReuniao: () => void;
@@ -195,6 +199,14 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           <span className="text-label-sm text-primary font-semibold">{ev.proximoPassoIA}</span>
                         </div>
                       )}
+                      {ev.analiseReuniao && <div className="p-space-xs rounded-lg bg-surface-container text-on-surface flex flex-col gap-1"><span className="text-label-sm text-primary">Análise da reunião</span><p className="text-body-sm text-on-surface-variant">{ev.analiseReuniao}</p></div>}
+                      {ev.acoesReuniao && ev.acoesReuniao.length > 0 && <div className="text-body-sm text-on-surface-variant"><span className="text-label-sm text-primary">Plano de ação</span><ul className="list-disc pl-5">{ev.acoesReuniao.map((acao, i) => <li key={`${acao.acao}-${i}`}>{acao.acao}{acao.responsavel ? ` — ${acao.responsavel}` : ''}{acao.prazo ? ` — ${acao.prazo}` : ''} ({acao.origem === 'combinada' ? 'combinada' : 'sugestão'})</li>)}</ul></div>}
+                      {ev.processamentoAudio && ev.processamentoAudio !== 'concluido' && (
+                        <p className="text-body-sm text-error">{ev.processamentoAudio === 'pendente' ? 'Áudio aguardando transcrição.' : `Transcrição pendente: ${ev.erroProcessamentoAudio || 'tente novamente.'}`}</p>
+                      )}
+                      {ev.anexos.filter((anexo) => anexo.tipo === 'audio').map((anexo) => (
+                        anexo.url ? <a key={anexo.caminho || anexo.nome} href={anexo.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 text-body-sm text-primary underline"><Icon name="graphic_eq" size={16} />Ouvir áudio: {anexo.nome}{anexo.tamanho ? ` (${tamanhoAudio(anexo.tamanho)})` : ''}</a> : null
+                      ))}
                       {ev.historicoImportado && (
                         <details className="text-body-sm text-on-surface-variant">
                           <summary className="cursor-pointer text-primary">Histórico completo da planilha</summary>
