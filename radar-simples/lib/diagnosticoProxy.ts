@@ -1,6 +1,8 @@
 import { runBigQuery } from './bigQueryClient.js';
 import { buscarDadosEscolares } from './censoEscolarProxy.js';
 import { buscarVaarOficial } from './vaarOficial.js';
+import { buscarComparativosIdeb } from './idebOficial.js';
+import { buscarRepassesRecebidos } from './repassesOficiais.js';
 import type { AchadoDiagnostico, Diagnostico } from '../src/types/diagnostico.js';
 export type { AchadoDiagnostico, Diagnostico, TipoAchado } from '../src/types/diagnostico.js';
 
@@ -34,16 +36,22 @@ export const SQL_ACHADOS = `
 `;
 
 export async function gerarDiagnostico(codigoIbge: number | undefined, dependencias = {
-  censo: buscarDadosEscolares, vaar: buscarVaarOficial, query: runBigQuery,
+  censo: buscarDadosEscolares, vaar: buscarVaarOficial, query: runBigQuery, ideb: buscarComparativosIdeb, repasses: buscarRepassesRecebidos,
 }): Promise<ResultadoDiagnostico> {
   if (!codigoIbge || !/^[1-9]\d{6}$/.test(String(codigoIbge))) {
     return { status: 400, body: { sucesso: false, erro: 'Informe um código IBGE de sete dígitos.' } };
   }
-  const [censo, vaar] = await Promise.allSettled([dependencias.censo(codigoIbge), dependencias.vaar(codigoIbge)]);
+  const [censo, vaar, ideb, repasses] = await Promise.allSettled([dependencias.censo(codigoIbge), dependencias.vaar(codigoIbge), dependencias.ideb(codigoIbge), dependencias.repasses(codigoIbge)]);
   const dados: Diagnostico = {
     codigoIbge, consultadoEm: new Date().toISOString(), resumo: null, achados: [], vaar: null,
-    avisoCenso: null, avisoVaar: null,
+    avisoCenso: null, avisoVaar: null, comparativosIdeb: [], avisoIdeb: null, comparativoRepasses: null, avisoRepasses: null,
   };
+  if (repasses.status === 'fulfilled') dados.comparativoRepasses = repasses.value;
+  else dados.avisoRepasses = repasses.reason instanceof Error ? repasses.reason.message : 'Consulta de repasses recebidos pendente.';
+  if (ideb.status === 'fulfilled') {
+    dados.comparativosIdeb = ideb.value.comparativos;
+    dados.avisoIdeb = ideb.value.aviso;
+  } else dados.avisoIdeb = ideb.reason instanceof Error ? ideb.reason.message : 'Comparação IDEB pendente.';
   if (vaar.status === 'fulfilled') dados.vaar = vaar.value;
   else dados.avisoVaar = vaar.reason instanceof Error ? vaar.reason.message : 'FNDE indisponível; consulta VAAR pendente.';
   if (censo.status === 'fulfilled' && censo.value.body.sucesso && censo.value.body.dados) {

@@ -3,12 +3,13 @@
   "private": true,
   "version": "0.1.0",
   "type": "module",
+  "engines": { "node": "24.x" },
   "scripts": {
     "dev": "tsx server.ts",
     "build": "vite build && esbuild server.ts --bundle --platform=node --format=cjs --packages=external --sourcemap --outfile=dist/server.cjs",
     "start": "node dist/server.cjs",
     "lint": "tsc --noEmit",
-    "test": "bun test src/storage.test.ts src/auth/access.test.ts src/utils/urgencia.test.ts src/utils/rota.test.ts src/utils/forecast.test.ts src/utils/agenda.test.ts src/utils/relatorioGestao.test.ts lib/iaPlanilha.test.ts lib/vaarOficial.test.ts"
+    "test": "bun test src/storage.test.ts src/auth/access.test.ts src/utils/urgencia.test.ts src/utils/rota.test.ts src/utils/forecast.test.ts src/utils/agenda.test.ts src/utils/relatorioGestao.test.ts lib/iaPlanilha.test.ts lib/vaarOficial.test.ts lib/comparativoEstadual.test.ts lib/repassesOficiais.test.ts"
   },
   "dependencies": {
     "@google-cloud/bigquery": "^7.9.1",
@@ -17,10 +18,12 @@
     "@vitejs/plugin-react": "^5.0.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "fflate": "0.8.3",
     "firebase": "^12.17.1",
     "jspdf": "^3.0.1",
     "react": "^19.0.1",
     "react-dom": "^19.0.1",
+    "read-excel-file": "9.3.10",
     "vite": "^6.2.3"
   },
   "devDependencies": {

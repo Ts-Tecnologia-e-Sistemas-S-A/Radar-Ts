@@ -1,6 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { AchadoDiagnostico, Diagnostico, TipoAchado } from '../api/diagnostico';
-import { CONDICOES_VAAR } from '../types/diagnostico';
+import { CONDICOES_VAAR, type ComparativoEstadual } from '../types/diagnostico';
 import { EventoTimeline, MunicipioCrm, MunicipioIbge } from '../types';
 
 function cabecalho(doc: jsPDF, titulo: string, subtitulo: string): number {
@@ -262,6 +262,7 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
   const vaar = diagnostico.vaar;
   if (!vaar) {
     paragrafo(doc, `Avaliação pendente: ${diagnostico.avisoVaar || 'Fonte oficial indisponível.'}`, y);
+    adicionarComparativos(doc, diagnostico);
     return doc;
   }
   y = paragrafo(doc, `Exercício ${vaar.exercicio}. ${vaar.publicacao}`, y);
@@ -283,7 +284,57 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
     y += 7;
   }
 
+  adicionarComparativos(doc, diagnostico);
   return doc;
+}
+
+function adicionarComparativos(doc: jsPDF, diagnostico: Diagnostico) {
+  const comparativos: ComparativoEstadual[] = [
+    ...(diagnostico.comparativoRepasses ? [diagnostico.comparativoRepasses] : []),
+    ...(diagnostico.vaar?.comparativoAprendizagem ? [diagnostico.vaar.comparativoAprendizagem] : []),
+    ...(diagnostico.comparativosIdeb || []),
+  ];
+  for (const c of comparativos) {
+    doc.addPage();
+    let y = cabecalho(doc, `${c.titulo} / ${c.uf} / ${c.anoReferencia}`, 'Cidade filtrada e maiores resultados do estado');
+    y = paragrafo(doc, c.universo, y);
+    if (c.periodo) y = paragrafo(doc, `Período: ${c.periodo}.`, y);
+    if (c.atualizadoEm) y = paragrafo(doc, `Base oficial atualizada em ${new Date(c.atualizadoEm).toLocaleString('pt-BR')}.`, y);
+    y = paragrafo(doc, `Cinco primeiros do estado, incluindo empates. ${c.totalComNota} municípios com resultado no grupo comparado. A cidade filtrada aparece primeiro.`, y);
+    if (!c.cidade) y = paragrafo(doc, 'Cidade filtrada: sem resultado publicado nesta base.', y);
+    const linhas = [...(c.cidade ? [c.cidade] : []), ...c.destaques];
+    const cabecalhoTabela = () => {
+      doc.setFontSize(10);
+      doc.setTextColor(15, 41, 66);
+      doc.text('Posição', 14, y);
+      doc.text('Município', 37, y);
+      doc.text(c.formato === 'moeda' ? 'Valor recebido' : 'Nota / indicador', 196, y, { align: 'right' });
+      y += 7;
+    };
+    cabecalhoTabela();
+    for (const r of linhas) {
+      const nome: string[] = doc.splitTextToSize(`${r.municipio}${r.codigoIbge === c.cidade?.codigoIbge ? ' (cidade filtrada)' : ''}`, c.formato === 'moeda' ? 100 : 109);
+      const altura = Math.max(10, nome.length * 5 + 4);
+      if (y + altura > 270) { doc.addPage(); y = 20; cabecalhoTabela(); }
+      if (r.codigoIbge === c.cidade?.codigoIbge) { doc.setFillColor(238, 244, 249); doc.rect(12, y - 5, 186, altura, 'F'); }
+      doc.setTextColor(30, 30, 30);
+      doc.text(r.posicao === null ? '-' : `${r.posicao}º`, 14, y);
+      doc.text(nome, 37, y);
+      doc.text(r.nota === null ? 'Não divulgado' : r.nota.toLocaleString('pt-BR', { ...(c.formato === 'moeda' ? { style: 'currency', currency: 'BRL' } : {}), minimumFractionDigits: c.casasDecimais, maximumFractionDigits: c.casasDecimais }), 196, y, { align: 'right' });
+      y += altura;
+    }
+    if (c.cidade?.posicao === null) y = paragrafo(doc, 'Sem posição: a cidade não tem nota divulgada ou não participa do grupo elegível desta comparação.', y + 3);
+    y = paragrafo(doc, `Consulta: ${new Date(c.consultadoEm).toLocaleString('pt-BR')}. Referência: ${c.anoReferencia}.`, y + 4);
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setTextColor(30, 70, 140);
+    doc.textWithLink(c.fonte.titulo, 14, y, { url: c.fonte.url });
+  }
+  const avisos = [diagnostico.avisoRepasses, diagnostico.vaar?.avisoComparativo, diagnostico.avisoIdeb].filter(Boolean);
+  if (avisos.length) {
+    doc.addPage();
+    let y = cabecalho(doc, 'Comparações pendentes', 'Disponibilidade das fontes oficiais');
+    for (const aviso of avisos) y = paragrafo(doc, aviso!, y);
+  }
 }
 
 /**

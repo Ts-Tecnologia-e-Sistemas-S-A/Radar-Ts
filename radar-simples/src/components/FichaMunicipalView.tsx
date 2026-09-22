@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { buscarDadosEscolares } from '../api/censoEscolar';
+import { buscarDadosEscolares, type DadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
 import { analisarPlanilha, ContatoDetectado, sintetizarNota } from '../api/ia';
 import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
@@ -19,6 +19,7 @@ import {
 import { compartilharOuBaixarPdf, gerarPdfDiagnostico } from '../utils/pdf';
 import Icon from './Icon';
 import AvaliacaoVaarCard from './AvaliacaoVaarCard';
+import ComparativoEstadualCard from './ComparativoEstadualCard';
 
 interface FichaMunicipalViewProps {
   municipio: MunicipioIbge;
@@ -34,22 +35,38 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   const [salvo, setSalvo] = useState(false);
   const [atualizandoCenso, setAtualizandoCenso] = useState(false);
   const [avisoCenso, setAvisoCenso] = useState<string | null>(null);
+  const [censoAtual, setCensoAtual] = useState<(DadosEscolares & { codigoIbge: number }) | null>(null);
   const [diagnostico, setDiagnostico] = useState<Diagnostico | null>(null);
   const [gerandoDiagnostico, setGerandoDiagnostico] = useState(false);
   const [exportandoDiagnostico, setExportandoDiagnostico] = useState(false);
   const [erroDiagnostico, setErroDiagnostico] = useState<string | null>(null);
 
   const requisicao = useRef(0);
+  const requisicaoCenso = useRef(0);
   const cidadeAtual = useRef(municipio.codigoIbge);
   cidadeAtual.current = municipio.codigoIbge;
+
+  useEffect(() => {
+    const codigoIbge = municipio.codigoIbge;
+    const id = ++requisicaoCenso.current;
+    const vigente = () => requisicaoCenso.current === id && cidadeAtual.current === codigoIbge;
+    setCensoAtual(null);
+    setAtualizandoCenso(true);
+    setAvisoCenso(null);
+    buscarDadosEscolares(codigoIbge).then((dados) => {
+      if (!vigente()) return;
+      if (dados) setCensoAtual({ ...dados, codigoIbge });
+      else setAvisoCenso('Sem dado publicado na edição atual. Valores históricos não serão apresentados como atuais.');
+    }).catch((e: Error) => { if (vigente()) setAvisoCenso(e.message); })
+      .finally(() => { if (vigente()) setAtualizandoCenso(false); });
+    return () => { requisicaoCenso.current++; };
+  }, [municipio.codigoIbge, revisaoCarga]);
 
   useEffect(() => {
     requisicao.current++;
     setGerandoDiagnostico(false);
     setExportandoDiagnostico(false);
     setErroDiagnostico(null);
-    setAtualizandoCenso(false);
-    setAvisoCenso(null);
     let cancelado = false;
     setCarregando(true);
     setFalhaCarga(false);
@@ -86,14 +103,16 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
 
   async function atualizarCensoEscolar() {
     const codigoIbge = crm.codigoIbge;
-    const id = requisicao.current;
-    const vigente = () => cidadeAtual.current === codigoIbge && requisicao.current === id;
+    const id = ++requisicaoCenso.current;
+    const vigente = () => cidadeAtual.current === codigoIbge && requisicaoCenso.current === id;
     setAtualizandoCenso(true);
+    setCensoAtual(null);
     setAvisoCenso(null);
     try {
       const dados = await buscarDadosEscolares(codigoIbge);
       if (!vigente()) return;
       if (dados) {
+        setCensoAtual({ ...dados, codigoIbge });
         const atualizado = { ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano };
         await saveMunicipioCrm(atualizado);
         if (vigente()) setCrm(atualizado);
@@ -103,7 +122,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     } catch (e: any) {
       if (vigente()) setAvisoCenso(e.message || 'Falha ao consultar o Censo Escolar.');
     } finally {
-      if (cidadeAtual.current === codigoIbge) setAtualizandoCenso(false);
+      if (vigente()) setAtualizandoCenso(false);
     }
   }
 
@@ -119,6 +138,10 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       const resultado = await buscarDiagnostico(codigoIbge);
       if (!vigente()) return;
       setDiagnostico(resultado);
+      requisicaoCenso.current++;
+      setAtualizandoCenso(false);
+      setCensoAtual(resultado.resumo ? { ...resultado.resumo, codigoIbge } : null);
+      setAvisoCenso(resultado.avisoCenso || null);
       await saveResultadosMunicipio(codigoIbge, { diagnostico: resultado });
       if (!vigente()) return;
       if (exportar) {
@@ -204,24 +227,22 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         </div>
 
         <div className="grid grid-cols-2 gap-2.5">
-          <CampoEditavel
+          <NumeroOficial
             label="Rede Escolar"
-            valor={crm.escolasCount}
+            valor={censoAtual?.codigoIbge === municipio.codigoIbge ? censoAtual.escolas : undefined}
             sufixo="escolas"
-            onSalvar={(v) => salvar({ ...crm, escolasCount: v, censoEscolarAno: undefined })}
           />
-          <CampoEditavel
+          <NumeroOficial
             label="Matrículas Totais"
-            valor={crm.alunosCount}
+            valor={censoAtual?.codigoIbge === municipio.codigoIbge ? censoAtual.alunos : undefined}
             sufixo="alunos"
-            onSalvar={(v) => salvar({ ...crm, alunosCount: v, censoEscolarAno: undefined })}
           />
         </div>
         <div className="flex items-center justify-between px-0.5">
           <span className="text-label-sm text-on-surface-variant">
-            {crm.censoEscolarAno
-              ? `Registro salvo: Censo Escolar INEP ${crm.censoEscolarAno}. Atualização atual não verificada.`
-              : 'Números digitados manualmente'}
+            {censoAtual?.codigoIbge === municipio.codigoIbge
+              ? `Censo Escolar INEP ${censoAtual.ano}: edição atual verificada nesta consulta.`
+              : 'Dados atuais pendentes de verificação. Registros antigos não são exibidos como atuais.'}
           </span>
           <button
             disabled={atualizandoCenso}
@@ -251,11 +272,17 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
           </button>
         </div>
         <p className="text-body-sm text-on-surface-variant">
-          Consulta da cidade selecionada nas fontes oficiais. Mostra o exercício, a publicação e a data da consulta. O PDF consulta as fontes novamente antes de ser gerado.
+          Cidade selecionada e maiores repasses recebidos do Fundeb no estado, além de aprendizagem VAAR e IDEB. A consulta oficial pode levar até três minutos. O PDF atualiza as fontes antes de ser gerado.
         </p>
         {erroDiagnostico && <p className="text-body-sm text-error">{erroDiagnostico}</p>}
         {diagnostico && diagnostico.codigoIbge === municipio.codigoIbge && (
           <>
+            {diagnostico.comparativoRepasses && <ComparativoEstadualCard comparativo={diagnostico.comparativoRepasses} />}
+            {diagnostico.avisoRepasses && <p role="status" className="text-body-sm">Repasses recebidos pendentes: {diagnostico.avisoRepasses}</p>}
+            {diagnostico.vaar?.comparativoAprendizagem && <ComparativoEstadualCard comparativo={diagnostico.vaar.comparativoAprendizagem} />}
+            {diagnostico.vaar?.avisoComparativo && <p role="status" className="text-body-sm">Comparação VAAR pendente: {diagnostico.vaar.avisoComparativo}</p>}
+            {diagnostico.comparativosIdeb?.map((comparativo) => <ComparativoEstadualCard key={comparativo.titulo} comparativo={comparativo} />)}
+            {diagnostico.avisoIdeb && <p role="status" className="text-body-sm">Comparação IDEB pendente: {diagnostico.avisoIdeb}</p>}
             {diagnostico.vaar ? <AvaliacaoVaarCard vaar={diagnostico.vaar} /> : (
               <p role="status" className="text-body-sm text-on-surface-variant">VAAR pendente: {diagnostico.avisoVaar || 'Fonte oficial indisponível.'}</p>
             )}
@@ -463,28 +490,20 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   );
 }
 
-function CampoEditavel({
+function NumeroOficial({
   label,
   valor,
   sufixo,
-  onSalvar,
 }: {
   label: string;
   valor: number | undefined;
   sufixo: string;
-  onSalvar: (v: number | undefined) => void;
 }) {
   return (
     <div className="bg-surface-container-lowest rounded-xl p-3 shadow-sm flex flex-col gap-1">
       <span className="text-label-sm text-on-surface-variant uppercase tracking-wide">{label}</span>
       <div className="flex items-baseline gap-1">
-        <input
-          type="number"
-          min={0}
-          className="w-full bg-transparent text-headline-md text-primary font-bold focus:outline-none"
-          value={valor ?? ''}
-          onChange={(e) => onSalvar(e.target.value ? Number(e.target.value) : undefined)}
-        />
+        <span className="text-headline-md text-primary font-bold">{valor === undefined ? '—' : valor.toLocaleString('pt-BR')}</span>
         <span className="text-label-md text-on-surface-variant">{sufixo}</span>
       </div>
     </div>
