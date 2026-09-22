@@ -36,6 +36,6 @@ export async function runBigQuery<T = Record<string, unknown>>(
   query: string,
   params: Record<string, unknown> = {}
 ): Promise<T[]> {
-  const [rows] = await getClient().query({ query, params });
+  const [rows] = await getClient().query({ query, params, useQueryCache: false });
   return rows as T[];
 }

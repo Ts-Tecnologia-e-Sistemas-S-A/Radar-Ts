@@ -1,15 +1,6 @@
-/**
- * Busca a rede escolar municipal (nº de escolas + matrículas totais) de um
- * município no Censo Escolar do INEP, via a tabela pública
- * `basedosdados.br_inep_censo_escolar.escola` (Base dos Dados). Usa sempre o
- * ano mais recente disponível pra aquele município. Só agrega contagens —
- * nunca lê dado de aluno individual (a própria Base dos Dados descontinuou
- * a tabela de matrícula por aluno em 2020, por LGPD).
- *
- * Lógica compartilhada entre server.ts (dev local) e api/censo-escolar.ts
- * (Vercel), mesmo padrão de lib/pncpProxy.ts.
- */
+/** Censo municipal: só consulta o ano e a revisão oficial previamente conciliados com o espelho. */
 import { runBigQuery } from './bigQueryClient.js';
+import { consultarEdicaoCenso, validarEspelhoCenso } from './censoAtualidade.js';
 
 export interface DadosEscolares {
   ano: number;
@@ -29,11 +20,21 @@ interface AgregadoRow {
 }
 
 export async function buscarDadosEscolares(codigoIbge: number | undefined): Promise<ResultadoCensoEscolar> {
-  if (!codigoIbge || !Number.isInteger(codigoIbge)) {
+  if (!codigoIbge || !/^[1-9]\d{6}$/.test(String(codigoIbge))) {
     return { status: 400, body: { sucesso: false, erro: 'Parâmetro codigoIbge é obrigatório.' } };
   }
 
   try {
+    const edicao = await consultarEdicaoCenso();
+    validarEspelhoCenso(edicao, process.env.CENSO_ESCOLAR_REVISAO_VALIDADA);
+    // A conciliação também perde validade se a tabela intermediária mudar.
+    const tabela = await runBigQuery<{ alterado: string }>(
+      `SELECT CAST(last_modified_time AS STRING) AS alterado
+       FROM \`basedosdados.br_inep_censo_escolar.__TABLES__\` WHERE table_id = 'escola'`
+    );
+    if (!tabela[0]?.alterado || tabela[0].alterado !== process.env.CENSO_ESCOLAR_TABELA_VALIDADA_EM) {
+      throw new Error('A base intermediária do Censo precisa ser conciliada com a revisão atual do INEP. Consulta bloqueada.');
+    }
     const idMunicipio = String(codigoIbge);
     // rede = código de dependência administrativa do INEP (TP_DEPENDENCIA),
     // não texto: 1=Federal, 2=Estadual, 3=Municipal, 4=Privada — confirmado
@@ -42,27 +43,26 @@ export async function buscarDadosEscolares(codigoIbge: number | undefined): Prom
       `SELECT
          dados.ano,
          COUNT(*) AS escolas,
-         SUM(dados.quantidade_matricula_educacao_basica) AS alunos
+         IF(COUNTIF(dados.quantidade_matricula_educacao_basica IS NULL) > 0,
+            NULL, SUM(dados.quantidade_matricula_educacao_basica)) AS alunos
        FROM \`basedosdados.br_inep_censo_escolar.escola\` AS dados
        WHERE dados.id_municipio = @idMunicipio
          AND dados.rede = '3'
-         AND dados.ano = (
-           SELECT MAX(ano) FROM \`basedosdados.br_inep_censo_escolar.escola\`
-           WHERE id_municipio = @idMunicipio AND rede = '3'
-         )
+         AND dados.ano = @ano
        GROUP BY dados.ano`,
-      { idMunicipio }
+      { idMunicipio, ano: edicao.ano }
     );
 
     const row = rows[0];
-    if (!row) {
-      return { status: 200, body: { sucesso: true, dados: null } };
-    }
+    if (!row || row.alunos === null) throw new Error(`Censo ${edicao.ano} sem dados completos para este município. Não serão usados anos anteriores.`);
     return {
       status: 200,
-      body: { sucesso: true, dados: { ano: row.ano, escolas: row.escolas, alunos: row.alunos ?? 0 } },
+      body: { sucesso: true, dados: { ano: row.ano, escolas: row.escolas, alunos: row.alunos } },
     };
   } catch (err: any) {
-    return { status: 502, body: { sucesso: false, erro: err.message || 'Falha ao consultar o Censo Escolar' } };
+    const erro = err.message === 'fetch failed' || err.name === 'TimeoutError'
+      ? 'Não foi possível consultar a revisão atual do INEP. Censo pendente; números anteriores não serão utilizados.'
+      : err.message || 'Falha ao consultar o Censo Escolar';
+    return { status: 502, body: { sucesso: false, erro } };
   }
 }

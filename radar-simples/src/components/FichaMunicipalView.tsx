@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { buscarDadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
 import { analisarPlanilha, ContatoDetectado, sintetizarNota } from '../api/ia';
 import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
 import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
-import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, getResultadosMunicipio, saveResultadosMunicipio } from '../storage';
+import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio } from '../storage';
 import {
   Contato,
   ESTAGIOS_FUNIL_B2G,
@@ -18,6 +18,7 @@ import {
 } from '../types';
 import { compartilharOuBaixarPdf, gerarPdfDiagnostico } from '../utils/pdf';
 import Icon from './Icon';
+import AvaliacaoVaarCard from './AvaliacaoVaarCard';
 
 interface FichaMunicipalViewProps {
   municipio: MunicipioIbge;
@@ -38,21 +39,32 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   const [exportandoDiagnostico, setExportandoDiagnostico] = useState(false);
   const [erroDiagnostico, setErroDiagnostico] = useState<string | null>(null);
 
+  const requisicao = useRef(0);
+  const cidadeAtual = useRef(municipio.codigoIbge);
+  cidadeAtual.current = municipio.codigoIbge;
+
   useEffect(() => {
+    requisicao.current++;
+    setGerandoDiagnostico(false);
+    setExportandoDiagnostico(false);
+    setErroDiagnostico(null);
+    setAtualizandoCenso(false);
+    setAvisoCenso(null);
     let cancelado = false;
     setCarregando(true);
     setFalhaCarga(false);
     setDiagnostico(null);
-    Promise.all([getMunicipioCrm(municipio.codigoIbge), getResultadosMunicipio(municipio.codigoIbge)])
-      .then(([existente, resultados]) => {
+    getMunicipioCrm(municipio.codigoIbge)
+      .then((existente) => {
         if (cancelado) return;
         setCrm(existente || municipioCrmVazio(municipio.codigoIbge));
-        setDiagnostico(resultados.diagnostico ?? null);
+        // Diagnósticos salvos são históricos. Exibir números exige nova consulta.
       })
       .catch((e: any) => { if (!cancelado) { setFalhaCarga(true); setErro(e.message || 'Falha ao carregar dados do banco'); } })
       .finally(() => !cancelado && setCarregando(false));
     return () => {
       cancelado = true;
+      requisicao.current++;
     };
   }, [municipio.codigoIbge, revisaoCarga]);
 
@@ -73,46 +85,50 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   }
 
   async function atualizarCensoEscolar() {
+    const codigoIbge = crm.codigoIbge;
+    const id = requisicao.current;
+    const vigente = () => cidadeAtual.current === codigoIbge && requisicao.current === id;
     setAtualizandoCenso(true);
     setAvisoCenso(null);
     try {
-      const dados = await buscarDadosEscolares(crm.codigoIbge);
+      const dados = await buscarDadosEscolares(codigoIbge);
+      if (!vigente()) return;
       if (dados) {
-        await salvar({ ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano });
+        const atualizado = { ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano };
+        await saveMunicipioCrm(atualizado);
+        if (vigente()) setCrm(atualizado);
       } else {
         setAvisoCenso('Sem dado do Censo Escolar publicado pra esse município.');
       }
     } catch (e: any) {
-      setAvisoCenso(e.message || 'Falha ao consultar o Censo Escolar.');
+      if (vigente()) setAvisoCenso(e.message || 'Falha ao consultar o Censo Escolar.');
     } finally {
-      setAtualizandoCenso(false);
+      if (cidadeAtual.current === codigoIbge) setAtualizandoCenso(false);
     }
   }
 
-  async function gerarDiagnostico() {
-    setGerandoDiagnostico(true);
+  async function consultarDiagnostico(exportar = false) {
+    const codigoIbge = municipio.codigoIbge;
+    const id = ++requisicao.current;
+    const vigente = () => requisicao.current === id && cidadeAtual.current === codigoIbge;
+    setGerandoDiagnostico(!exportar);
+    setExportandoDiagnostico(exportar);
     setErroDiagnostico(null);
+    setDiagnostico(null);
     try {
-      const resultado = await buscarDiagnostico(municipio.codigoIbge);
-      await saveResultadosMunicipio(municipio.codigoIbge, { diagnostico: resultado });
+      const resultado = await buscarDiagnostico(codigoIbge);
+      if (!vigente()) return;
       setDiagnostico(resultado);
+      await saveResultadosMunicipio(codigoIbge, { diagnostico: resultado });
+      if (!vigente()) return;
+      if (exportar) {
+        const doc = gerarPdfDiagnostico(municipio, resultado);
+        await compartilharOuBaixarPdf(doc, `diagnostico-${municipio.nome.toLowerCase().replace(/\s+/g, '-')}.pdf`);
+      }
     } catch (e: any) {
-      setErroDiagnostico(e.message || 'Falha ao gerar diagnóstico.');
+      if (vigente()) setErroDiagnostico(e.message || 'Falha ao consultar o diagnóstico.');
     } finally {
-      setGerandoDiagnostico(false);
-    }
-  }
-
-  async function exportarDiagnostico() {
-    if (!diagnostico) return;
-    setExportandoDiagnostico(true);
-    try {
-      const doc = gerarPdfDiagnostico(municipio, diagnostico);
-      await compartilharOuBaixarPdf(doc, `diagnostico-${municipio.nome.toLowerCase().replace(/\s+/g, '-')}.pdf`);
-    } catch (e: any) {
-      setErroDiagnostico(e.message || 'Falha ao gerar PDF.');
-    } finally {
-      setExportandoDiagnostico(false);
+      if (vigente()) { setGerandoDiagnostico(false); setExportandoDiagnostico(false); }
     }
   }
 
@@ -204,7 +220,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         <div className="flex items-center justify-between px-0.5">
           <span className="text-label-sm text-on-surface-variant">
             {crm.censoEscolarAno
-              ? `Fonte: Censo Escolar INEP ${crm.censoEscolarAno} (rede municipal)`
+              ? `Registro salvo: Censo Escolar INEP ${crm.censoEscolarAno}. Atualização atual não verificada.`
               : 'Números digitados manualmente'}
           </span>
           <button
@@ -225,25 +241,29 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             <Icon name="fact_check" size={18} />
             <h3 className="text-label-lg">Diagnóstico Gratuito</h3>
           </div>
-          {!diagnostico && (
-            <button
-              disabled={gerandoDiagnostico}
-              onClick={gerarDiagnostico}
-              className="text-label-sm text-secondary font-semibold flex items-center gap-1 disabled:opacity-50"
-            >
-              <Icon name={gerandoDiagnostico ? 'sync' : 'fact_check'} size={14} className={gerandoDiagnostico ? 'animate-spin' : ''} />
-              {gerandoDiagnostico ? 'Analisando…' : 'Gerar'}
-            </button>
-          )}
+          <button
+            disabled={gerandoDiagnostico || exportandoDiagnostico}
+            onClick={() => consultarDiagnostico()}
+            className="text-label-sm text-secondary font-semibold flex items-center gap-1 disabled:opacity-50"
+          >
+            <Icon name={gerandoDiagnostico ? 'sync' : 'fact_check'} size={14} className={gerandoDiagnostico ? 'animate-spin' : ''} />
+            {gerandoDiagnostico || exportandoDiagnostico ? 'Consultando fontes…' : diagnostico ? 'Atualizar' : 'Gerar'}
+          </button>
         </div>
         <p className="text-body-sm text-on-surface-variant">
-          Relatório em PDF pra entregar pro município — dados oficiais do Censo Escolar, com pontos de atenção sobre o cadastro que podem afetar o repasse do Fundeb.
+          Consulta da cidade selecionada nas fontes oficiais. Mostra o exercício, a publicação e a data da consulta. O PDF consulta as fontes novamente antes de ser gerado.
         </p>
         {erroDiagnostico && <p className="text-body-sm text-error">{erroDiagnostico}</p>}
-        {diagnostico && (
+        {diagnostico && diagnostico.codigoIbge === municipio.codigoIbge && (
           <>
+            {diagnostico.vaar ? <AvaliacaoVaarCard vaar={diagnostico.vaar} /> : (
+              <p role="status" className="text-body-sm text-on-surface-variant">VAAR pendente: {diagnostico.avisoVaar || 'Fonte oficial indisponível.'}</p>
+            )}
+            <p className="text-label-sm text-on-surface-variant">Consulta realizada em {new Date(diagnostico.consultadoEm!).toLocaleString('pt-BR')}.</p>
             <div className="space-y-1.5">
-              {diagnostico.achados.length === 0 ? (
+              {diagnostico.avisoCenso ? (
+                <p className="text-body-sm text-on-surface-variant">Censo Escolar: {diagnostico.avisoCenso}</p>
+              ) : diagnostico.achados.length === 0 ? (
                 <p className="text-body-sm text-on-surface-variant">Nenhuma inconsistência encontrada nos critérios avaliados.</p>
               ) : (
                 diagnostico.achados.map((a, idx) => (
@@ -256,7 +276,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             </div>
             <button
               disabled={exportandoDiagnostico}
-              onClick={exportarDiagnostico}
+              onClick={() => consultarDiagnostico(true)}
               className="w-full h-10 rounded-lg bg-primary text-on-primary text-label-md flex items-center justify-center gap-2 disabled:opacity-60"
             >
               <Icon name={exportandoDiagnostico ? 'sync' : 'share'} size={16} className={exportandoDiagnostico ? 'animate-spin' : ''} />
