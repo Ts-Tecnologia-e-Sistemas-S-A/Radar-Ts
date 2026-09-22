@@ -1,0 +1,21 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // O arquivo é criado pelo usuário autenticado e fica dentro do UID dele.
+    // A URL vinculada ao evento permite que os demais usuários autorizados do
+    // Radar o escutem pela própria Memória da Conta, sem abrir o bucket.
+    match /reunioes/{uid}/{codigoIbge}/{idReuniao}/{arquivo} {
+      allow read: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+      allow create, update: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true
+        && request.resource.size < 500 * 1024 * 1024
+        && request.resource.contentType.matches('audio/.*');
+      allow delete: if request.auth != null
+        && request.auth.uid == uid
+        && request.auth.token.email_verified == true;
+    }
+  }
+}

@@ -4,5 +4,8 @@
       "database": "ai-studio-sicapradardeopor-149d8755-5f86-427a-a9a1-d0cb69519e35",
       "rules": "firestore.rules"
     }
-  ]
+  ],
+  "storage": {
+    "rules": "storage.rules"
+  }
 }

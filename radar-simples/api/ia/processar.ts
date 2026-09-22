@@ -1,6 +1,10 @@
 import type { IncomingMessage, ServerResponse } from 'http';
 import { processarRequisicaoIA } from '../../lib/iaProxy.js';
 
+// Arquivos grandes são enviados direto ao Firebase Storage; esta função só
+// recebe a referência do arquivo e pode aguardar a preparação pela IA.
+export const maxDuration = 300;
+
 /**
  * Função serverless do Vercel — equivalente ao endpoint Express de
  * server.ts (usado no dev local).

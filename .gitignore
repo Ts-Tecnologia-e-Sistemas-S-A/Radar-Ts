@@ -1,6 +1,8 @@
 node_modules/
 build/
 dist/
+dist-offline/
+.offline-data/
 coverage/
 .DS_Store
 *.log

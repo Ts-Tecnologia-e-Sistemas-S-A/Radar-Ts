@@ -5,6 +5,7 @@ import {
   persistentMultipleTabManager,
 } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import firebaseConfig from '../../firebase-applet-config.json';
 
 /**
@@ -41,3 +42,6 @@ export const db = initializeFirestore(
 );
 
 export const auth = getAuth(app);
+// Áudios de reunião ficam no Storage, fora do Firestore. Isso permite guardar
+// arquivos grandes sem transformar a transcrição em uma cópia do áudio.
+export const storage = getStorage(app);

@@ -49,10 +49,16 @@ export async function analisarPlanilha(texto: string): Promise<RelatorioPlanilha
 
 export interface TranscricaoReuniao extends SinteseNota {
   transcricao: string;
+  analise: string;
+  acoes: import('../types').AcaoReuniao[];
 }
 
 export function transcreverAudio(audioBase64: string, mimeType: string): Promise<TranscricaoReuniao> {
   return chamarIA<TranscricaoReuniao>('transcrever_audio', { audioBase64, mimeType });
+}
+
+export function transcreverAudioArquivo(arquivoUrl: string, mimeType: string, nome: string): Promise<TranscricaoReuniao> {
+  return chamarIA<TranscricaoReuniao>('transcrever_audio_arquivo', { arquivoUrl, mimeType, nome });
 }
 
 export interface DespesaExtraida {
