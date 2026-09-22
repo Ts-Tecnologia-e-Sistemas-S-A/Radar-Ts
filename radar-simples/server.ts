@@ -28,6 +28,7 @@ app.get('/api/pncp/licitacoes', async (req, res) => {
 // INEP (Base dos Dados/BigQuery). Sem GOOGLE_CLOUD_CREDENTIALS_JSON, devolve
 // erro explícito em vez de fabricar números.
 app.get('/api/censo-escolar', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const codigoIbge = req.query.codigoIbge ? Number(req.query.codigoIbge) : undefined;
   const { status, body } = await buscarDadosEscolares(codigoIbge);
   res.status(status).json(body);
@@ -36,6 +37,7 @@ app.get('/api/censo-escolar', async (req, res) => {
 // Diagnóstico gratuito da rede municipal (resumo + pontos de atenção de
 // cadastro) — pensado pra virar um PDF entregue pro próprio município.
 app.get('/api/diagnostico', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
   const codigoIbge = req.query.codigoIbge ? Number(req.query.codigoIbge) : undefined;
   const { status, body } = await gerarDiagnostico(codigoIbge);
   res.status(status).json(body);

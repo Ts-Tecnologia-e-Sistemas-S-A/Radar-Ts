@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { AchadoDiagnostico, Diagnostico, TipoAchado } from '../api/diagnostico';
+import { CONDICOES_VAAR } from '../types/diagnostico';
 import { EventoTimeline, MunicipioCrm, MunicipioIbge } from '../types';
 
 function cabecalho(doc: jsPDF, titulo: string, subtitulo: string): number {
@@ -18,11 +19,15 @@ function cabecalho(doc: jsPDF, titulo: string, subtitulo: string): number {
 }
 
 function paragrafo(doc: jsPDF, texto: string, y: number, largura = 182): number {
-  const linhas = doc.splitTextToSize(texto, largura);
   doc.setFontSize(10);
+  const linhas: string[] = doc.splitTextToSize(texto, largura);
   doc.setTextColor(30, 30, 30);
-  doc.text(linhas, 14, y);
-  return y + linhas.length * 5 + 4;
+  for (const linha of linhas) {
+    if (y > 278) { doc.addPage(); y = 20; }
+    doc.text(linha, 14, y);
+    y += 5;
+  }
+  return y + 4;
 }
 
 export function gerarPdfBriefing(municipio: MunicipioIbge, crm: MunicipioCrm, eventos: EventoTimeline[]): jsPDF {
@@ -168,12 +173,15 @@ const EXPLICACAO_ACHADO: Record<TipoAchado, SubsecaoExplicacao[]> = {
  * diz isso de forma positiva em vez de omitir a seção.
  */
 export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagnostico): jsPDF {
+  if (diagnostico.codigoIbge !== municipio.codigoIbge || !diagnostico.consultadoEm) {
+    throw new Error('Consulte novamente o diagnóstico desta cidade antes de exportar.');
+  }
   const doc = new jsPDF();
   let y = cabecalho(doc, `Diagnóstico Gratuito — ${municipio.nome} / ${municipio.uf}`, 'Rede Municipal de Ensino');
 
   y = paragrafo(
     doc,
-    'Este diagnóstico usa dados públicos oficiais do Censo Escolar do INEP (via Base dos Dados), a mesma base que a FNDE usa pra calcular o repasse do Fundeb. O objetivo é ajudar o município a identificar pontos do cadastro que valem uma conferência, antes que afetem o repasse do próximo ano.',
+    `Consulta das fontes oficiais realizada em ${new Date(diagnostico.consultadoEm).toLocaleString('pt-BR')}. Cada base tem seu próprio período de referência. Informações cuja atualização não foi confirmada são apresentadas como pendentes.`,
     y
   );
 
@@ -187,7 +195,7 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
     y = paragrafo(doc, `Escolas na rede municipal: ${diagnostico.resumo.escolas}`, y);
     y = paragrafo(doc, `Matrículas totais: ${diagnostico.resumo.alunos}`, y);
   } else {
-    y = paragrafo(doc, 'Sem dado do Censo Escolar publicado pra esse município ainda.', y);
+    y = paragrafo(doc, diagnostico.avisoCenso || 'Censo Escolar atual não confirmado para este município.', y);
   }
 
   y += 4;
@@ -196,8 +204,10 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
   doc.text('Pontos de Atenção', 14, y);
   y += 6;
 
-  if (diagnostico.achados.length === 0) {
-    y = paragrafo(doc, 'Nenhuma inconsistência encontrada nos dados públicos disponíveis — cadastro consistente nos critérios avaliados.', y);
+  if (diagnostico.avisoCenso) {
+    y = paragrafo(doc, 'Verificação do Censo pendente. A ausência de achados não significa ausência de inconsistências.', y);
+  } else if (diagnostico.achados.length === 0) {
+    y = paragrafo(doc, 'Nenhuma inconsistência encontrada nos critérios avaliados.', y);
   } else {
     for (const tipo of ORDEM_TIPOS_ACHADO) {
       const achadosDoTipo: AchadoDiagnostico[] = diagnostico.achados.filter((a) => a.tipo === tipo);
@@ -242,10 +252,36 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
   doc.setFontSize(8);
   doc.setTextColor(140, 140, 140);
   const linhasRodape = doc.splitTextToSize(
-    'Fonte: Censo Escolar do INEP, via Base dos Dados (basedosdados.org). Gerado automaticamente — não substitui conferência oficial.',
+    'Censo Escolar: INEP, via Base dos Dados, condicionado à validação da edição e revisão. Este diagnóstico não substitui a conferência oficial.',
     182
   );
   doc.text(linhasRodape, 14, y);
+
+  doc.addPage();
+  y = cabecalho(doc, `VAAR — ${municipio.nome} / ${municipio.uf}`, 'Habilitação e previsão oficial de repasse');
+  const vaar = diagnostico.vaar;
+  if (!vaar) {
+    paragrafo(doc, `Avaliação pendente: ${diagnostico.avisoVaar || 'Fonte oficial indisponível.'}`, y);
+    return doc;
+  }
+  y = paragrafo(doc, `Exercício ${vaar.exercicio}. ${vaar.publicacao}`, y);
+  y = paragrafo(doc, `${vaar.habilitado ? 'Habilitado' : 'Não habilitado'}; ${vaar.beneficiario ? 'beneficiário' : 'não beneficiário'}.`, y);
+  for (const [i, condicao] of CONDICOES_VAAR.entries()) {
+    y = paragrafo(doc, `${condicao}: ${vaar.condicoes[i] ? 'atendida' : 'não atendida'}.`, y);
+  }
+  y = paragrafo(doc, `Evoluiu atendimento: ${vaar.evoluiuAtendimento ? 'sim' : 'não'}. Elegível: ${vaar.habilitado && vaar.evoluiuAtendimento ? 'sim' : 'não'}.`, y);
+  y = paragrafo(doc, `Evoluiu aprendizagem: ${vaar.evoluiuAprendizagem ? 'sim' : 'não'}. Elegível: ${vaar.habilitado && vaar.evoluiuAprendizagem ? 'sim' : 'não'}.`, y);
+  y = paragrafo(doc, `Previsão oficial de repasse: ${vaar.repasseTotalPrevisto === null ? 'pendente de conferência' : vaar.repasseTotalPrevisto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`, y);
+  if (vaar.pendencia) y = paragrafo(doc, `Pendência publicada: ${vaar.pendencia}`, y);
+  for (const aviso of vaar.avisos) y = paragrafo(doc, aviso, y);
+  y = paragrafo(doc, `Consulta ao FNDE: ${new Date(vaar.consultadoEm).toLocaleString('pt-BR')}. Fontes oficiais (links):`, y);
+  for (const fonte of vaar.fontes) {
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setFontSize(9);
+    doc.setTextColor(30, 70, 140);
+    doc.textWithLink(fonte.titulo, 14, y, { url: fonte.url });
+    y += 7;
+  }
 
   return doc;
 }

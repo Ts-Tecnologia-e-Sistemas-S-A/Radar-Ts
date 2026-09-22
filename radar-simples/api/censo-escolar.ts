@@ -10,6 +10,7 @@ export default async function handler(req: IncomingMessage, res: ServerResponse)
   const codigoIbge = url.searchParams.get('codigoIbge');
   const { status, body } = await buscarDadosEscolares(codigoIbge ? Number(codigoIbge) : undefined);
   res.statusCode = status;
+  res.setHeader('Cache-Control', 'no-store');
   res.setHeader('Content-Type', 'application/json');
   res.end(JSON.stringify(body));
 }
