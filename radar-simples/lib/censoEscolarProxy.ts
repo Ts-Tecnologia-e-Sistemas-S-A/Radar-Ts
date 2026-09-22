@@ -54,7 +54,7 @@ export async function buscarDadosEscolares(codigoIbge: number | undefined): Prom
     );
 
     const row = rows[0];
-    if (!row || row.alunos === null) throw new Error(`Censo ${edicao.ano} sem dados completos para este município. Não serão usados anos anteriores.`);
+    if (!row || row.ano !== edicao.ano || row.alunos === null) throw new Error(`Censo ${edicao.ano} sem dados completos para este município. Não serão usados anos anteriores.`);
     return {
       status: 200,
       body: { sucesso: true, dados: { ano: row.ano, escolas: row.escolas, alunos: row.alunos } },

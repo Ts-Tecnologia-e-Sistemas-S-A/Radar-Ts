@@ -118,6 +118,8 @@ describe('leitura e atualização', () => {
     const r = await gerarDiagnostico(2103000, {
       censo: async () => ({ status: 502, body: { sucesso: false, erro: 'Revisão não validada' } }),
       vaar: async () => vaar,
+      ideb: async () => ({ comparativos: [], aviso: 'IDEB indisponível' }),
+      repasses: async () => { throw new Error('Repasses indisponíveis'); },
       query: async () => { throw new Error('Não deve consultar achados sem Censo atual'); },
     });
     expect(r.body.sucesso).toBe(true);

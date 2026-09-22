@@ -1,5 +1,6 @@
 import { lerFonteOficial, linksHtml, normalizar, tabelaCsv, textoHtml } from './fontesOficiais.js';
 import type { AvaliacaoVaar } from '../src/types/diagnostico.js';
+import { compararAprendizagemVaar } from './vaarComparativo.js';
 
 const BASE = 'https://www.gov.br/fnde/pt-br/acesso-a-informacao/acoes-e-programas/financiamento/fundeb';
 type Leitor = (url: string) => Promise<string>;
@@ -41,7 +42,8 @@ export async function buscarVaarOficial(codigoIbge: number, ler: Leitor = lerFon
   if (!/^[1-9]\d{6}$/.test(String(codigoIbge))) throw new Error('Código IBGE inválido.');
   const exercicio = Number(new Intl.DateTimeFormat('en', { year: 'numeric', timeZone: 'America/Sao_Paulo' }).format(agora));
   const pagina = `${BASE}/${exercicio}`;
-  const fontes = descobrirPublicacao(await ler(pagina), pagina);
+  const html = await ler(pagina);
+  const fontes = descobrirPublicacao(html, pagina);
   const [habilitacao, valores] = await Promise.all([ler(fontes.habilitacaoUrl), ler(fontes.valoresUrl)]);
   const portaria = (texto: string) => normalizar(texto).match(/portaria[^;\n]*?n[ºo°.]*\s*(\d+)/)?.[1];
   if (!portaria(fontes.publicacao) || portaria(fontes.publicacao) !== portaria(valores.slice(0, 1500))) {
@@ -72,10 +74,18 @@ export async function buscarVaarOficial(codigoIbge: number, ler: Leitor = lerFon
   if (beneficiario && repasses.length === 1) repasseTotalPrevisto = moedaOficial(repasses[0]['complementacao da uniao-vaar (r$)']);
   else if (!beneficiario && repasses.length === 0) repasseTotalPrevisto = 0;
   else avisos.push('A lista de habilitação e a última tabela de repasses divergem. Valor bloqueado até conferência oficial.');
+  let comparativoAprendizagem = null;
+  let avisoComparativo = null;
+  try {
+    const indicadores = linksHtml(html, pagina).filter((l) => /indicadores.*atendimento.*aprendizagem.*vaar.*\.csv$/i.test(l.url));
+    if (indicadores.length !== 1) throw new Error('Arquivo atual dos indicadores VAAR não identificado com segurança.');
+    comparativoAprendizagem = compararAprendizagemVaar(codigoIbge, await ler(indicadores[0].url), habilitacao, exercicio, indicadores[0].url, agora.toISOString());
+  } catch (erro) { avisoComparativo = erro instanceof Error ? erro.message : 'Comparação estadual do VAAR indisponível.'; }
   return {
     codigoIbge, municipio: r.entidade, uf: r.uf, exercicio, publicacao: fontes.publicacao,
     consultadoEm: agora.toISOString(), condicoes, habilitado, beneficiario,
     evoluiuAtendimento, evoluiuAprendizagem, repasseTotalPrevisto,
+    comparativoAprendizagem, avisoComparativo,
     pendencia: r['pendencia identificada'] && r['pendencia identificada'] !== '-' ? r['pendencia identificada'] : null,
     avisos,
     fontes: [
