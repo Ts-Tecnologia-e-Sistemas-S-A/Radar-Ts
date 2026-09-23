@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'bun:test';
+import { X509Certificate } from 'node:crypto';
+import { rootCertificates } from 'node:tls';
+import { INTERMEDIARIO_INEP } from './inepCertificado';
+import { lerArquivoInep } from './inepDownload';
 import { compararEstado, numeroPublicado, type NotaDaFonte } from './comparativoEstadual';
 import { buscarComparativosIdeb, descobrirEdicaoIdeb, extrairNotasIdeb, lerNotasIdeb, PAGINA_IDEB } from './idebOficial';
 import { compararAprendizagemVaar } from './vaarComparativo';
@@ -6,6 +10,22 @@ import { gerarDiagnostico } from './diagnosticoProxy';
 import { zipSync, strToU8 } from 'fflate';
 
 const metadados = { titulo: 'Teste', anoReferencia: 2025, universo: 'Municipal', fonte: { titulo: 'INEP', url: 'https://www.gov.br/inep/' }, consultadoEm: '2026-09-22T12:00:00Z', casasDecimais: 1 };
+
+describe('conexão segura com o INEP em produção', () => {
+  it('confirma a assinatura da intermediária ausente com uma raiz pública do Node', () => {
+    const intermediaria = new X509Certificate(INTERMEDIARIO_INEP);
+    const raiz = rootCertificates.map((pem) => new X509Certificate(pem)).find((c) => c.fingerprint256 === '4F:A3:12:6D:8D:3A:11:D1:C4:85:5A:4F:80:7C:BA:D6:CF:91:9D:3A:5A:88:B0:3B:EA:2C:63:72:D9:3C:40:C9');
+    expect(raiz).toBeDefined();
+    expect(intermediaria.verify(raiz!.publicKey)).toBe(true);
+    expect(intermediaria.fingerprint256).toBe('E1:07:47:D4:DA:7B:AB:09:CB:A9:95:2F:01:9D:35:34:CB:9F:BA:07:0B:F1:3D:87:91:B1:69:9C:D2:FF:59:DD');
+    expect(Date.parse(intermediaria.validTo)).toBeGreaterThan(Date.now());
+  });
+  it('não usa HTTP nem entrega o cliente TLS a outros domínios', async () => {
+    for (const url of ['http://download.inep.gov.br/dados.zip', 'https://example.com/dados.zip', 'https://download.inep.gov.br.example.com/dados.zip']) {
+      await expect(lerArquivoInep(url)).rejects.toThrow('oficial');
+    }
+  });
+});
 const notas: NotaDaFonte[] = [9, 8, 7, 6, 5, 5, 4, 3].map((nota, i) => ({ codigoIbge: 2100000 + i, municipio: `Cidade ${i}`, uf: 'MA', nota, participa: true }));
 
 describe('cidade filtrada e líderes do mesmo estado', () => {

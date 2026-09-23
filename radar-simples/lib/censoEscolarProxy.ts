@@ -60,7 +60,7 @@ export async function buscarDadosEscolares(codigoIbge: number | undefined): Prom
       body: { sucesso: true, dados: { ano: row.ano, escolas: row.escolas, alunos: row.alunos } },
     };
   } catch (err: any) {
-    const erro = err.message === 'fetch failed' || err.name === 'TimeoutError'
+    const erro = err.message === 'fetch failed' || ['TimeoutError', 'AbortError'].includes(err.name) || ['ECONNRESET', 'ENOTFOUND', 'ETIMEDOUT', 'UNABLE_TO_VERIFY_LEAF_SIGNATURE'].includes(err.code)
       ? 'Não foi possível consultar a revisão atual do INEP. Censo pendente; números anteriores não serão utilizados.'
       : err.message || 'Falha ao consultar o Censo Escolar';
     return { status: 502, body: { sucesso: false, erro } };

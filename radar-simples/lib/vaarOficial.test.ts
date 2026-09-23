@@ -97,14 +97,13 @@ describe('leitura e atualização', () => {
   it('seleciona a edição oficial mais recente e invalida retificações do mesmo ano', async () => {
     const html = '<a href="https://download.inep.gov.br/2024.zip">Microdados Censo Escolar 2024</a><a href="https://download.inep.gov.br/2025.zip">Microdados Censo Escolar 2025</a>';
     let etag = 'v1';
-    globalThis.fetch = (async (url, opcoes) => {
+    const metadados = async (url: string) => {
       expect(String(url)).toEndWith('/2025.zip');
-      expect(opcoes?.method).toBe('HEAD');
-      return new Response(null, { headers: { ETag: etag, 'Last-Modified': 'Mon, 20 Jul 2026 12:00:00 GMT' } });
-    }) as typeof fetch;
-    const primeira = await consultarEdicaoCenso(async () => html);
+      return { bytes: Buffer.alloc(0), headers: { etag, 'last-modified': 'Mon, 20 Jul 2026 12:00:00 GMT' } };
+    };
+    const primeira = await consultarEdicaoCenso(async () => html, metadados);
     etag = 'v2';
-    const segunda = await consultarEdicaoCenso(async () => html);
+    const segunda = await consultarEdicaoCenso(async () => html, metadados);
     expect(primeira.ano).toBe(2025);
     expect(primeira.revisao).not.toBe(segunda.revisao);
     expect(() => validarEspelhoCenso(segunda, primeira.revisao)).toThrow();
