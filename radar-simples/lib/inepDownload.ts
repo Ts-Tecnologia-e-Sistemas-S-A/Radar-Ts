@@ -13,13 +13,13 @@ export function lerArquivoInep(url: string, somenteMetadados = false): Promise<{
     return Promise.reject(new Error('Endereço fora do servidor oficial de arquivos do INEP.'));
   }
   return new Promise((resolve, reject) => {
-    // GET parcial funciona mesmo quando a origem rejeita HEAD. O corpo é
-    // encerrado ao receber os metadados, inclusive se a origem ignorar Range.
+    // A origem pode recusar HEAD e Range. Encerra o GET ao receber os
+    // cabeçalhos quando só precisamos dos metadados, sem baixar os microdados.
     const req = get(endereco, {
       agent: agenteInep, signal: AbortSignal.timeout(somenteMetadados ? 15000 : 45000),
-      headers: { 'Cache-Control': 'no-cache', ...(somenteMetadados ? { Range: 'bytes=0-0' } : {}) },
+      headers: { 'Cache-Control': 'no-cache' },
     }, (res) => {
-      if (res.statusCode !== 200 && !(somenteMetadados && res.statusCode === 206)) {
+      if (res.statusCode !== 200) {
         res.destroy(); reject(new Error(`INEP indisponível (HTTP ${res.statusCode}). Redirecionamentos não são aceitos.`)); return;
       }
       if (somenteMetadados) { resolve({ bytes: Buffer.alloc(0), headers: res.headers }); res.destroy(); return; }
