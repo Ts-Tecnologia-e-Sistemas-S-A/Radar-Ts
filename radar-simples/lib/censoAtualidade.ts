@@ -1,11 +1,11 @@
 import { createHash } from 'node:crypto';
-import { configurarCertificadosSistema } from './tlsOficial.js';
+import { lerArquivoInep } from './inepDownload.js';
 import { lerFonteOficial, linksHtml, normalizar } from './fontesOficiais.js';
 
 export const PAGINA_CENSO = 'https://www.gov.br/inep/pt-br/acesso-a-informacao/dados-abertos/microdados/censo-escolar';
 
 /** Identifica também retificações do mesmo ano, sem baixar o ZIP de microdados. */
-export async function consultarEdicaoCenso(ler = lerFonteOficial) {
+export async function consultarEdicaoCenso(ler = lerFonteOficial, metadados = (url: string) => lerArquivoInep(url, true)) {
   const links = linksHtml(await ler(PAGINA_CENSO), PAGINA_CENSO)
     .filter((l) => /microdados.*censo.*escolar/.test(normalizar(l.texto)) && /20\d{2}/.test(l.texto));
   const edicoes = links.map((l) => ({ ...l, ano: Number(l.texto.match(/20\d{2}/)![0]) }));
@@ -15,11 +15,10 @@ export async function consultarEdicaoCenso(ler = lerFonteOficial) {
   const edicao = atuais[0];
   const url = new URL(edicao.url);
   if (url.protocol !== 'https:' || url.hostname !== 'download.inep.gov.br') throw new Error('Arquivo atual do INEP não reconhecido.');
-  configurarCertificadosSistema();
-  const resposta = await fetch(edicao.url, { method: 'HEAD', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(15000) });
-  const etag = resposta.headers.get('etag');
-  const ultimaModificacao = resposta.headers.get('last-modified');
-  if (!resposta.ok || !etag || !ultimaModificacao) throw new Error('Não foi possível confirmar a revisão do arquivo do INEP.');
+  const resposta = await metadados(edicao.url);
+  const etag = resposta.headers.etag;
+  const ultimaModificacao = resposta.headers['last-modified'];
+  if (!etag || !ultimaModificacao) throw new Error('Não foi possível confirmar a revisão do arquivo do INEP.');
   const revisao = createHash('sha256').update(JSON.stringify([edicao.url, edicao.texto, etag, ultimaModificacao])).digest('hex');
   return { ano, revisao, url: edicao.url };
 }

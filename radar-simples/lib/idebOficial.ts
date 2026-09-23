@@ -1,4 +1,4 @@
-import { configurarCertificadosSistema } from './tlsOficial.js';
+import { lerArquivoInep } from './inepDownload.js';
 import { unzipSync } from 'fflate';
 import { readSheet } from 'read-excel-file/node';
 import { lerFonteOficial, linksHtml, normalizar } from './fontesOficiais.js';
@@ -6,29 +6,12 @@ import { compararEstado, numeroPublicado, ufDoCodigo, type NotaDaFonte } from '.
 import type { ComparativoEstadual } from '../src/types/diagnostico.js';
 
 export const PAGINA_IDEB = 'https://www.gov.br/inep/pt-br/areas-de-atuacao/pesquisas-estatisticas-e-indicadores/ideb/resultados';
-const LIMITE_ZIP = 40_000_000;
 
-/** Apenas download.inep.gov.br; validação TLS permanece obrigatória, incluindo CAs do SO. */
+/** Apenas download.inep.gov.br; validação TLS permanece obrigatória. */
 export async function baixarPlanilhaInep(url: string): Promise<Uint8Array> {
   const endereco = new URL(url);
   if (endereco.protocol !== 'https:' || endereco.hostname !== 'download.inep.gov.br' || !endereco.pathname.startsWith('/ideb/')) throw new Error('Arquivo fora da fonte oficial do IDEB.');
-  // Usa também a confiança do sistema operacional, sem relaxar a verificação TLS.
-  configurarCertificadosSistema();
-  const iniciar = async () => {
-    const resposta = await fetch(url, { cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(45000), headers: { 'Cache-Control': 'no-cache' } });
-    if (!resposta.ok || !resposta.body || Number(resposta.headers.get('content-length') || 0) > LIMITE_ZIP) throw new Error('Download inválido.');
-    const leitor = resposta.body.getReader();
-    const partes: Uint8Array[] = [];
-    let tamanho = 0;
-    while (true) {
-      const { done, value } = await leitor.read();
-      if (done) break;
-      tamanho += value.byteLength;
-      if (tamanho > LIMITE_ZIP) { await leitor.cancel(); throw new Error('Arquivo excede o limite.'); }
-      partes.push(value);
-    }
-    return Buffer.concat(partes);
-  };
+  const iniciar = async () => (await lerArquivoInep(url)).bytes;
   const inicio = Date.now();
   try { return await iniciar(); }
   catch {
