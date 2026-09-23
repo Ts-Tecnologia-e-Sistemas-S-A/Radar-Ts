@@ -151,6 +151,9 @@ export interface EventoTimeline {
   local?: string;
   participantes?: string;
   resumo: string;
+  /** Relato digitado preservado antes de qualquer síntese da IA. */
+  textoOriginal?: string;
+  registroRapido?: { autorId: string; atualizadoEm: string; encerrado: boolean };
   sinteseIA?: string;
   transcricao?: string;
   textoPlanilha?: string;

@@ -213,6 +213,12 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           <p className="pt-space-xs whitespace-pre-wrap break-words">{ev.resumo}</p>
                         </details>
                       )}
+                      {ev.textoOriginal !== undefined && (
+                        <details className="text-body-sm text-on-surface-variant">
+                          <summary className="cursor-pointer text-primary">Relato original digitado</summary>
+                          <p className="pt-space-xs whitespace-pre-wrap break-words">{ev.textoOriginal}</p>
+                        </details>
+                      )}
                       {ev.transcricao && (
                         <details className="text-body-sm text-on-surface-variant">
                           <summary className="cursor-pointer text-primary">Transcrição completa</summary>

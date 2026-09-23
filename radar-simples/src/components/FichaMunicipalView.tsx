@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { buscarDadosEscolares, type DadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
-import { analisarPlanilha, ContatoDetectado, sintetizarNota } from '../api/ia';
+import { analisarPlanilha, ContatoDetectado } from '../api/ia';
 import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
 import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
 import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio } from '../storage';
@@ -20,6 +20,7 @@ import { compartilharOuBaixarPdf, gerarPdfDiagnostico } from '../utils/pdf';
 import Icon from './Icon';
 import AvaliacaoVaarCard from './AvaliacaoVaarCard';
 import ComparativoEstadualCard from './ComparativoEstadualCard';
+import NotaConversa from './NotaConversa';
 
 interface FichaMunicipalViewProps {
   municipio: MunicipioIbge;
@@ -480,7 +481,6 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       <RegistroRapidoIA
         key={municipio.codigoIbge}
         municipio={municipio}
-        crm={crm}
         onEventoSalvo={() => setSalvo(true)}
         onContatoDetectado={adicionarContatoDetectado}
       />
@@ -525,216 +525,83 @@ function CampoEditavelMonetario({ label, valor, onSalvar }: { label: string; val
   );
 }
 
-function RegistroRapidoIA({
-  municipio,
-  crm,
-  onEventoSalvo,
-  onContatoDetectado,
-}: {
+function RegistroRapidoIA({ municipio, onEventoSalvo, onContatoDetectado }: {
   municipio: MunicipioIbge;
-  crm: MunicipioCrm;
   onEventoSalvo: () => void;
   onContatoDetectado: (contato: ContatoDetectado) => Promise<boolean>;
 }) {
-  const draftKey = `radar_ts_registro_rapido_${municipio.codigoIbge}`;
-  const [nota, setNota] = useState('');
   const [modo, setModo] = useState<'nota' | 'planilha'>('nota');
+  return <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3.5">
+    <div className="flex items-center gap-1.5 text-primary">
+      <Icon name="smart_toy" size={20} className="text-secondary" />
+      <h3 className="text-label-lg">Registro Rápido de Campo</h3>
+    </div>
+    <label className="text-label-sm text-on-surface-variant block" htmlFor="tipo-registro">Tipo de registro</label>
+    <select id="tipo-registro" value={modo} onChange={(e) => setModo(e.target.value as 'nota' | 'planilha')}
+      className="w-full rounded-lg bg-surface-container-low p-2 text-primary">
+      <option value="nota">Nota de reunião</option>
+      <option value="planilha">Dados de planilha — gerar relatório</option>
+    </select>
+    {modo === 'nota'
+      ? <NotaConversa municipio={municipio} onContatoDetectado={onContatoDetectado} />
+      : <RegistroPlanilha municipio={municipio} onEventoSalvo={onEventoSalvo} />}
+  </section>;
+}
+
+function RegistroPlanilha({ municipio, onEventoSalvo }: { municipio: MunicipioIbge; onEventoSalvo: () => void }) {
+  const chave = `radar_ts_planilha_${municipio.codigoIbge}`;
+  const [nota, setNota] = useState(() => {
+    try {
+      const atual = localStorage.getItem(chave);
+      if (atual !== null) return atual;
+      const antigo = JSON.parse(localStorage.getItem(`radar_ts_registro_rapido_${municipio.codigoIbge}`) || 'null');
+      return antigo?.modo === 'planilha' && typeof antigo.nota === 'string' ? antigo.nota : '';
+    } catch { return ''; }
+  });
   const [relatorio, setRelatorio] = useState<RelatorioPlanilha | null>(null);
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
-  const [resultado, setResultado] = useState<{ combinado: string; proximoPasso: string } | null>(null);
-  const [contatoSugerido, setContatoSugerido] = useState<ContatoDetectado | null>(null);
-  const [salvandoContato, setSalvandoContato] = useState(false);
-  const [carregandoResultado, setCarregandoResultado] = useState(true);
-
-  useEffect(() => {
-    try {
-      const rascunho = localStorage.getItem(draftKey);
-      if (!rascunho) return;
-      const dados = JSON.parse(rascunho) as { nota?: string; modo?: 'nota' | 'planilha' };
-      if (dados.nota) setNota(dados.nota);
-      if (dados.modo === 'nota' || dados.modo === 'planilha') setModo(dados.modo);
-    } catch {
-      localStorage.removeItem(draftKey);
-    }
-  }, [draftKey]);
-
-  useEffect(() => {
-    if (!nota.trim()) {
-      localStorage.removeItem(draftKey);
-      return;
-    }
-    localStorage.setItem(draftKey, JSON.stringify({ nota, modo }));
-  }, [draftKey, nota, modo]);
-
-  function limparRascunho() {
-    localStorage.removeItem(draftKey);
-    setNota('');
-  }
-
   useEffect(() => {
     let cancelado = false;
     getEventos(municipio.codigoIbge).then((eventos) => {
       if (cancelado) return;
-      const ultimo = eventos.filter((e) => e.sinteseIA)
+      const ultimo = eventos.filter((e) => e.relatorioPlanilha)
         .sort((a, b) => (b.criadaEm || b.data).localeCompare(a.criadaEm || a.data))[0];
-      if (ultimo) setResultado({ combinado: ultimo.sinteseIA!, proximoPasso: ultimo.proximoPassoIA || '' });
-      const ultimoRelatorio = eventos.filter((e) => e.relatorioPlanilha)
-        .sort((a, b) => (b.criadaEm || b.data).localeCompare(a.criadaEm || a.data))[0];
-      if (ultimoRelatorio?.relatorioPlanilha) setRelatorio(ultimoRelatorio.relatorioPlanilha);
-    }).catch((e) => !cancelado && setErro(e.message || 'Falha ao recuperar a síntese salva'))
-      .finally(() => !cancelado && setCarregandoResultado(false));
+      if (ultimo?.relatorioPlanilha) setRelatorio(ultimo.relatorioPlanilha);
+    }).catch((e) => { if (!cancelado) setErro(e.message || 'Falha ao recuperar relatório.'); });
     return () => { cancelado = true; };
   }, [municipio.codigoIbge]);
-
+  function editar(texto: string) {
+    setNota(texto);
+    try { localStorage.setItem(chave, texto); }
+    catch { setErro('Não foi possível guardar o rascunho neste aparelho.'); }
+  }
   async function processar() {
-    if (!nota.trim()) return;
-    setProcessando(true);
-    setErro(null);
+    if (!nota.trim() || processando) return;
+    setProcessando(true); setErro(null);
     try {
-      if (!navigator.onLine) {
-        const texto = nota.trim();
-        await addEvento({
-          id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge,
-          tipo: modo === 'planilha' ? 'documento' : 'reuniao',
-          data: new Date().toISOString().slice(0, 10), criadaEm: new Date().toISOString(),
-          resumo: modo === 'planilha' ? 'Planilha registrada offline — análise pendente' : texto,
-          textoPlanilha: modo === 'planilha' ? prepararTextoPlanilha(texto) : undefined,
-          anexos: [], mandato: 'Atual', mandatoAtivo: true,
-        });
-        setErro('Registro salvo no aparelho. A análise da IA poderá ser feita quando a conexão voltar.');
-        onEventoSalvo();
-        limparRascunho();
-        return;
-      }
-      if (modo === 'planilha') {
-        const texto = prepararTextoPlanilha(nota);
-        const analise = await analisarPlanilha(texto);
-        await addEvento({
-          id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge, tipo: 'documento',
-          data: new Date().toISOString().slice(0, 10), criadaEm: new Date().toISOString(),
-          resumo: analise.titulo, textoPlanilha: texto, relatorioPlanilha: analise,
-          anexos: [], mandato: 'Atual', mandatoAtivo: true,
-        });
-        setRelatorio(analise);
-        onEventoSalvo();
-        limparRascunho();
-        return;
-      }
-      const sintese = await sintetizarNota(nota.trim());
+      const texto = prepararTextoPlanilha(nota);
+      const analise = navigator.onLine ? await analisarPlanilha(texto) : null;
       await addEvento({
-        id: crypto.randomUUID(),
-        codigoIbge: municipio.codigoIbge,
-        tipo: 'reuniao',
-        data: new Date().toISOString().slice(0, 10),
-        resumo: nota.trim(),
-        criadaEm: new Date().toISOString(),
-        sinteseIA: sintese.combinado,
-        proximoPassoIA: sintese.proximoPasso,
-        anexos: [],
-        mandato: 'Atual',
-        mandatoAtivo: true,
+        id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge, tipo: 'documento',
+        data: new Date().toISOString().slice(0, 10), criadaEm: new Date().toISOString(),
+        resumo: analise?.titulo || 'Planilha registrada offline — análise pendente',
+        textoPlanilha: texto, relatorioPlanilha: analise || undefined,
+        anexos: [], mandato: 'Atual', mandatoAtivo: true,
       });
-      setResultado(sintese);
-      setContatoSugerido(sintese.contatoDetectado?.nome || sintese.contatoDetectado?.telefone ? sintese.contatoDetectado : null);
-      onEventoSalvo();
-      limparRascunho();
-    } catch (e: any) {
-      setErro(e.message || 'Falha ao processar com IA');
-    } finally {
-      setProcessando(false);
-    }
+      setRelatorio(analise); onEventoSalvo(); editar('');
+    } catch (e: any) { setErro(e.message || 'Falha ao processar a planilha.'); }
+    finally { setProcessando(false); }
   }
-
-  async function confirmarContato() {
-    if (!contatoSugerido || salvandoContato) return;
-    setSalvandoContato(true);
-    try {
-      if (await onContatoDetectado(contatoSugerido)) setContatoSugerido(null);
-    } finally {
-      setSalvandoContato(false);
-    }
-  }
-
-  return (
-    <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3.5">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5 text-primary">
-          <Icon name="smart_toy" size={20} className="text-secondary" />
-          <h3 className="text-label-lg">Registro Rápido de Campo</h3>
-        </div>
-      </div>
-      <div className="space-y-2">
-        <label className="text-label-sm text-on-surface-variant block" htmlFor="tipo-registro">Tipo de registro</label>
-        <select id="tipo-registro" disabled={processando} value={modo} onChange={(e) => setModo(e.target.value as 'nota' | 'planilha')}
-          className="w-full rounded-lg bg-surface-container-low p-2 text-primary">
-          <option value="nota">Nota de reunião</option>
-          <option value="planilha">Dados de planilha — gerar relatório</option>
-        </select>
-        <label htmlFor="texto-registro" className="text-label-sm text-on-surface-variant block">
-          {modo === 'planilha' ? 'Cole os cabeçalhos e as linhas da planilha' : 'O que aconteceu na conversa?'}
-        </label>
-        <textarea
-          id="texto-registro"
-          disabled={processando}
-          className="w-full rounded-lg bg-surface-container-low p-3 text-body-md text-primary focus:outline-none resize-none"
-          placeholder={modo === 'planilha' ? 'Ex: Escola\tMatrículas\nEscola A\t120\nEscola B\t85' : 'Ex: Reunião com o secretário. Pediu demonstração na próxima terça...'}
-          rows={modo === 'planilha' ? 7 : 3}
-          value={nota}
-          onChange={(e) => setNota(e.target.value)}
-          onPaste={(e) => {
-            if (e.clipboardData.getData('text/plain').includes('\t')) setModo('planilha');
-          }}
-        />
-        {modo === 'planilha' && <p className="text-label-sm text-on-surface-variant">Inclua unidades e período nos cabeçalhos. O relatório ficará salvo na Memória da Conta.</p>}
-      </div>
-      <button
-        disabled={carregandoResultado || processando || !nota.trim()}
-        onClick={processar}
-        className="w-full h-12 rounded-lg bg-primary text-on-primary text-label-lg flex items-center justify-center gap-2 disabled:opacity-50"
-      >
-        <Icon name={processando ? 'sync' : 'bolt'} size={18} className={processando ? 'animate-spin' : ''} />
-        <span>{processando ? 'Processando e salvando...' : modo === 'planilha' ? 'Gerar e salvar relatório com IA' : 'Salvar e Processar com IA'}</span>
-      </button>
-      {erro && <p className="text-body-sm text-error">{erro}</p>}
-      {relatorio && <RelatorioPlanilhaCard relatorio={relatorio} />}
-      {resultado && (
-        <div className="rounded-xl bg-secondary-container/30 p-3.5 space-y-2.5">
-          <div className="flex items-center gap-1.5 text-secondary">
-            <Icon name="verified" size={16} />
-            <span className="text-label-sm uppercase tracking-wider font-semibold">Síntese gerada pela IA</span>
-          </div>
-          <div className="p-2.5 rounded-lg bg-surface-container-lowest space-y-1">
-            <span className="text-label-sm uppercase font-bold text-primary">O que ficou combinado:</span>
-            <p className="text-body-md text-on-surface">{resultado.combinado}</p>
-          </div>
-          <div className="p-2.5 rounded-lg bg-surface-container-lowest space-y-1">
-            <span className="text-label-sm uppercase font-bold text-primary">Próximo passo sugerido:</span>
-            <p className="text-body-md text-on-surface">{resultado.proximoPasso}</p>
-          </div>
-        </div>
-      )}
-      {contatoSugerido && (
-        <div className="rounded-xl bg-primary-container/40 p-3.5 space-y-2.5">
-          <div className="flex items-center gap-1.5 text-primary">
-            <Icon name="person_add" size={16} />
-            <span className="text-label-sm uppercase tracking-wider font-semibold">Contato detectado na nota</span>
-          </div>
-          <p className="text-body-md text-on-surface">
-            {contatoSugerido.nome || 'Sem nome identificado'}
-            {contatoSugerido.cargo ? ` — ${contatoSugerido.cargo}` : ''}
-            {contatoSugerido.telefone ? ` — ${contatoSugerido.telefone}` : ''}
-          </p>
-          <div className="flex items-center gap-2">
-            <button onClick={() => setContatoSugerido(null)} className="flex-1 h-10 rounded-lg bg-surface-container-lowest text-on-surface-variant text-label-sm font-semibold">
-              Ignorar
-            </button>
-            <button disabled={salvandoContato} onClick={confirmarContato} className="flex-1 h-10 rounded-lg bg-primary text-on-primary text-label-sm font-semibold disabled:opacity-50">
-              {salvandoContato ? 'Salvando…' : 'Salvar em Contatos-Chave'}
-            </button>
-          </div>
-        </div>
-      )}
-    </section>
-  );
+  return <div className="space-y-3">
+    <label htmlFor="texto-planilha" className="text-label-sm text-on-surface-variant block">Cole os cabeçalhos e as linhas da planilha</label>
+    <textarea id="texto-planilha" rows={7} disabled={processando} value={nota} onChange={(e) => editar(e.target.value)}
+      className="w-full rounded-lg bg-surface-container-low p-3 text-body-md text-primary resize-y"
+      placeholder={'Escola\tMatrículas\nEscola A\t120\nEscola B\t85'} />
+    <p className="text-label-sm text-on-surface-variant">Inclua unidades e período nos cabeçalhos. O relatório ficará salvo na Memória da Conta.</p>
+    <button disabled={processando || !nota.trim()} onClick={processar}
+      className="w-full h-12 rounded-lg bg-primary text-on-primary text-label-lg disabled:opacity-50">{processando ? 'Processando e salvando…' : 'Gerar e salvar relatório com IA'}</button>
+    {erro && <p className="text-body-sm text-error">{erro}</p>}
+    {relatorio && <RelatorioPlanilhaCard relatorio={relatorio} />}
+  </div>;
 }
