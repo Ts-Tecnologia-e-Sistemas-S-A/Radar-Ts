@@ -605,4 +605,3 @@ function RegistroPlanilha({ municipio, onEventoSalvo }: { municipio: MunicipioIb
     {relatorio && <RelatorioPlanilhaCard relatorio={relatorio} />}
   </div>;
 }
-

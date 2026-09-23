@@ -64,7 +64,7 @@ export class RegistroConversa {
     this.atualizar({ evento, texto: evento?.resumo || '', pronto: true, status: evento ? precisaSalvar ? 'pendente' : 'salvo' : 'vazio' });
     // Reenvio idempotente também recupera texto digitado antes de fechar a aba.
     if (evento && precisaSalvar) this.agendar();
-    if (!precisaSalvar) this.backup(evento, true);
+    if (evento && !precisaSalvar) this.backup(evento, true);
   }
   editar(texto: string) {
     if (!this.estado.pronto) return;
