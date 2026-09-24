@@ -39,10 +39,6 @@ export interface SinteseNota {
   contatoDetectado: ContatoDetectado | null;
 }
 
-export function sintetizarNota(texto: string): Promise<SinteseNota> {
-  return chamarIA<SinteseNota>('sintetizar_nota', { texto });
-}
-
 export async function analisarPlanilha(texto: string): Promise<RelatorioPlanilha> {
   return validarRelatorioPlanilha(await chamarIA('analisar_planilha', { texto: prepararTextoPlanilha(texto) }));
 }
@@ -59,18 +55,6 @@ export function transcreverAudio(audioBase64: string, mimeType: string): Promise
 
 export function transcreverAudioArquivo(arquivoUrl: string, mimeType: string, nome: string): Promise<TranscricaoReuniao> {
   return chamarIA<TranscricaoReuniao>('transcrever_audio_arquivo', { arquivoUrl, mimeType, nome });
-}
-
-export interface DespesaExtraida {
-  valor: number | null;
-  data: string | null;
-  categoria: 'combustivel' | 'hospedagem' | 'alimentacao' | 'pedagio' | 'outros' | null;
-  estabelecimento: string | null;
-  descricaoSugerida: string;
-}
-
-export function extrairDespesa(imagemBase64: string, mimeType: string): Promise<DespesaExtraida> {
-  return chamarIA<DespesaExtraida>('ocr_despesa', { imagemBase64, mimeType });
 }
 
 export interface Briefing {

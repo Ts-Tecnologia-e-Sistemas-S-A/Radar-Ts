@@ -41,6 +41,13 @@ export default function App() {
     setCarregandoMunicipios(true);
     setErroMunicipios(null);
     try {
+      if (!navigator.onLine) {
+        const cache = localStorage.getItem(MUNICIPIOS_OFFLINE_KEY);
+        if (cache) {
+          setMunicipios(JSON.parse(cache) as MunicipioIbge[]);
+          return;
+        }
+      }
       const crm = await getMunicipiosCrm();
       const codigos = new Set(Object.keys(crm).map(Number));
       let selecionados: MunicipioIbge[];
