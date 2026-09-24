@@ -39,6 +39,10 @@ export interface BuyingHistoryItem {
   modality: string;
   addendumsCount?: number;
   contractDate?: string; // Data de assinatura/homologação do contrato vigente (AAAA-MM-DD)
+  publishedAt?: string;
+  retrievedAt?: string;
+  source?: string;
+  sourceUrl?: string;
 }
 
 export interface IOFactorWeights {
@@ -64,6 +68,11 @@ export interface EducationalMetrics {
   educacensoStatus?: string;
   fundebBudget: number; // R$
   mainPains: string[];
+  referenceYear?: number;
+  publishedAt?: string;
+  retrievedAt?: string;
+  source?: string;
+  sourceUrl?: string;
 }
 
 export interface Municipality {
@@ -72,6 +81,9 @@ export interface Municipality {
   state: string; // "PI", "MA", "CE", "BA", "PE", "SP", "MG", etc.
   region: 'Nordeste' | 'Norte' | 'Centro-Oeste' | 'Sudeste' | 'Sul';
   population: number;
+  populationReferenceYear?: number;
+  populationSource?: string;
+  populationSourceUrl?: string;
   status: MunicipalityStatus;
   funnelStage: FunnelStage;
   currentSystem: string; // Competitor or legacy
@@ -84,8 +96,10 @@ export interface Municipality {
   ioScore: number; // 0 - 100
   ioFactors: IOFactorWeights;
   educationalMetrics: EducationalMetrics;
+  educationalMetricsArchive?: EducationalMetrics[];
   keyContacts: KeyContact[];
   buyingHistory: BuyingHistoryItem[];
+  buyingHistoryArchive?: BuyingHistoryItem[];
   lastActivityDate: string;
   dealOwner?: string;
   latitude?: number;

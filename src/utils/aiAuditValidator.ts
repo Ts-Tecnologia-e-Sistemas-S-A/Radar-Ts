@@ -1,4 +1,9 @@
 import { Municipality } from '../types';
+import {
+  EMPTY_EDUCATIONAL_METRICS,
+  selectNewestBuyingHistory,
+  selectNewestEducationalMetrics,
+} from './dataRecency';
 
 export interface AuditResult<T = Municipality> {
   isValid: boolean;
@@ -82,26 +87,34 @@ export function auditAIDataIntegrity(rawData: any): AuditResult<Municipality> {
     }
   });
 
-  // Ensure default mandatory official sources if none detected
+  // Missing evidence must remain explicit; never assign sources the response did not provide.
   if (verifiedSources.length === 0) {
-    verifiedSources.push('PNCP (Portal Nacional de Contratações Públicas)');
-    verifiedSources.push(`Portal da Transparência de ${rawData.name || 'Município'}`);
-    verifiedSources.push('INEP / Censo Escolar');
-    warnings.push('Nenhuma fonte oficial explícita informada pela IA. Atribuídas fontes oficiais padrão do governo.');
+    warnings.push('Nenhuma fonte oficial explícita foi comprovada pela resposta.');
   }
 
   // 3. Timon Rule & Business Logic Audit (Advanced Stage Rule)
-  const currentSystem = rawData.currentSystem || 'Sistema Local Legado';
+  const currentSystem = rawData.currentSystem || 'Não localizado em fonte oficial';
   const funnelStage = rawData.funnelStage || 'prospectado';
   const status = rawData.status || 'oportunidade';
 
+  const normalizedHistory = selectNewestBuyingHistory(
+    Array.isArray(rawData.buyingHistory) ? rawData.buyingHistory : [],
+    Array.isArray(rawData.buyingHistoryArchive) ? rawData.buyingHistoryArchive : []
+  );
+  const normalizedEducation = selectNewestEducationalMetrics([
+    rawData.educationalMetrics,
+    ...(Array.isArray(rawData.educationalMetricsArchive) ? rawData.educationalMetricsArchive : []),
+  ]);
+  if (rawData.educationalMetrics && !normalizedEducation.current) {
+    warnings.push('Métricas educacionais sem ano de referência do INEP foram arquivadas e não serão exibidas como atuais.');
+  }
+
   if (
     (funnelStage === 'licitacao_aberta' || status === 'licitacao') &&
-    rawData.buyingHistory &&
-    rawData.buyingHistory.length > 0
+    normalizedHistory.current.length > 0
   ) {
-    const latestPurchase = rawData.buyingHistory[0];
-    if (latestPurchase && latestPurchase.year >= 2024 && latestPurchase.company) {
+    const latestPurchase = normalizedHistory.current[0];
+    if (latestPurchase?.company) {
       warnings.push(
         `Regra Timon Aplicada: Licitação aberta descartada em favor do contrato vigente com ${latestPurchase.company} (Ano ${latestPurchase.year}).`
       );
@@ -117,27 +130,18 @@ export function auditAIDataIntegrity(rawData: any): AuditResult<Municipality> {
 
   let sanitizedIOScore = Number(rawData.ioScore);
   if (isNaN(sanitizedIOScore) || sanitizedIOScore < 0 || sanitizedIOScore > 100) {
-    sanitizedIOScore = 75; // Default safe middle score
-    warnings.push('Score IO fora do intervalo [0-100]. Normalizado para 75.');
+    sanitizedIOScore = 0;
+    warnings.push('Score IO ausente ou inválido. Mantido como pendente (0).');
   }
 
   // 5. Contact Verification & Formatting Audit
   const keyContacts = Array.isArray(rawData.keyContacts) ? rawData.keyContacts : [];
   const sanitizedContacts = keyContacts.map((contact: any) => ({
-    name: contact?.name || 'Secretário(a) de Educação (Pendente Verificação)',
-    role: contact?.role || 'Secretário Municipal de Educação',
-    phone: contact?.phone || '(99) 3661-2000',
-    email: contact?.email || `semec@${(rawData.name || 'municipio').toLowerCase().replace(/\s+/g, '')}.${(rawData.state || 'ma').toLowerCase()}.gov.br`,
+    name: contact?.name || 'Não localizado em fonte oficial',
+    role: contact?.role || 'Não localizado em fonte oficial',
+    phone: contact?.phone,
+    email: contact?.email,
   }));
-
-  if (sanitizedContacts.length === 0) {
-    sanitizedContacts.push({
-      name: 'Secretário(a) de Educação',
-      role: 'Secretário Municipal de Educação',
-      phone: '(99) 3661-2000',
-      email: `semec@${(rawData.name || 'municipio').toLowerCase().replace(/\s+/g, '')}.${(rawData.state || 'ma').toLowerCase()}.gov.br`,
-    });
-  }
 
   // Determine Verification Status
   const isValid = errors.length === 0;
@@ -167,45 +171,38 @@ export function auditAIDataIntegrity(rawData: any): AuditResult<Municipality> {
     name: rawData.name || 'Cidade',
     state: (rawData.state || 'MA').toUpperCase(),
     region: rawData.region || 'Nordeste',
-    population: Number(rawData.population) || 100000,
+    population: Number(rawData.population) || 0,
+    populationReferenceYear: Number(rawData.populationReferenceYear) || undefined,
+    populationSource: rawData.populationSource,
+    populationSourceUrl: rawData.populationSourceUrl,
     status: status,
     funnelStage: funnelStage,
     currentSystem: currentSystem,
     currentContractValue: sanitizedContractValue,
-    contractDaysRemaining: Number(rawData.contractDaysRemaining) || 90,
+    contractDaysRemaining: Number(rawData.contractDaysRemaining) || 0,
     renewalProbability: rawData.renewalProbability || 'Média',
-    tenderProbability: Number(rawData.tenderProbability) || 80,
-    estimatedNewContractValue: Number(rawData.estimatedNewContractValue) || sanitizedContractValue * 1.15,
+    tenderProbability: Number(rawData.tenderProbability) || 0,
+    estimatedNewContractValue: Number(rawData.estimatedNewContractValue) || 0,
     probableModality: rawData.probableModality || 'Pregão Eletrônico',
     ioScore: sanitizedIOScore,
     ioFactors: rawData.ioFactors || {
-      contractExpiringDays: 85,
-      lowIdebScore: 70,
-      techInvestmentHistory: 80,
-      budgetAvailability: 90,
-      managementChange: 75,
-      federalFundsAvailable: 85,
-      existingRelationship: 60,
+      contractExpiringDays: 0,
+      lowIdebScore: 0,
+      techInvestmentHistory: 0,
+      budgetAvailability: 0,
+      managementChange: 0,
+      federalFundsAvailable: 0,
+      existingRelationship: 0,
     },
-    educationalMetrics: rawData.educationalMetrics || {
-      ideb: 4.2,
-      idebMeta: 5.0,
-      studentsCount: 15000,
-      schoolsCount: 45,
-      teachersCount: 850,
-      fundebAnnualBudget: 45000000,
-      mainPains: [
-        'Erros no fechamento do Educacenso do MEC',
-        'Sistema antigo sem diário eletrônico offline nas escolas rurais',
-        'Falta de prestação de contas automatizada no TCE',
-      ],
-    },
+    educationalMetrics: normalizedEducation.current || EMPTY_EDUCATIONAL_METRICS,
+    educationalMetricsArchive: normalizedEducation.archived,
     keyContacts: sanitizedContacts,
-    buyingHistory: Array.isArray(rawData.buyingHistory) ? rawData.buyingHistory : [],
+    buyingHistory: normalizedHistory.current,
+    buyingHistoryArchive: normalizedHistory.archived,
     lastActivityDate: new Date().toISOString().slice(0, 10),
     dealOwner: rawData.dealOwner || 'José Badotti',
-    latitude: rawData.latitude || -4.4553,
-    longitude: rawData.longitude || -43.8864,
+    latitude: rawData.latitude,
+    longitude: rawData.longitude,
     notes: rawData.notes || `Perfil auditado em ${new Date().toLocaleDateString('pt-BR')}.`,
     dataVerificationStatus,
     verifiedSources,
