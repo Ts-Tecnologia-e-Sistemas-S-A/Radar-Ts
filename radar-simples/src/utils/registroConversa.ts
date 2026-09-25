@@ -61,7 +61,7 @@ export class RegistroConversa {
   }
   iniciar(evento: ConversaSalva | null, precisaSalvar = true) {
     if (this.estado.pronto) return;
-    this.atualizar({ evento, texto: evento?.resumo || '', pronto: true, status: evento ? precisaSalvar ? 'pendente' : 'salvo' : 'vazio' });
+    this.atualizar({ evento, texto: (evento?.textoOriginal ?? evento?.resumo) || '', pronto: true, status: evento ? precisaSalvar ? 'pendente' : 'salvo' : 'vazio' });
     // Reenvio idempotente também recupera texto digitado antes de fechar a aba.
     if (evento && precisaSalvar) this.agendar();
     if (evento && !precisaSalvar) this.backup(evento, true);
@@ -118,12 +118,12 @@ export class RegistroConversa {
       const sintese = validarSinteseConversa(await this.deps.gerar(anterior.textoOriginal));
       if (!vigente()) return null;
       const atualizado: ConversaSalva = {
-        ...anterior, resumo: sintese.combinado, sinteseIA: sintese.combinado, proximoPassoIA: sintese.proximoPasso,
+        ...anterior, resumo: anterior.textoOriginal, sinteseIA: sintese.combinado, proximoPassoIA: sintese.proximoPasso,
         registroRapido: { ...anterior.registroRapido, atualizadoEm: new Date().toISOString() },
       };
       await this.gravar(atualizado);
       if (!vigente()) return null;
-      this.atualizar({ evento: atualizado, texto: atualizado.resumo, status: 'salvo', erro: null });
+      this.atualizar({ evento: atualizado, texto: anterior.textoOriginal, status: 'salvo', erro: null });
       this.backup(atualizado, true);
       return sintese;
     } catch (e) {
