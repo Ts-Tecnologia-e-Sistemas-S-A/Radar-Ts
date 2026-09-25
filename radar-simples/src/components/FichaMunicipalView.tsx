@@ -17,6 +17,7 @@ import {
   municipioCrmVazio,
 } from '../types';
 import { compartilharOuBaixarPdf, gerarPdfDiagnostico } from '../utils/pdf';
+import { atualizarUltimaAtividadeMunicipio } from '../utils/ordenacaoMunicipios';
 import Icon from './Icon';
 import AvaliacaoVaarCard from './AvaliacaoVaarCard';
 import ComparativoEstadualCard from './ComparativoEstadualCard';
@@ -87,11 +88,12 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   }, [municipio.codigoIbge, revisaoCarga]);
 
   async function salvar(atualizado: MunicipioCrm, otimista = true) {
+    const crmComAtividade = atualizarUltimaAtividadeMunicipio(crm, atualizado);
     setSalvo(false);
-    if (otimista) setCrm(atualizado);
+    if (otimista) setCrm(crmComAtividade);
     try {
-      await saveMunicipioCrm(atualizado);
-      if (!otimista) setCrm(atualizado);
+      await saveMunicipioCrm(crmComAtividade);
+      if (!otimista) setCrm(crmComAtividade);
       setSalvo(true);
       setErro(null);
       setTimeout(() => setSalvo(false), 2000);
@@ -115,8 +117,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       if (dados) {
         setCensoAtual({ ...dados, codigoIbge });
         const atualizado = { ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano };
-        await saveMunicipioCrm(atualizado);
-        if (vigente()) setCrm(atualizado);
+        await salvar(atualizado, false);
       } else {
         setAvisoCenso('Sem dado do Censo Escolar publicado pra esse município.');
       }

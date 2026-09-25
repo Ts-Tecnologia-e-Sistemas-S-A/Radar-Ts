@@ -4,6 +4,7 @@ import { proximaTarefa } from '../utils/agenda';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
+import { compararMunicipiosPorUltimaAtividade } from '../utils/ordenacaoMunicipios';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -33,7 +34,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<'todos' | 'urgentes'>('todos');
-  const [ordenacao, setOrdenacao] = useState('tarefa');
+  const [ordenacao, setOrdenacao] = useState('atividade');
   const [visitasPorCodigo, setVisitasPorCodigo] = useState<Record<number, { data: string; hora?: string }>>({});
 
   useEffect(() => {
@@ -78,6 +79,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
       .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
       .sort((a, b) => {
+        if (ordenacao === 'atividade') return compararMunicipiosPorUltimaAtividade(a, b);
         if (ordenacao !== 'nome') {
           const dataA = ordenacao === 'visita' ? visitasPorCodigo[a.municipio.codigoIbge] : a.crm.proximaAcao;
           const dataB = ordenacao === 'visita' ? visitasPorCodigo[b.municipio.codigoIbge] : b.crm.proximaAcao;
@@ -127,11 +129,13 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
           onChange={(e) => setOrdenacao(e.target.value)}
           className="w-full h-12 px-3 rounded-xl bg-surface-container-lowest text-on-surface shadow-sm"
         >
+          <option value="atividade">Mais recentes (última atividade)</option>
           <option value="tarefa">Data da tarefa</option>
           <option value="visita">Data da visita</option>
           <option value="nome">Nome (A–Z)</option>
         </select>
-        {ordenacao !== 'nome' && <span className="text-label-sm">Pendências mais antigas primeiro; cidades sem data ao final.</span>}
+        {ordenacao === 'atividade' && <span className="text-label-sm">Cidades com atividade mais recente primeiro.</span>}
+        {ordenacao !== 'atividade' && ordenacao !== 'nome' && <span className="text-label-sm">Pendências mais antigas primeiro; cidades sem data ao final.</span>}
       </label>
 
       <button onClick={onVerRelatorio} className="w-full min-h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center gap-2 px-3">

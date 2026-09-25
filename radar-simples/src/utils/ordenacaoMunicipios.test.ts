@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import type { MunicipioCrm, MunicipioIbge } from '../types';
-import { ordenarMunicipiosPorUltimaAtividade } from './ordenacaoMunicipios';
+import { atualizarUltimaAtividadeMunicipio, ordenarMunicipiosPorUltimaAtividade, ultimaAtividadeDoEvento } from './ordenacaoMunicipios';
 
 function municipio(codigoIbge: number, nome: string, uf: string): MunicipioIbge {
   return { codigoIbge, nome, uf };
@@ -46,5 +46,36 @@ describe('ordenacaoMunicipiosPorUltimaAtividade', () => {
     ];
 
     expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Aparecida', 'Belo Horizonte', 'São José']);
+  });
+});
+
+describe('atualizarUltimaAtividadeMunicipio', () => {
+  it('atualiza a atividade quando há edição real do CRM', () => {
+    const anterior = crm(1, '2026-01-01T08:00:00.000Z');
+    const atualizado = atualizarUltimaAtividadeMunicipio(anterior, { ...anterior, observacoes: 'Visitado' }, '2026-01-10T08:00:00.000Z');
+    expect(atualizado.ultimaAtividadeEm).toBe('2026-01-10T08:00:00.000Z');
+  });
+
+  it('não altera a atividade quando nada mudou além do próprio timestamp', () => {
+    const anterior = crm(1, '2026-01-01T08:00:00.000Z');
+    const atualizado = atualizarUltimaAtividadeMunicipio(anterior, { ...anterior }, '2026-01-10T08:00:00.000Z');
+    expect(atualizado.ultimaAtividadeEm).toBe('2026-01-01T08:00:00.000Z');
+  });
+});
+
+describe('ultimaAtividadeDoEvento', () => {
+  it('prefere o horário efetivo do registro rápido quando existe', () => {
+    expect(ultimaAtividadeDoEvento({
+      id: 'e1',
+      codigoIbge: 1,
+      tipo: 'reuniao',
+      data: '2026-01-10',
+      resumo: 'Registro',
+      anexos: [],
+      mandato: 'Atual',
+      mandatoAtivo: true,
+      criadaEm: '2026-01-10T08:00:00.000Z',
+      registroRapido: { autorId: 'u1', atualizadoEm: '2026-01-10T09:00:00.000Z', encerrado: false },
+    })).toBe('2026-01-10T09:00:00.000Z');
   });
 });

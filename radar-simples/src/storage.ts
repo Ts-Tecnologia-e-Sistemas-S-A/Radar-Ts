@@ -4,6 +4,7 @@ import { Despesa, EventoTimeline, MunicipioCrm, municipioCrmVazio } from './type
 import { idHistoricoImportado, validarPacoteHistorico, type PacoteHistorico } from './utils/importarHistorico';
 import type { Diagnostico } from './api/diagnostico';
 import { validarSugestaoTarefa, type Tarefa } from './utils/agenda';
+import { ultimaAtividadeDoEvento } from './utils/ordenacaoMunicipios';
 
 const MUNICIPIOS_COLLECTION = 'radar_simples_municipios';
 const DESPESAS_COLLECTION = 'radar_simples_despesas';
@@ -132,6 +133,11 @@ export async function getEventos(codigoIbge?: number): Promise<EventoTimeline[]>
 
 export async function addEvento(evento: EventoTimeline): Promise<void> {
   await setDoc(doc(db, EVENTOS_COLLECTION, evento.id), semUndefined(evento));
+  await setDoc(
+    doc(db, MUNICIPIOS_COLLECTION, String(evento.codigoIbge)),
+    { ultimaAtividadeEm: ultimaAtividadeDoEvento(evento) },
+    { mergeFields: ['ultimaAtividadeEm'] },
+  );
 }
 
 export interface PontoRota {

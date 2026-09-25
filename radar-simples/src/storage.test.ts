@@ -193,6 +193,15 @@ describe('getEventos / addEvento', () => {
     expect(await getEventos(10)).toEqual([makeEvento('e1', 10)]);
     expect(await getEventos()).toHaveLength(2);
   });
+  it('atualiza a última atividade do CRM ao salvar reunião sem perder outros campos', async () => {
+    const original = makeMunicipio(10, {
+      contatos: [{ id: 'c1', nome: 'Contato', cargo: 'Secretário' }],
+      estagioFunil: 'juridico',
+    });
+    await saveMunicipioCrm(original);
+    await addEvento({ ...makeEvento('e1', 10), criadaEm: '2026-03-05T14:00:00.000Z' });
+    expect(await getMunicipioCrm(10)).toEqual({ ...original, ultimaAtividadeEm: '2026-03-05T14:00:00.000Z' });
+  });
 });
 
 describe('tarefas da agenda', () => {
@@ -256,5 +265,11 @@ describe('getPontosRota / addPontoRota', () => {
     await addPontoRota({ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' });
     const pontos = await getPontosRota();
     expect(pontos).toEqual([{ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' }]);
+  });
+  it('não usa rota nem despesas para mudar a última atividade do município', async () => {
+    await saveMunicipioCrm(makeMunicipio(10, { ultimaAtividadeEm: '2026-01-01T08:00:00.000Z' }));
+    await addPontoRota({ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' });
+    await addDespesa(makeDespesa('d1', 10));
+    expect((await getMunicipioCrm(10))?.ultimaAtividadeEm).toBe('2026-01-01T08:00:00.000Z');
   });
 });
