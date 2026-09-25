@@ -51,6 +51,7 @@ export interface SolucaoOfertada {
 export interface MunicipioCrm {
   codigoIbge: number;
   prioritario: boolean;
+  ultimaAtividadeEm?: string;
   macrorregiao?: string;
   escolasCount?: number;
   alunosCount?: number;

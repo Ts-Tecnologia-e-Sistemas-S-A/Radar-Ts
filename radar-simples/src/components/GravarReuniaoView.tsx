@@ -3,6 +3,7 @@ import { ContatoDetectado, TranscricaoReuniao, transcreverAudioArquivo } from '.
 import { enviarAudioReuniao, validarAudioReuniao, type AudioEnviado } from '../audioStorage';
 import { addEvento, getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import { Contato, MunicipioIbge, municipioCrmVazio } from '../types';
+import { atualizarUltimaAtividadeMunicipio } from '../utils/ordenacaoMunicipios';
 import Icon from './Icon';
 
 type Estado = 'pronto' | 'enviando' | 'processando' | 'resultado' | 'erro';
@@ -73,7 +74,8 @@ export default function GravarReuniaoView({ municipio, onFechar }: GravarReuniao
     try {
       const crmAtual = (await getMunicipioCrm(municipio.codigoIbge)) || municipioCrmVazio(municipio.codigoIbge);
       const novo: Contato = { id: crypto.randomUUID(), nome: contatoSugerido.nome || 'Novo contato', cargo: contatoSugerido.cargo || '', telefone: contatoSugerido.telefone || undefined };
-      await saveMunicipioCrm({ ...crmAtual, contatos: [...crmAtual.contatos, novo] }); setContatoSugerido(null); setContatoSalvo(true);
+      await saveMunicipioCrm(atualizarUltimaAtividadeMunicipio(crmAtual, { ...crmAtual, contatos: [...crmAtual.contatos, novo] }));
+      setContatoSugerido(null); setContatoSalvo(true);
     } catch (e: any) { setErro(e.message || 'Falha ao salvar o contato'); } finally { setSalvandoContato(false); }
   }
 
