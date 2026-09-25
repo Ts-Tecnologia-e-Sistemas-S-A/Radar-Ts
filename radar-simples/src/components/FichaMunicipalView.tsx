@@ -87,8 +87,8 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     };
   }, [municipio.codigoIbge, revisaoCarga]);
 
-  async function salvar(atualizado: MunicipioCrm, otimista = true) {
-    const crmComAtividade = atualizarUltimaAtividadeMunicipio(crm, atualizado);
+  async function salvar(atualizado: MunicipioCrm, otimista = true, registrarAtividade = true) {
+    const crmComAtividade = registrarAtividade ? atualizarUltimaAtividadeMunicipio(crm, atualizado) : atualizado;
     setSalvo(false);
     if (otimista) setCrm(crmComAtividade);
     try {
@@ -117,7 +117,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       if (dados) {
         setCensoAtual({ ...dados, codigoIbge });
         const atualizado = { ...crm, escolasCount: dados.escolas, alunosCount: dados.alunos, censoEscolarAno: dados.ano };
-        await salvar(atualizado, false);
+        await salvar(atualizado, false, false);
       } else {
         setAvisoCenso('Sem dado do Censo Escolar publicado pra esse município.');
       }
