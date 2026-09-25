@@ -78,7 +78,7 @@ describe('importação de histórico', () => {
     const pacote = { versao: 1 as const, fonte: 'Fonte de teste', registros: [{ codigoIbge: 2103000, cidade: 'Caxias / MA', data: '', texto: 'Relato completo\nSegunda visita e contato.', visitaRegistrada: false }] };
     expect(await importarHistorico(pacote)).toEqual({ inseridos: 1, existentes: 0 });
     expect(await importarHistorico(pacote)).toEqual({ inseridos: 0, existentes: 1 });
-    expect(await getMunicipioCrm(2103000)).toEqual(crm);
+    expect(await getMunicipioCrm(2103000)).toMatchObject(crm);
     const eventos = await getEventos(2103000);
     expect(eventos).toHaveLength(1); expect(eventos[0].data).toBe(''); expect(eventos[0].resumo).toBe(pacote.registros[0].texto);
   });
@@ -142,7 +142,15 @@ describe('getMunicipioCrm / saveMunicipioCrm', () => {
   it('salva e recupera pelo código IBGE', async () => {
     await saveMunicipioCrm(makeMunicipio(2211001, { prioritario: true }));
     const resultado = await getMunicipioCrm(2211001);
-    expect(resultado).toEqual(makeMunicipio(2211001, { prioritario: true }));
+    expect(resultado).toMatchObject(makeMunicipio(2211001, { prioritario: true }));
+    expect(resultado?.ultimaAtividadeEm).toBeString();
+  });
+  it('não muda a última atividade quando não houve alteração real', async () => {
+    await saveMunicipioCrm(makeMunicipio(10, { observacoes: 'Contato inicial' }));
+    const salvo = await getMunicipioCrm(10);
+    await saveMunicipioCrm(makeMunicipio(10, { observacoes: 'Contato inicial' }));
+    const reaplicado = await getMunicipioCrm(10);
+    expect(reaplicado?.ultimaAtividadeEm).toBe(salvo?.ultimaAtividadeEm);
   });
 });
 
@@ -192,6 +200,21 @@ describe('getEventos / addEvento', () => {
     await addEvento(makeEvento('e2', 20));
     expect(await getEventos(10)).toEqual([makeEvento('e1', 10)]);
     expect(await getEventos()).toHaveLength(2);
+  });
+  it('atualiza a última atividade do CRM ao salvar reunião sem apagar outros campos', async () => {
+    await saveMunicipioCrm(makeMunicipio(10, { contatos: [{ id: '1', nome: 'Maria', cargo: 'Secretária' }] }));
+    await addEvento({ ...makeEvento('reuniao-1', 10), criadaEm: '2026-09-25T15:00:00.000Z', resumo: 'Reunião registrada' });
+    const crm = await getMunicipioCrm(10);
+    expect(crm).toMatchObject({ codigoIbge: 10, contatos: [{ id: '1', nome: 'Maria', cargo: 'Secretária' }], ultimaAtividadeEm: '2026-09-25T15:00:00.000Z' });
+  });
+  it('usa a atualização do registro rápido ao regravar a mesma conversa', async () => {
+    await addEvento({
+      ...makeEvento('nota-1', 10),
+      criadaEm: '2026-09-25T10:00:00.000Z',
+      registroRapido: { autorId: 'teste', atualizadoEm: '2026-09-25T16:00:00.000Z', encerrado: false },
+      textoOriginal: 'Relato atualizado',
+    });
+    expect((await getMunicipioCrm(10))?.ultimaAtividadeEm).toBe('2026-09-25T16:00:00.000Z');
   });
 });
 
@@ -256,5 +279,11 @@ describe('getPontosRota / addPontoRota', () => {
     await addPontoRota({ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' });
     const pontos = await getPontosRota();
     expect(pontos).toEqual([{ id: 'p1', latitude: -5.09, longitude: -42.36, timestamp: '2026-01-01T08:00:00.000Z' }]);
+  });
+  it('não altera a última atividade do município com GPS ou despesa', async () => {
+    await saveMunicipioCrm(makeMunicipio(77, { ultimaAtividadeEm: '2026-09-25T09:00:00.000Z' }));
+    await addPontoRota({ id: 'p2', latitude: -5.1, longitude: -42.3, timestamp: '2026-09-25T18:00:00.000Z' });
+    await addDespesa(makeDespesa('d3', 77, { comprovante: { mimeType: 'image/jpeg', base64: 'abc' } }));
+    expect((await getMunicipioCrm(77))?.ultimaAtividadeEm).toBe('2026-09-25T09:00:00.000Z');
   });
 });

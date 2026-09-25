@@ -4,6 +4,7 @@ import { Despesa, EventoTimeline, MunicipioCrm, municipioCrmVazio } from './type
 import { idHistoricoImportado, validarPacoteHistorico, type PacoteHistorico } from './utils/importarHistorico';
 import type { Diagnostico } from './api/diagnostico';
 import { validarSugestaoTarefa, type Tarefa } from './utils/agenda';
+import { municipioCrmMudouSemUltimaAtividade } from './utils/atividadeMunicipio';
 
 const MUNICIPIOS_COLLECTION = 'radar_simples_municipios';
 const DESPESAS_COLLECTION = 'radar_simples_despesas';
@@ -111,7 +112,26 @@ export async function getMunicipioCrm(codigoIbge: number): Promise<MunicipioCrm 
 }
 
 export async function saveMunicipioCrm(municipio: MunicipioCrm): Promise<void> {
-  await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge)), semUndefined(municipio));
+  const ref = doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge));
+  const existente = await getDoc(ref);
+  const crmAnterior = existente.exists() ? existente.data() as MunicipioCrm : null;
+  const ultimaAtividadeEm = municipio.ultimaAtividadeEm
+    || (municipioCrmMudouSemUltimaAtividade(crmAnterior, municipio)
+      ? new Date().toISOString()
+      : crmAnterior?.ultimaAtividadeEm);
+  await setDoc(ref, semUndefined(ultimaAtividadeEm ? { ...municipio, ultimaAtividadeEm } : municipio));
+}
+
+export async function touchMunicipioCrm(codigoIbge: number, ultimaAtividadeEm = new Date().toISOString()): Promise<void> {
+  const ref = doc(db, MUNICIPIOS_COLLECTION, String(codigoIbge));
+  const existente = await getDoc(ref);
+  if (!existente.exists()) {
+    await setDoc(ref, semUndefined({ ...municipioCrmVazio(codigoIbge), ultimaAtividadeEm }));
+    return;
+  }
+  const crm = existente.data() as MunicipioCrm;
+  if (crm.ultimaAtividadeEm === ultimaAtividadeEm) return;
+  await setDoc(ref, { codigoIbge, ultimaAtividadeEm }, { mergeFields: ['codigoIbge', 'ultimaAtividadeEm'] });
 }
 
 export async function getDespesas(codigoIbge?: number): Promise<Despesa[]> {
@@ -132,6 +152,10 @@ export async function getEventos(codigoIbge?: number): Promise<EventoTimeline[]>
 
 export async function addEvento(evento: EventoTimeline): Promise<void> {
   await setDoc(doc(db, EVENTOS_COLLECTION, evento.id), semUndefined(evento));
+  await touchMunicipioCrm(
+    evento.codigoIbge,
+    evento.registroRapido?.atualizadoEm || evento.criadaEm || new Date().toISOString(),
+  );
 }
 
 export interface PontoRota {
