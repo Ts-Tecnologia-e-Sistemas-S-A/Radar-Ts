@@ -4,11 +4,12 @@ import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
 import { analisarPlanilha, ContatoDetectado } from '../api/ia';
 import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
 import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
-import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio } from '../storage';
+import { addEvento, cancelarTarefaSeExistir, getEventos, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio, saveStandby } from '../storage';
 import {
   Contato,
   ESTAGIOS_FUNIL_B2G,
   EstagioFunilB2G,
+  MOTIVOS_ESPERA,
   MunicipioCrm,
   MunicipioIbge,
   SolucaoOfertada,
@@ -21,6 +22,8 @@ import Icon from './Icon';
 import AvaliacaoVaarCard from './AvaliacaoVaarCard';
 import ComparativoEstadualCard from './ComparativoEstadualCard';
 import NotaConversa from './NotaConversa';
+import { entrarEmStandby, marcarComoVisitada, reativarOportunidade } from '../utils/pipeline';
+import { dataLocal } from '../utils/agenda';
 
 interface FichaMunicipalViewProps {
   municipio: MunicipioIbge;
@@ -87,6 +90,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   }, [municipio.codigoIbge, revisaoCarga]);
 
   async function salvar(atualizado: MunicipioCrm, otimista = true) {
+    atualizado = atualizado.contatos.length > 0 ? marcarComoVisitada(atualizado) : atualizado;
     setSalvo(false);
     if (otimista) setCrm(atualizado);
     try {
@@ -185,6 +189,26 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
 
   function atualizarSolucao(id: string, campos: Partial<SolucaoOfertada>) {
     salvar({ ...crm, solucoes: crm.solucoes.map((s) => (s.id === id ? { ...s, ...campos } : s)) });
+  }
+
+  async function alterarEstagio(estagio: EstagioFunilB2G) {
+    if (estagio === 'standby') {
+      try {
+        const entrada = crm.contatos.length > 0 ? marcarComoVisitada(crm) : crm;
+        const resultado = entrarEmStandby(entrada, municipio.nome);
+        await saveStandby(resultado.crm, resultado.tarefa);
+        setCrm(resultado.crm); setErro(null); setSalvo(true);
+      } catch (e: any) { setErro(e.message); }
+      return;
+    }
+    const estavaEmStandby = crm.estagioFunil === 'standby';
+    const base = estavaEmStandby ? reativarOportunidade(crm) : crm;
+    const visitada = ['visita', 'qualificacao', 'diagnostico', 'proposta', 'juridico', 'homologacao', 'contratado'].includes(estagio)
+      ? marcarComoVisitada(base, dataLocal())
+      : base;
+    if (await salvar({ ...visitada, estagioFunil: estagio }) && estavaEmStandby) {
+      await cancelarTarefaSeExistir(`reativacao-standby-${crm.codigoIbge}`);
+    }
   }
 
   if (falhaCarga && !carregando) return <div className="pt-space-xs space-y-3">
@@ -385,45 +409,51 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             <h3 className="text-label-lg">Funil da Oportunidade B2G</h3>
           </div>
         </div>
-        <div className="relative flex items-center justify-between px-2 pt-1">
-          <div className="absolute left-6 right-6 top-4 h-1 bg-surface-container -z-0" />
-          <div
-            className="absolute left-6 top-4 h-1 bg-secondary -z-0 transition-all duration-300"
-            style={{ width: `${(ESTAGIOS_FUNIL_B2G.findIndex((e) => e.value === crm.estagioFunil) / (ESTAGIOS_FUNIL_B2G.length - 1)) * 100}%` }}
-          />
-          {ESTAGIOS_FUNIL_B2G.map((estagio, idx) => {
-            const idxAtual = ESTAGIOS_FUNIL_B2G.findIndex((e) => e.value === crm.estagioFunil);
-            const concluido = idx < idxAtual;
-            const atual = idx === idxAtual;
-            return (
-              <button
-                key={estagio.value}
-                type="button"
-                onClick={() => salvar({ ...crm, estagioFunil: estagio.value as EstagioFunilB2G })}
-                className="relative z-10 flex flex-col items-center gap-1"
-              >
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold shadow-sm ${
-                    concluido
-                      ? 'bg-secondary text-on-secondary'
-                      : atual
-                        ? 'bg-primary text-on-primary ring-4 ring-secondary-container'
-                        : 'bg-surface-container text-on-surface-variant border border-outline-variant'
-                  }`}
-                >
-                  {concluido ? <Icon name="check" size={14} /> : idx + 1}
-                </div>
-                <span className={`text-[11px] text-center leading-tight whitespace-nowrap ${atual ? 'text-secondary font-bold' : 'text-on-surface-variant font-medium'}`}>
-                  {idx + 1}. {estagio.label.split(' ')[0]}
-                </span>
-              </button>
-            );
-          })}
+        <label className="block text-label-sm text-on-surface-variant">Etapa atual
+          <select
+            className="mt-1 w-full h-11 px-3 rounded-lg bg-surface-container-low text-primary"
+            value={crm.estagioFunil}
+            onChange={(e) => void alterarEstagio(e.target.value as EstagioFunilB2G)}
+          >
+            {ESTAGIOS_FUNIL_B2G.map((estagio) => <option key={estagio.value} value={estagio.value}>{estagio.label}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <label className="text-label-sm text-on-surface-variant">Porte populacional
+            <select className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.portePopulacional || ''} onChange={(e) => salvar({ ...crm, portePopulacional: e.target.value as MunicipioCrm['portePopulacional'] || undefined })}>
+              <option value="">Não informado</option><option value="pequeno">Pequeno</option><option value="medio">Médio</option><option value="grande">Grande</option>
+            </select>
+          </label>
+          <CampoEditavelNumero label="Estimativa de alunos" valor={crm.alunosCount} onSalvar={(v) => salvar({ ...crm, alunosCount: v })} />
         </div>
-        <div className="p-2 rounded-lg bg-surface-container-low text-on-surface-variant text-body-sm">
-          Etapa atual: <strong className="text-primary">{ESTAGIOS_FUNIL_B2G.find((e) => e.value === crm.estagioFunil)?.label}</strong>
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <label className="flex items-center gap-2 rounded-lg bg-surface-container-low p-3 text-label-md text-primary">
+            <input type="checkbox" checked={crm.visitada} onChange={(e) => salvar(e.target.checked ? marcarComoVisitada(crm, dataLocal()) : { ...crm, visitada: false, dataPrimeiraVisita: undefined, dataUltimaVisita: undefined })} />
+            Cidade visitada
+          </label>
+          <label className="text-label-sm text-on-surface-variant">Data da primeira visita
+            <input type="date" className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.dataPrimeiraVisita || ''} onChange={(e) => salvar(e.target.value ? marcarComoVisitada({ ...crm, dataPrimeiraVisita: e.target.value }, e.target.value) : { ...crm, dataPrimeiraVisita: undefined })} />
+          </label>
         </div>
         <CampoEditavelMonetario label="Valor anual estimado (R$/ano)" valor={crm.valorAnual} onSalvar={(v) => salvar({ ...crm, valorAnual: v })} />
+        <div className="border-t border-surface-container pt-3 space-y-2">
+          <h4 className="text-label-lg text-primary">Em Espera / Nutrição</h4>
+          <label className="block text-label-sm text-on-surface-variant">Data de reativação
+            <input type="date" className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.dataReativacao || ''} onChange={(e) => setCrm({ ...crm, dataReativacao: e.target.value || undefined })} />
+          </label>
+          <label className="block text-label-sm text-on-surface-variant">Motivo da espera
+            <select className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.motivoEspera || ''} onChange={(e) => setCrm({ ...crm, motivoEspera: e.target.value as MunicipioCrm['motivoEspera'] || undefined })}>
+              <option value="">Selecione</option>{MOTIVOS_ESPERA.map((motivo) => <option key={motivo.value} value={motivo.value}>{motivo.label}</option>)}
+            </select>
+          </label>
+          <label className="block text-label-sm text-on-surface-variant">Detalhes para a retomada
+            <textarea rows={2} className="mt-1 w-full rounded-lg bg-surface-container-low p-2 text-primary" value={crm.detalhesEspera || ''} onChange={(e) => setCrm({ ...crm, detalhesEspera: e.target.value || undefined })} />
+          </label>
+          <button type="button" onClick={() => void alterarEstagio('standby')} className="w-full min-h-11 rounded-lg bg-secondary text-on-secondary px-3">
+            {crm.estagioFunil === 'standby' ? 'Atualizar espera e lembrete' : 'Colocar em espera'}
+          </button>
+          {crm.estagioFunil === 'standby' && <button type="button" onClick={() => void alterarEstagio(crm.estagioAntesStandby || 'qualificacao')} className="w-full min-h-11 rounded-lg border border-primary text-primary px-3">Reativar agora</button>}
+        </div>
       </div>
 
       <div className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3">
@@ -523,6 +553,10 @@ function CampoEditavelMonetario({ label, valor, onSalvar }: { label: string; val
       />
     </div>
   );
+}
+
+function CampoEditavelNumero({ label, valor, onSalvar }: { label: string; valor: number | undefined; onSalvar: (v: number | undefined) => void }) {
+  return <label className="text-label-sm text-on-surface-variant">{label}<input type="number" min={0} className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={valor ?? ''} onChange={(e) => onSalvar(e.target.value ? Number(e.target.value) : undefined)} /></label>;
 }
 
 function RegistroRapidoIA({ municipio, onEventoSalvo, onContatoDetectado }: {

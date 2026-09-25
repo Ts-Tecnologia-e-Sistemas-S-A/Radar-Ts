@@ -21,11 +21,16 @@ describe('relatório gerencial', () => {
   });
   it('trata avanço além do mapeamento como interesse comercial', () => {
     const crm = {
-      2103000: { codigoIbge: 2103000, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'mapeamento' as const },
-      2200400: { codigoIbge: 2200400, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'qualificacao' as const },
+      2103000: { codigoIbge: 2103000, prioritario: false, visitada: true, contatos: [], solucoes: [], estagioFunil: 'mapeamento' as const },
+      2200400: { codigoIbge: 2200400, prioritario: false, visitada: true, contatos: [], solucoes: [], estagioFunil: 'qualificacao' as const },
     };
     const r = montarRelatorioGestao({ ...fonte, crm }, '2026-09-01', '2026-09-30');
     expect(r.cidadesVisitadas).toBe(2); expect(r.oportunidadesComInteresse).toBe(1);
+  });
+  it('não conta uma cidade apenas pesquisada como visitada', () => {
+    const crm = { 2103000: { codigoIbge: 2103000, prioritario: false, visitada: false, contatos: [], solucoes: [], estagioFunil: 'mapeamento' as const } };
+    const r = montarRelatorioGestao({ ...fonte, crm }, '2026-09-01', '2026-09-30');
+    expect(r.cidades).toHaveLength(1); expect(r.cidadesVisitadas).toBe(0);
   });
   it('bloqueia períodos e valores inválidos', () => {
     expect(() => montarRelatorioGestao(fonte, '2026-02-30', '2026-09-01')).toThrow();

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { getMunicipiosCrm } from '../storage';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { forecastPonderado } from '../utils/forecast';
+import { dataLocal } from '../utils/agenda';
+import { visivelNoFoco } from '../utils/pipeline';
 import Icon from './Icon';
 
 interface PipelineViewProps {
@@ -14,6 +16,7 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
   const [crmPorCodigo, setCrmPorCodigo] = useState<Record<number, MunicipioCrm>>({});
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
+  const [visao, setVisao] = useState<'foco' | 'espera'>('foco');
 
   useEffect(() => {
     let cancelado = false;
@@ -32,16 +35,26 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
     };
   }, [municipios]);
 
-  const linhas = useMemo(
+  const linhasBase = useMemo(
     () =>
       municipios
         .map((municipio) => ({ municipio, crm: crmPorCodigo[municipio.codigoIbge] }))
         .filter((l): l is { municipio: MunicipioIbge; crm: MunicipioCrm } => Boolean(l.crm)),
     [municipios, crmPorCodigo]
   );
+  const hoje = dataLocal();
+  const linhas = useMemo(() => linhasBase
+    .filter((linha) => visao === 'espera' ? linha.crm.estagioFunil === 'standby' : visivelNoFoco(linha.crm, hoje))
+    .sort((a, b) => visao === 'espera'
+      ? (a.crm.dataReativacao || '').localeCompare(b.crm.dataReativacao || '')
+      : a.municipio.nome.localeCompare(b.municipio.nome, 'pt-BR')),
+  [linhasBase, visao, hoje]);
+  const etapasVisiveis = visao === 'espera'
+    ? ESTAGIOS_FUNIL_B2G.filter((estagio) => estagio.value === 'standby')
+    : ESTAGIOS_FUNIL_B2G;
 
-  const totalPipeline = linhas.reduce((soma, l) => soma + (l.crm.valorAnual || 0), 0);
-  const totalPonderado = linhas.reduce((soma, l) => soma + forecastPonderado(l.crm.valorAnual, l.crm.estagioFunil), 0);
+  const totalPipeline = linhasBase.filter((l) => l.crm.estagioFunil !== 'standby').reduce((soma, l) => soma + (l.crm.valorAnual || 0), 0);
+  const totalPonderado = linhasBase.filter((l) => l.crm.estagioFunil !== 'standby').reduce((soma, l) => soma + forecastPonderado(l.crm.valorAnual, l.crm.estagioFunil), 0);
 
   return (
     <div className="flex flex-col gap-space-lg pt-space-xs pb-24">
@@ -86,7 +99,13 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
       {carregando && <p className="text-body-sm text-on-surface-variant">Carregando…</p>}
       {erro && <p className="text-body-sm text-error">{erro}</p>}
 
-      {ESTAGIOS_FUNIL_B2G.map((estagio, idx) => {
+      <div className="grid grid-cols-2 rounded-lg bg-surface-container p-1" role="tablist" aria-label="Visualização do pipeline">
+        <button role="tab" aria-selected={visao === 'foco'} onClick={() => setVisao('foco')} className={`min-h-10 rounded-md px-3 ${visao === 'foco' ? 'bg-primary text-on-primary' : 'text-primary'}`}>Foco em Campo</button>
+        <button role="tab" aria-selected={visao === 'espera'} onClick={() => setVisao('espera')} className={`min-h-10 rounded-md px-3 ${visao === 'espera' ? 'bg-primary text-on-primary' : 'text-primary'}`}>Radar de Espera</button>
+      </div>
+      <p className="text-body-sm text-on-surface-variant">{visao === 'foco' ? 'Esperas com retorno futuro ficam ocultas e reaparecem automaticamente na data de reativação.' : 'Oportunidades em nutrição, ordenadas pela data de retorno.'}</p>
+
+      {etapasVisiveis.map((estagio, idx) => {
         const doEstagio = linhas.filter((l) => l.crm.estagioFunil === estagio.value);
         const totalEstagio = doEstagio.reduce((soma, l) => soma + (l.crm.valorAnual || 0), 0);
         return (
@@ -125,6 +144,7 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
                       {crm.alunosCount !== undefined && (
                         <span className="text-body-sm text-on-surface-variant">{crm.alunosCount.toLocaleString('pt-BR')} alunos</span>
                       )}
+                      {crm.estagioFunil === 'standby' && <span className="text-body-sm text-secondary">Reativar em: {crm.dataReativacao ? crm.dataReativacao.split('-').reverse().join('/') : 'data pendente'}</span>}
                     </div>
                     {crm.valorAnual !== undefined && (
                       <div className="flex flex-col items-end flex-shrink-0">
@@ -149,6 +169,7 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
           </section>
         );
       })}
+      {!carregando && linhas.length === 0 && <p className="text-body-sm text-on-surface-variant">Nenhuma oportunidade nesta visualização.</p>}
     </div>
   );
 }

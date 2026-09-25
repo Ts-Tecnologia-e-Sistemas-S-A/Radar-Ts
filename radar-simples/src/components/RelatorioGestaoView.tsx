@@ -89,12 +89,12 @@ export default function RelatorioGestaoView({ municipios, onFechar, onImportado 
         </section>
         <section className="space-y-3">
           <h3 className="text-headline-sm text-primary">Cidades visitadas, interesse e histórico</h3>
-          <p className="text-body-sm text-on-surface-variant">Toda cidade com ficha, contato, nota ou outro registro é considerada visitada. O interesse comercial é indicado quando a prefeitura avança no funil além de “Mapeamento &amp; Contato Político”.</p>
+          <p className="text-body-sm text-on-surface-variant">Toda cidade com ficha, contato, nota ou outro registro é considerada visitada. O interesse comercial é indicado quando a prefeitura avança no funil além de “Pesquisa / Mapa”.</p>
           {!relatorio.cidades.length && <p>Nenhuma cidade com registros no período.</p>}
           {relatorio.cidades.map((c) => <article key={c.codigo} className="rounded-xl bg-surface-container-lowest p-4 space-y-2 break-words">
             <h4 className="text-label-lg font-semibold text-primary">{c.nome}</h4>
             <p>Status atual: {c.status}{c.prioritario ? ' · Prioritária' : ''}</p>
-            <p>Cidade visitada · {c.visitas.length} registros formais de visita com data · Gastos: {moeda(c.totalDespesas)}</p>
+            <p>{c.visitada ? 'Cidade visitada' : 'Pesquisa sem visita'} · {c.visitas.length} registros formais de visita com data · Gastos: {moeda(c.totalDespesas)}</p>
             <p className="text-body-sm">Próxima ação: {c.proximaAcao}</p>
             <details><summary className="cursor-pointer text-secondary py-2">Histórico do período ({c.historico.length})</summary>
               {!c.historico.length && <p>Sem atividades registradas; há despesas vinculadas.</p>}

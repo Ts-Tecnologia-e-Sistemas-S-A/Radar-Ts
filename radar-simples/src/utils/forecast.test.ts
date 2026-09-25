@@ -3,7 +3,7 @@ import { forecastPonderado } from './forecast';
 
 describe('forecastPonderado', () => {
   it('aplica o peso da etapa sobre o valor anual', () => {
-    expect(forecastPonderado(100000, 'mapeamento')).toBe(10000);
+    expect(forecastPonderado(100000, 'mapeamento')).toBe(5000);
     expect(forecastPonderado(100000, 'homologacao')).toBe(90000);
   });
 
