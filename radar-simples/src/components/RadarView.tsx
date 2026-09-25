@@ -4,14 +4,8 @@ import { proximaTarefa } from '../utils/agenda';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
+import { correspondeBuscaMunicipio } from '../utils/municipioSearch';
 import Icon from './Icon';
-
-function normalizar(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-}
 
 interface LinhaMunicipio {
   municipio: MunicipioIbge;
@@ -71,11 +65,10 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
   }, [municipios]);
 
   const linhas: LinhaMunicipio[] = useMemo(() => {
-    const alvo = normalizar(busca.trim());
     return municipios
       .map((municipio) => ({ municipio, crm: crmPorCodigo[municipio.codigoIbge] }))
       .filter((l): l is LinhaMunicipio => Boolean(l.crm))
-      .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
+      .filter((l) => correspondeBuscaMunicipio(busca, l.municipio))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
       .sort((a, b) => {
         if (ordenacao !== 'nome') {
