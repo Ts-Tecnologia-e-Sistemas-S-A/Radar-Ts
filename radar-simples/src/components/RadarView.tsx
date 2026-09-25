@@ -128,7 +128,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
         Ordenar cidades por
         <select
           value={ordenacao}
-          onChange={(e) => setOrdenacao(e.target.value)}
+          onChange={(e) => setOrdenacao(e.target.value as OrdenacaoRadar)}
           className="w-full h-12 px-3 rounded-xl bg-surface-container-lowest text-on-surface shadow-sm"
         >
           <option value="atividade">Mais recentes</option>

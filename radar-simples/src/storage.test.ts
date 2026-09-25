@@ -207,6 +207,15 @@ describe('getEventos / addEvento', () => {
     const crm = await getMunicipioCrm(10);
     expect(crm).toMatchObject({ codigoIbge: 10, contatos: [{ id: '1', nome: 'Maria', cargo: 'Secretária' }], ultimaAtividadeEm: '2026-09-25T15:00:00.000Z' });
   });
+  it('usa a atualização do registro rápido ao regravar a mesma conversa', async () => {
+    await addEvento({
+      ...makeEvento('nota-1', 10),
+      criadaEm: '2026-09-25T10:00:00.000Z',
+      registroRapido: { autorId: 'teste', atualizadoEm: '2026-09-25T16:00:00.000Z', encerrado: false },
+      textoOriginal: 'Relato atualizado',
+    });
+    expect((await getMunicipioCrm(10))?.ultimaAtividadeEm).toBe('2026-09-25T16:00:00.000Z');
+  });
 });
 
 describe('tarefas da agenda', () => {

@@ -152,7 +152,10 @@ export async function getEventos(codigoIbge?: number): Promise<EventoTimeline[]>
 
 export async function addEvento(evento: EventoTimeline): Promise<void> {
   await setDoc(doc(db, EVENTOS_COLLECTION, evento.id), semUndefined(evento));
-  await touchMunicipioCrm(evento.codigoIbge, evento.criadaEm || new Date().toISOString());
+  await touchMunicipioCrm(
+    evento.codigoIbge,
+    evento.registroRapido?.atualizadoEm || evento.criadaEm || new Date().toISOString(),
+  );
 }
 
 export interface PontoRota {
