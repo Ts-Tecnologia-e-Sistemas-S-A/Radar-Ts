@@ -10,14 +10,22 @@ describe('relatório gerencial', () => {
     const r = montarRelatorioGestao({ ...fonte, despesas: [despesa, { ...despesa, id: '2', data: '2026-09-30', valor: 0.2 }, { ...despesa, id: '3', data: '2026-10-01', valor: 100 }] }, '2026-09-01', '2026-09-30');
     expect(r.totalDespesas).toBe(0.3); expect(r.semMunicipio).toBe(0.3); expect(r.despesas).toHaveLength(2);
   });
-  it('inclui histórico sem data sem inventar visitas no período e preserva cidade não carregada', () => {
+  it('conta cidade com nota como visitada mesmo sem data e preserva cidade não carregada', () => {
     const r = montarRelatorioGestao({ ...fonte, eventos: [evento, { ...evento, id: 'fora', data: '2026-07-30' }] }, '2026-09-01', '2026-09-30');
-    expect(r.semData).toBe(1); expect(r.visitas).toBe(0); expect(r.cidades[0].nome).toBe('Município IBGE 2103000');
+    expect(r.semData).toBe(1); expect(r.visitas).toBe(0); expect(r.cidadesVisitadas).toBe(1); expect(r.cidades[0].nome).toBe('Município IBGE 2103000');
     expect(r.cidades[0].historico[0].texto).toContain('Texto integral');
   });
-  it('não conta documentos comuns e tarefas pendentes como visitas', () => {
+  it('separa cidades visitadas de registros formais de visita', () => {
     const r = montarRelatorioGestao({ ...fonte, eventos: [{ ...evento, data: '2026-09-20' }, { ...evento, id: 'doc', codigoIbge: 2200400, data: '2026-09-20', historicoImportado: undefined }] }, '2026-09-01', '2026-09-30');
-    expect(r.visitas).toBe(1); expect(r.cidadesVisitadas).toBe(1);
+    expect(r.visitas).toBe(1); expect(r.cidadesVisitadas).toBe(2);
+  });
+  it('trata avanço além do mapeamento como interesse comercial', () => {
+    const crm = {
+      2103000: { codigoIbge: 2103000, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'mapeamento' as const },
+      2200400: { codigoIbge: 2200400, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'qualificacao' as const },
+    };
+    const r = montarRelatorioGestao({ ...fonte, crm }, '2026-09-01', '2026-09-30');
+    expect(r.cidadesVisitadas).toBe(2); expect(r.oportunidadesComInteresse).toBe(1);
   });
   it('bloqueia períodos e valores inválidos', () => {
     expect(() => montarRelatorioGestao(fonte, '2026-02-30', '2026-09-01')).toThrow();
