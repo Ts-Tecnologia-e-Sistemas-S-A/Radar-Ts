@@ -145,10 +145,10 @@ export async function addEvento(evento: EventoTimeline): Promise<void> {
     const anterior = atual.ultimaAtividadeEm ? Date.parse(atual.ultimaAtividadeEm) : Number.NaN;
     const proxima = Date.parse(ultimaAtividadeEm);
     if (Number.isNaN(anterior) || (!Number.isNaN(proxima) && proxima > anterior)) {
-      await setDoc(municipioRef, { ultimaAtividadeEm }, { mergeFields: ['ultimaAtividadeEm'] });
+      await setDoc(municipioRef, { ultimaAtividadeEm }, { merge: true });
     }
   } catch {
-    await setDoc(municipioRef, { ultimaAtividadeEm }, { mergeFields: ['ultimaAtividadeEm'] });
+    await setDoc(municipioRef, { ultimaAtividadeEm }, { merge: true });
   }
 }
 
