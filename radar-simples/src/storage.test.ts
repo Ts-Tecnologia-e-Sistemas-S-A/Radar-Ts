@@ -202,6 +202,11 @@ describe('getEventos / addEvento', () => {
     await addEvento({ ...makeEvento('e1', 10), criadaEm: '2026-03-05T14:00:00.000Z' });
     expect(await getMunicipioCrm(10)).toEqual({ ...original, ultimaAtividadeEm: '2026-03-05T14:00:00.000Z' });
   });
+  it('não regride a última atividade quando um evento mais antigo é salvo depois', async () => {
+    await saveMunicipioCrm(makeMunicipio(10, { ultimaAtividadeEm: '2026-03-05T14:00:00.000Z' }));
+    await addEvento({ ...makeEvento('e-antigo', 10), criadaEm: '2026-03-01T09:00:00.000Z' });
+    expect((await getMunicipioCrm(10))?.ultimaAtividadeEm).toBe('2026-03-05T14:00:00.000Z');
+  });
 });
 
 describe('tarefas da agenda', () => {

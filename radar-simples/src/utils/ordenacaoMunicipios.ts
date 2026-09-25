@@ -23,8 +23,8 @@ function atividadeComoNumero(ultimaAtividadeEm?: string): number | null {
 }
 
 function compararPorFallback(a: MunicipioIbge, b: MunicipioIbge): number {
-  return a.nome.localeCompare(b.nome, 'pt-BR')
-    || a.uf.localeCompare(b.uf, 'pt-BR')
+  return a.uf.localeCompare(b.uf, 'pt-BR')
+    || a.nome.localeCompare(b.nome, 'pt-BR')
     || a.codigoIbge - b.codigoIbge;
 }
 

@@ -133,11 +133,23 @@ export async function getEventos(codigoIbge?: number): Promise<EventoTimeline[]>
 
 export async function addEvento(evento: EventoTimeline): Promise<void> {
   await setDoc(doc(db, EVENTOS_COLLECTION, evento.id), semUndefined(evento));
-  await setDoc(
-    doc(db, MUNICIPIOS_COLLECTION, String(evento.codigoIbge)),
-    { ultimaAtividadeEm: ultimaAtividadeDoEvento(evento) },
-    { mergeFields: ['ultimaAtividadeEm'] },
-  );
+  const municipioRef = doc(db, MUNICIPIOS_COLLECTION, String(evento.codigoIbge));
+  const ultimaAtividadeEm = ultimaAtividadeDoEvento(evento);
+  try {
+    const snapshot = await getDoc(municipioRef);
+    if (!snapshot.exists()) {
+      await setDoc(municipioRef, semUndefined({ ...municipioCrmVazio(evento.codigoIbge), ultimaAtividadeEm }));
+      return;
+    }
+    const atual = snapshot.data() as Partial<MunicipioCrm>;
+    const anterior = atual.ultimaAtividadeEm ? Date.parse(atual.ultimaAtividadeEm) : Number.NaN;
+    const proxima = Date.parse(ultimaAtividadeEm);
+    if (Number.isNaN(anterior) || (!Number.isNaN(proxima) && proxima > anterior)) {
+      await setDoc(municipioRef, { ultimaAtividadeEm }, { mergeFields: ['ultimaAtividadeEm'] });
+    }
+  } catch {
+    await setDoc(municipioRef, { ultimaAtividadeEm }, { mergeFields: ['ultimaAtividadeEm'] });
+  }
 }
 
 export interface PontoRota {

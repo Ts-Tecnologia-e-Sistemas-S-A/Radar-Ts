@@ -35,7 +35,7 @@ describe('ordenacaoMunicipiosPorUltimaAtividade', () => {
       { municipio: municipio(3, 'Balsas', 'PI'), crm: crm(3) },
     ];
 
-    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Açailândia', 'Balsas', 'Zé Doca']);
+    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Açailândia', 'Zé Doca', 'Balsas']);
   });
 
   it('mantém a ordenação estável por nome e UF quando o tempo é igual', () => {
@@ -45,7 +45,19 @@ describe('ordenacaoMunicipiosPorUltimaAtividade', () => {
       { municipio: municipio(20, 'Belo Horizonte', 'MG'), crm: crm(20, '2026-01-01T00:00:00.000Z') },
     ];
 
-    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Aparecida', 'Belo Horizonte', 'São José']);
+    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => `${item.municipio.uf}-${item.municipio.nome}`))
+      .toEqual(['MG-Belo Horizonte', 'SP-Aparecida', 'SP-São José']);
+  });
+
+  it('desempata homônimos por UF e código quando falta atividade', () => {
+    const linhas = [
+      { municipio: municipio(2, 'Santa Luzia', 'PB'), crm: crm(2) },
+      { municipio: municipio(1, 'Santa Luzia', 'MG'), crm: crm(1) },
+      { municipio: municipio(3, 'Santa Luzia', 'MG'), crm: crm(3) },
+    ];
+
+    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => `${item.municipio.uf}-${item.municipio.codigoIbge}`))
+      .toEqual(['MG-1', 'MG-3', 'PB-2']);
   });
 });
 
