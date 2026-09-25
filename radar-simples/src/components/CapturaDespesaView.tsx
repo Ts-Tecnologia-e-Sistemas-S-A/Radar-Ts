@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { extrairDespesa } from '../api/ia';
+import { salvarFotoGoogleFotos, type FotoGoogle } from '../api/googleFotos';
 import { addDespesa } from '../storage';
 import { CATEGORIAS_DESPESA, CategoriaDespesa, MunicipioIbge } from '../types';
+import { dataValida } from '../utils/agenda';
 import Icon from './Icon';
 
 interface CapturaDespesaViewProps {
@@ -13,8 +14,8 @@ interface CapturaDespesaViewProps {
 // isso passa fácil do limite de ~4.5MB que o corpo de uma função serverless
 // do Vercel aceita, e a requisição é rejeitada antes de chegar no nosso
 // código (erro "Request Entity Too Large", que o navegador tenta ler como
-// JSON e quebra). Reduz pra no máximo 1600px no lado maior e reexporta como
-// JPEG comprimido — sobra resolução de sobra pra IA ler texto de cupom.
+// JSON e quebra). Reduz pra no máximo 1400px no lado maior e reexporta como
+// JPEG comprimido para enviar ao Google Fotos sem exceder o limite da função.
 const MAX_DIMENSAO_PX = 1400;
 const QUALIDADE_JPEG = 0.68;
 const MAX_BASE64_CHARS = 600_000;
@@ -67,10 +68,12 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
   const [salvo, setSalvo] = useState(false);
   const [localizacao, setLocalizacao] = useState<{ latitude: number; longitude: number } | null>(null);
   const [comprovante, setComprovante] = useState<{ base64: string; mimeType: 'image/jpeg' } | null>(null);
+  const [fotoGoogle, setFotoGoogle] = useState<FotoGoogle | null>(null);
+  const idDespesa = useRef(crypto.randomUUID());
 
   const [valor, setValor] = useState('');
-  const [data, setData] = useState(new Date().toISOString().slice(0, 10));
-  const [categoria, setCategoria] = useState<CategoriaDespesa>('combustivel');
+  const [data, setData] = useState('');
+  const [categoria, setCategoria] = useState<CategoriaDespesa | null>(null);
   const [descricao, setDescricao] = useState('');
 
   useEffect(() => {
@@ -88,19 +91,17 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
   async function aoSelecionarArquivo(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
+    e.target.value = '';
+    setComprovante(null);
+    setFotoGoogle(null);
     setPreviaUrl(URL.createObjectURL(file));
     setProcessando(true);
     setErro(null);
     try {
-      const { base64, mimeType } = await comprimirImagem(file);
+      const { base64 } = await comprimirImagem(file);
       setComprovante({ base64, mimeType: 'image/jpeg' });
-      const extraido = await extrairDespesa(base64, mimeType);
-      if (extraido.valor !== null) setValor(String(extraido.valor));
-      if (extraido.data) setData(extraido.data);
-      if (extraido.categoria) setCategoria(extraido.categoria);
-      setDescricao(extraido.descricaoSugerida || (extraido.estabelecimento ? `Despesa em ${extraido.estabelecimento}` : ''));
     } catch (e: any) {
-      setErro(e.message || 'Falha ao ler o cupom com IA — preencha os campos manualmente.');
+      setErro(e.message || 'Falha ao preparar a foto. Tente novamente.');
     } finally {
       setProcessando(false);
     }
@@ -108,25 +109,34 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
 
   async function salvar() {
     const valorNumerico = Number(valor.replace(',', '.'));
-    if (!valorNumerico || valorNumerico <= 0) {
+    if (!Number.isFinite(valorNumerico) || valorNumerico <= 0) {
       setErro('Informe um valor válido.');
       return;
     }
+    if (!dataValida(data)) { setErro('Informe uma data válida para a despesa.'); return; }
+    if (!categoria) { setErro('Escolha a categoria da despesa.'); return; }
+    if (!descricao.trim()) { setErro('Preencha a descrição da despesa.'); return; }
+    if (previaUrl && !comprovante) { setErro('A foto ainda não está pronta. Tente novamente.'); return; }
     setSalvando(true);
     setErro(null);
     try {
+      let foto = fotoGoogle;
+      if (comprovante && !foto) {
+        foto = await salvarFotoGoogleFotos(comprovante.base64);
+        setFotoGoogle(foto);
+      }
       await addDespesa({
-        id: crypto.randomUUID(),
+        id: idDespesa.current,
         codigoIbge: municipioSugerido?.codigoIbge,
         valor: valorNumerico,
         data,
         categoria,
-        descricao,
-        origemOcr: Boolean(previaUrl),
+        descricao: descricao.trim(),
+        origemOcr: false,
         latitude: localizacao?.latitude,
         longitude: localizacao?.longitude,
         criadaEm: new Date().toISOString(),
-        comprovante: comprovante || undefined,
+        fotoGoogle: foto || undefined,
       });
       setSalvo(true);
       setTimeout(onFechar, 900);
@@ -143,9 +153,9 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
         <div>
           <div className="text-label-sm text-secondary font-semibold flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-secondary animate-pulse" />
-            Leitura automática por IA em campo
+            Preenchimento manual
           </div>
-          <h2 className="text-headline-sm text-primary">Digitalizar Cupom / Despesa</h2>
+          <h2 className="text-headline-sm text-primary">Registrar despesa</h2>
         </div>
         <button onClick={onFechar} className="w-9 h-9 rounded-full bg-surface-container-low flex items-center justify-center">
           <Icon name="close" size={20} />
@@ -161,7 +171,7 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
             className="w-full h-56 rounded-xl bg-primary flex flex-col items-center justify-center gap-2 text-on-primary shadow-xl"
           >
             <Icon name="document_scanner" size={40} className="text-secondary-fixed" />
-            <span className="text-label-lg">Tirar Foto do Cupom</span>
+            <span className="text-label-lg">Fotografar comprovante (opcional)</span>
           </button>
         ) : (
           <div className="w-full rounded-xl overflow-hidden shadow-xl relative">
@@ -169,10 +179,11 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
             {processando && (
               <div className="absolute inset-0 bg-primary/60 flex items-center justify-center gap-2 text-on-primary">
                 <Icon name="sync" size={28} className="animate-spin" />
-                <span className="text-label-md">Analisando documento via IA...</span>
+                <span className="text-label-md">Preparando foto...</span>
               </div>
             )}
             <button
+              disabled={salvando}
               onClick={() => inputRef.current?.click()}
               className="absolute bottom-2 right-2 px-2.5 py-1 rounded-full bg-surface-container-lowest text-primary text-label-sm font-semibold shadow-sm flex items-center gap-1"
             >
@@ -183,6 +194,7 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
         )}
 
         {erro && <p className="text-body-sm text-error">{erro}</p>}
+        <p className="text-body-sm text-on-surface-variant">Preencha os campos abaixo. A foto será salva no Google Fotos da conta conectada; o banco guardará o link.</p>
 
         <div className="w-full bg-surface-container-lowest rounded-xl shadow-sm p-card-padding flex flex-col gap-space-md">
           <div className="grid grid-cols-2 gap-space-xs">
@@ -259,12 +271,12 @@ export default function CapturaDespesaView({ municipioSugerido, onFechar }: Capt
 
       <div className="p-screen-margin-mobile pb-safe">
         <button
-          disabled={salvando || !previaUrl && !valor}
+          disabled={salvando || processando || salvo}
           onClick={salvar}
           className="w-full h-12 bg-secondary text-on-secondary rounded-xl text-label-lg flex items-center justify-center gap-2 shadow-lg disabled:opacity-60"
         >
           <Icon name={salvo ? 'verified' : 'check_circle'} size={20} />
-          <span>{salvo ? 'Despesa Salva!' : salvando ? 'Registrando...' : `Salvar${valor ? ` (R$ ${valor})` : ''}`}</span>
+          <span>{salvo ? 'Despesa salva!' : salvando ? 'Salvando despesa...' : `Salvar${valor ? ` (R$ ${valor})` : ''}`}</span>
         </button>
       </div>
     </div>

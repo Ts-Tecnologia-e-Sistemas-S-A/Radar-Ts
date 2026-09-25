@@ -5,12 +5,19 @@ import { buscarLicitacoesPncp } from './lib/pncpProxy';
 import { processarRequisicaoIA } from './lib/iaProxy';
 import { buscarDadosEscolares } from './lib/censoEscolarProxy';
 import { gerarDiagnostico } from './lib/diagnosticoProxy';
+import { enviarComprovanteGoogleFotos } from './lib/googleFotos';
 
 const app = express();
 const PORT = 3000;
 
-// limit maior: payloads de áudio/imagem em base64 (transcrição, OCR de despesa)
+// limit maior: payloads de áudio em base64 e foto comprimida para Google Fotos.
 app.use(express.json({ limit: '10mb' }));
+
+app.post('/api/fotos/comprovante', async (req, res) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const { status, body } = await enviarComprovanteGoogleFotos(req.body);
+  res.status(status).json(body);
+});
 
 // Proxy da API pública do PNCP (Portal Nacional de Contratações Públicas,
 // Lei 14.133/2021) para evitar CORS no navegador. Não inventa dado nenhum:
@@ -43,8 +50,7 @@ app.get('/api/diagnostico', async (req, res) => {
   res.status(status).json(body);
 });
 
-// Único endpoint de IA de campo (síntese de nota, transcrição de áudio, OCR
-// de despesa, briefing, recomendações da semana) — ramificado por `modo`.
+// Endpoint de IA de campo (transcrição de áudio, briefing e recomendações).
 // Exige GEMINI_API_KEY; sem a chave, devolve erro explícito em vez de
 // fabricar uma resposta.
 app.post('/api/ia/processar', async (req, res) => {

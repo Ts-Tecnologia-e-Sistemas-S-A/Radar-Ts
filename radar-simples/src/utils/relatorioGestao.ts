@@ -57,7 +57,7 @@ export function montarRelatorioGestao(fonte: FonteRelatorio, inicio: string, fim
     inicio, fim, cidades, cidadesVisitadas, visitas: visitas.length, reunioes, totalDespesas, semData,
     semMunicipio: somar(despesas.filter((d) => !d.codigoIbge)),
     resumo: `No período de ${dataBr(inicio)} a ${dataBr(fim)}, foram registrados ${moeda(totalDespesas)} em ${despesas.length} despesas, ${visitas.length} registros de visitas realizadas em ${cidadesVisitadas} cidades e ${reunioes} reuniões/notas de campo. O relatório reúne ${cidades.length} cidades, incluindo aquelas com histórico sem data. O valor de ${moeda(totalDespesas)} é a base para solicitação de reembolso, sujeita à conferência da gestão.`,
-    despesas: despesas.map((d) => ({ ...d, valor: centavos(d) / 100, cidade: nomeCidade(d.codigoIbge), categoriaLabel: CATEGORIAS_DESPESA.find((c) => c.value === d.categoria)?.label || 'Outros', temComprovante: Boolean(d.comprovante?.base64) })),
+    despesas: despesas.map((d) => ({ ...d, valor: centavos(d) / 100, cidade: nomeCidade(d.codigoIbge), categoriaLabel: CATEGORIAS_DESPESA.find((c) => c.value === d.categoria)?.label || 'Outros', temComprovante: Boolean(d.fotoGoogle?.url || d.comprovante?.base64) })),
     categorias: CATEGORIAS_DESPESA.map((c) => ({ nome: c.label, valor: somar(despesas.filter((d) => (CATEGORIAS_DESPESA.some((item) => item.value === d.categoria) ? d.categoria : 'outros') === c.value)) })),
   };
 }

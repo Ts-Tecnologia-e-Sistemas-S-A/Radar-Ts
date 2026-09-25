@@ -104,7 +104,7 @@ export const CATEGORIAS_DESPESA: { value: CategoriaDespesa; label: string; icone
   { value: 'outros', label: 'Outros', icone: 'more_horiz' },
 ];
 
-/** Uma despesa de campo, com ou sem origem em OCR de cupom. */
+/** Uma despesa de campo preenchida manualmente. */
 export interface Despesa {
   id: string;
   codigoIbge?: number;
@@ -116,6 +116,9 @@ export interface Despesa {
   latitude?: number;
   longitude?: number;
   criadaEm: string; // ISO datetime
+  /** Referência ao comprovante na biblioteca Google Fotos de quem o enviou. */
+  fotoGoogle?: { id: string; url: string };
+  /** Formato legado, mantido apenas para ler comprovantes antigos. */
   comprovante?: {
     mimeType: 'image/jpeg';
     base64: string;
@@ -151,7 +154,7 @@ export interface EventoTimeline {
   local?: string;
   participantes?: string;
   resumo: string;
-  /** Relato digitado preservado antes de qualquer síntese da IA. */
+  /** Relato digitado preservado integralmente. */
   textoOriginal?: string;
   registroRapido?: { autorId: string; atualizadoEm: string; encerrado: boolean };
   sinteseIA?: string;

@@ -174,17 +174,20 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           </div>
                           <h3 className="text-headline-sm text-primary mt-0.5 flex items-center gap-1.5">
                             <Icon name={ICONE_TIPO[ev.tipo]} size={16} className="text-secondary" />
-                            {ev.resumo.length > 60 ? `${ev.resumo.slice(0, 60)}…` : ev.resumo}
+                            {(ev.registroRapido ? ev.textoOriginal ?? ev.resumo : ev.resumo).length > 60
+                              ? `${(ev.registroRapido ? ev.textoOriginal ?? ev.resumo : ev.resumo).slice(0, 60)}…`
+                              : (ev.registroRapido ? ev.textoOriginal ?? ev.resumo : ev.resumo)}
                           </h3>
                         </div>
                       </div>
+                      {ev.registroRapido && <p className="text-body-sm whitespace-pre-wrap break-words">{ev.textoOriginal ?? ev.resumo}</p>}
                       {ev.participantes && (
                         <div className="flex items-center gap-space-xs p-2 rounded-lg bg-surface-container-low">
                           <Icon name="badge" size={18} className="text-on-surface-variant" />
                           <div className="text-body-sm text-on-surface truncate">{ev.participantes}</div>
                         </div>
                       )}
-                      {ev.sinteseIA && (
+                      {ev.sinteseIA && !ev.registroRapido && (
                         <div className="p-space-xs rounded-lg bg-surface-container text-on-surface flex flex-col gap-1">
                           <div className="flex items-center gap-1 text-primary text-label-sm">
                             <Icon name="auto_awesome" size={14} />
@@ -193,7 +196,7 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           <p className="text-body-sm text-on-surface-variant leading-relaxed">{ev.sinteseIA}</p>
                         </div>
                       )}
-                      {ev.proximoPassoIA && (
+                      {ev.proximoPassoIA && !ev.registroRapido && (
                         <div className="pt-space-xs flex items-center justify-between">
                           <span className="text-label-sm text-on-surface-variant">Próximo passo</span>
                           <span className="text-label-sm text-primary font-semibold">{ev.proximoPassoIA}</span>
@@ -213,7 +216,7 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                           <p className="pt-space-xs whitespace-pre-wrap break-words">{ev.resumo}</p>
                         </details>
                       )}
-                      {ev.textoOriginal !== undefined && (
+                      {ev.textoOriginal !== undefined && ev.textoOriginal !== ev.resumo && !ev.registroRapido && (
                         <details className="text-body-sm text-on-surface-variant">
                           <summary className="cursor-pointer text-primary">Relato original digitado</summary>
                           <p className="pt-space-xs whitespace-pre-wrap break-words">{ev.textoOriginal}</p>

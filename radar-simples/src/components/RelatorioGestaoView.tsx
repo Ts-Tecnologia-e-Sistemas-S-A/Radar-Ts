@@ -83,8 +83,9 @@ export default function RelatorioGestaoView({ municipios, onFechar, onImportado 
           {relatorio.despesas.map((d) => <article key={d.id} className="rounded-xl bg-surface-container-lowest p-4 space-y-1 break-words">
             <p className="font-semibold text-primary">{dataBr(d.data)} · {d.categoriaLabel} · {moeda(d.valor)}</p>
             <p>{d.cidade}</p><p>{d.descricao || 'Sem descrição'}</p>
-            <p className="text-body-sm text-on-surface-variant">Comprovante: {d.temComprovante ? 'imagem registrada no aplicativo' : 'não anexado'}</p>
-            {d.temComprovante && <details><summary className="cursor-pointer text-secondary py-2">Ver comprovante</summary><img loading="lazy" className="max-w-full max-h-96 object-contain" src={`data:image/jpeg;base64,${d.comprovante!.base64}`} alt={`Comprovante de ${d.descricao || d.categoriaLabel}`} /></details>}
+            <p className="text-body-sm text-on-surface-variant">Comprovante: {d.fotoGoogle?.url ? 'salvo no Google Fotos' : d.comprovante?.base64 ? 'imagem registrada no aplicativo' : 'não anexado'}</p>
+            {d.fotoGoogle?.url && <a href={d.fotoGoogle.url} target="_blank" rel="noopener noreferrer" className="text-secondary underline py-2 inline-block">Abrir no Google Fotos</a>}
+            {d.comprovante?.base64 && <details><summary className="cursor-pointer text-secondary py-2">Ver comprovante antigo</summary><img loading="lazy" className="max-w-full max-h-96 object-contain" src={`data:image/jpeg;base64,${d.comprovante.base64}`} alt={`Comprovante de ${d.descricao || d.categoriaLabel}`} /></details>}
           </article>)}
         </section>
         <section className="space-y-3">

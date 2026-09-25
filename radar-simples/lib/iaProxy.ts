@@ -1,10 +1,8 @@
 import {
   analisarPlanilha,
   sugerirTarefa,
-  extrairDespesa,
   gerarBriefing,
   gerarRecomendacoesSemana,
-  sintetizarNota,
   transcreverAudio,
   transcreverAudioArquivo,
 } from './iaCampo.js';
@@ -35,10 +33,6 @@ export async function processarRequisicaoIA(modo: string, payload: any): Promise
         catch (e: any) { return erro400(e.message); }
         return ok(await analisarPlanilha(texto));
       }
-      case 'sintetizar_nota': {
-        if (!payload?.texto) return erro400('Campo "texto" é obrigatório.');
-        return ok(await sintetizarNota(payload.texto));
-      }
       case 'transcrever_audio': {
         if (!payload?.audioBase64 || !payload?.mimeType) return erro400('Campos "audioBase64" e "mimeType" são obrigatórios.');
         return ok(await transcreverAudio(payload.audioBase64, payload.mimeType));
@@ -49,10 +43,6 @@ export async function processarRequisicaoIA(modo: string, payload: any): Promise
         }
         if (payload.arquivoUrl.length > 3000 || payload.nome.length > 180) return erro400('Referência ou nome do áudio inválido.');
         return ok(await transcreverAudioArquivo(payload.arquivoUrl, payload.mimeType, payload.nome));
-      }
-      case 'ocr_despesa': {
-        if (!payload?.imagemBase64 || !payload?.mimeType) return erro400('Campos "imagemBase64" e "mimeType" são obrigatórios.');
-        return ok(await extrairDespesa(payload.imagemBase64, payload.mimeType));
       }
       case 'briefing': {
         if (!payload?.contextoHistorico) return erro400('Campo "contextoHistorico" é obrigatório.');

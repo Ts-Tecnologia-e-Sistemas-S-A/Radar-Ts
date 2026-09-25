@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { buscarDadosEscolares, type DadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
-import { analisarPlanilha, ContatoDetectado } from '../api/ia';
+import { analisarPlanilha } from '../api/ia';
 import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
 import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
 import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio } from '../storage';
@@ -161,19 +161,6 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     salvar({ ...crm, contatos: [...crm.contatos, novo] });
   }
 
-  // Confirmado pelo vendedor a partir de um contato que a IA detectou numa
-  // nota/gravação — nunca grava sozinho, sempre passa pela revisão humana
-  // primeiro (ver RegistroRapidoIA).
-  async function adicionarContatoDetectado(dados: ContatoDetectado) {
-    const novo: Contato = {
-      id: crypto.randomUUID(),
-      nome: dados.nome || 'Novo contato',
-      cargo: dados.cargo || '',
-      telefone: dados.telefone || undefined,
-    };
-    return await salvar({ ...crm, contatos: [...crm.contatos, novo] }, false);
-  }
-
   function atualizarContato(id: string, campos: Partial<Contato>) {
     salvar({ ...crm, contatos: crm.contatos.map((c) => (c.id === id ? { ...c, ...campos } : c)) });
   }
@@ -190,6 +177,10 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   if (falhaCarga && !carregando) return <div className="pt-space-xs space-y-3">
     <p role="alert" className="text-error">{erro}</p>
     <button className="text-primary" onClick={() => setRevisaoCarga((v) => v + 1)}>Tentar carregar novamente</button>
+    {!navigator.onLine && <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm">
+      <h3 className="text-label-lg text-primary mb-3">Nota de reunião</h3>
+      <NotaConversa municipio={municipio} />
+    </section>}
   </div>;
   if (carregando) {
     return <p className="text-body-sm text-on-surface-variant pt-space-xs">Carregando dados do banco…</p>;
@@ -482,7 +473,6 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         key={municipio.codigoIbge}
         municipio={municipio}
         onEventoSalvo={() => setSalvo(true)}
-        onContatoDetectado={adicionarContatoDetectado}
       />
 
       {salvo && <p className="text-label-sm text-green-600 text-center">Salvo.</p>}
@@ -525,10 +515,9 @@ function CampoEditavelMonetario({ label, valor, onSalvar }: { label: string; val
   );
 }
 
-function RegistroRapidoIA({ municipio, onEventoSalvo, onContatoDetectado }: {
+function RegistroRapidoIA({ municipio, onEventoSalvo }: {
   municipio: MunicipioIbge;
   onEventoSalvo: () => void;
-  onContatoDetectado: (contato: ContatoDetectado) => Promise<boolean>;
 }) {
   const [modo, setModo] = useState<'nota' | 'planilha'>('nota');
   return <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3.5">
@@ -543,7 +532,7 @@ function RegistroRapidoIA({ municipio, onEventoSalvo, onContatoDetectado }: {
       <option value="planilha">Dados de planilha — gerar relatório</option>
     </select>
     {modo === 'nota'
-      ? <NotaConversa municipio={municipio} onContatoDetectado={onContatoDetectado} />
+      ? <NotaConversa municipio={municipio} />
       : <RegistroPlanilha municipio={municipio} onEventoSalvo={onEventoSalvo} />}
   </section>;
 }

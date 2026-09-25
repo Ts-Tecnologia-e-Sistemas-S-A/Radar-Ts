@@ -3,7 +3,7 @@
 CRM de campo B2G mobile-first: 4 telas (**Radar**, **Pipeline**, **Ficha
 Municipal**, **Memória da Conta**) pra um vendedor gerenciar a prospecção de
 prefeituras — do primeiro contato até a homologação — com IA de campo real
-(síntese de anotações, transcrição de áudio, leitura de recibos, briefing e
+(notas e despesas digitadas sem IA, transcrição de áudio, briefing e
 recomendações semanais), rota por GPS e exportação de PDF.
 
 O layout segue o design system em [`DESIGN.md`](./DESIGN.md) (tokens Material
@@ -19,8 +19,8 @@ GEMINI_API_KEY=... bun run dev     # http://localhost:3000
 ```
 
 Sem `GEMINI_API_KEY`, o app funciona normalmente (Radar, Pipeline, Ficha,
-Memória, Firestore) mas qualquer ação de IA (registro rápido, transcrição de
-áudio, leitura de recibo, briefing, recomendações semanais) retorna erro
+Memória, Firestore e notas digitadas) mas as ações de IA (transcrição de
+áudio, briefing, recomendações semanais) retornam erro
 explícito em vez de resultado inventado — ver `lib/iaCampo.ts`.
 
 ## Validar
@@ -46,7 +46,10 @@ Config pública de cliente em `firebase-applet-config.json` (mesma usada em
 período. Esses resultados são recuperados ao reabrir as telas e não são
 sobrescritos por edições do CRM. As regras do banco precisam permitir o
 mesmo acesso a essa coleção (as regras versionadas já a abrangem).
-Síntese, próximo passo e transcrição completa ficam nos eventos da conta.
+As notas digitadas ficam integrais nos eventos da conta, sem análise por IA.
+O Firestore mantém escritas locais sem internet e as sincroniza quando a rede
+volta; o editor conserva também um rascunho neste aparelho até a confirmação.
+Síntese de áudio, próximo passo e transcrição completa ficam nos eventos da conta.
 Resultados que nunca chegaram ao banco antes desta correção precisam ser
 gerados novamente; transcrições antigas só têm o trecho que foi salvo.
 
@@ -68,11 +71,32 @@ e próximos passos. O texto original e o relatório ficam em um evento do tipo
 documento na Memória da Conta; não são contabilizados como reunião. Se houver
 falha na IA ou na gravação, o texto permanece no campo para nova tentativa.
 
+Em **Nota de reunião**, o texto digitado é salvo sem análise por IA. Sem
+internet, uma cópia fica no aparelho e a escrita do Firestore é sincronizada
+quando a conexão voltar. Uma nova conversa só pode ser iniciada após a
+confirmação da conversa atual no banco.
+
+Em **Registrar despesa**, valor, data, categoria e descrição são preenchidos
+manualmente. A foto opcional não passa por IA: ao salvar, o usuário concede
+acesso ao Google Fotos e o app envia o JPEG para a biblioteca da sua conta.
+O Firestore guarda apenas `fotoGoogle.id` e `fotoGoogle.url`, nunca o base64
+da nova foto. O link `productUrl` abre no Google Fotos para a conta dona da
+imagem; outros usuários do relatório podem não ter acesso. Fotos antigas em
+base64 continuam visíveis no relatório. Sem internet, despesas sem foto usam
+a fila local do Firestore; o upload de foto exige conexão.
+
+Para ativar esse envio, habilite a **Google Photos Library API** no projeto
+Google Cloud do OAuth usado pelo Firebase Authentication e configure a tela
+de consentimento para o escopo
+`https://www.googleapis.com/auth/photoslibrary.appendonly`, incluindo as
+origens autorizadas e a verificação OAuth exigida pelo Google. Não há chave
+de API nem token de acesso ao Fotos guardado no Firestore.
+
 - **IBGE** (lista de municípios) é fonte real — `servicodados.ibge.gov.br`
   direto do navegador. Nenhum dado de município é inventado.
 - **IA de campo** (`lib/iaCampo.ts`, modelo `gemini-3.6-flash` via
-  `@google/genai`) é real: síntese de nota de campo, transcrição de áudio de
-  reunião, extração de dados de recibo por imagem (OCR), briefing de conta e
+  `@google/genai`) é real: transcrição de áudio de
+  reunião, briefing de conta e
   recomendações semanais. Cada prompt instrui explicitamente a IA a nunca
   inventar valor não presente na entrada; sem `GEMINI_API_KEY`, a chamada
   falha com erro claro em vez de devolver um resultado fabricado.

@@ -9,7 +9,7 @@ import { validarSugestaoTarefa, type SugestaoTarefa } from '../src/utils/agenda.
 import { prepararTextoPlanilha, validarRelatorioPlanilha, type RelatorioPlanilha } from '../src/utils/relatorioPlanilha.js';
 
 /**
- * Integração real com Gemini pra IA de campo: sintetizar notas, transcrever
+ * Integração real com Gemini pra IA de campo: transcrever
  * áudio de reunião, extrair dados de cupom fiscal (OCR), gerar briefing e
  * recomendações. Exige GEMINI_API_KEY configurada (mesma variável que o app
  * principal usa) — sem a chave, cada função abaixo lança um erro explícito
@@ -56,16 +56,6 @@ export interface SinteseNota {
    *  direto: nome/telefone é dado estruturado que o vendedor edita à mão
    *  em outro lugar, e a IA pode entender errado). */
   contatoDetectado: ContatoDetectado | null;
-}
-
-const INSTRUCAO_SINTESE = `Você é o assistente de campo de um vendedor B2G (vendas para prefeituras) no Brasil.
-Recebe uma anotação rápida de reunião (texto ditado ou digitado em campo) e devolve APENAS um JSON válido:
-{"combinado": "frase objetiva do que ficou combinado/decidido", "proximoPasso": "próxima ação concreta sugerida, com prazo se possível", "contatoDetectado": {"nome": "...", "cargo": "...", "telefone": "..."} ou null}
-Preencha "contatoDetectado" só se a anotação mencionar claramente uma pessoa de contato (nome e/ou telefone) — cada campo que não aparecer no texto fica null, e o objeto inteiro fica null se nenhuma pessoa for identificável.
-Não invente nomes, valores ou fatos que não estejam no texto — se faltar informação, deixe genérico/null em vez de inventar.`;
-
-export async function sintetizarNota(texto: string): Promise<SinteseNota> {
-  return gerarJson<SinteseNota>([{ text: `Anotação: ${texto}` }], INSTRUCAO_SINTESE);
 }
 
 export async function sugerirTarefa(contexto: string, hoje: string): Promise<SugestaoTarefa> {
@@ -160,23 +150,6 @@ export async function transcreverAudioArquivo(arquivoUrl: string, mimeType: stri
     await rm(pasta, { recursive: true, force: true });
     if (arquivoGemini?.name) await getCliente().files.delete({ name: arquivoGemini.name }).catch(() => undefined);
   }
-}
-
-export interface DespesaExtraida {
-  valor: number | null;
-  data: string | null;
-  categoria: 'combustivel' | 'hospedagem' | 'alimentacao' | 'pedagio' | 'outros' | null;
-  estabelecimento: string | null;
-  descricaoSugerida: string;
-}
-
-const INSTRUCAO_OCR = `Você é um leitor de cupom fiscal / nota fiscal brasileira (NFC-e, SAT, cupom comum).
-Analise a imagem e devolva APENAS um JSON válido:
-{"valor": <número em reais, ou null se ilegível>, "data": "<AAAA-MM-DD ou null>", "categoria": "<combustivel|hospedagem|alimentacao|pedagio|outros ou null>", "estabelecimento": "<nome do estabelecimento ou null>", "descricaoSugerida": "<descrição curta>"}
-Se algum campo não estiver legível na imagem, use null para ele — NUNCA invente um valor plausível no lugar.`;
-
-export async function extrairDespesa(imagemBase64: string, mimeType: string): Promise<DespesaExtraida> {
-  return gerarJson<DespesaExtraida>([{ inlineData: { mimeType, data: imagemBase64 } }], INSTRUCAO_OCR);
 }
 
 export interface Briefing {
