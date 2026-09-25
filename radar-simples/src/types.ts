@@ -50,6 +50,8 @@ export interface SolucaoOfertada {
  */
 export interface MunicipioCrm {
   codigoIbge: number;
+  /** ISO datetime da última atividade manual registrada para esta praça. */
+  ultimaAtividadeEm?: string;
   prioritario: boolean;
   macrorregiao?: string;
   escolasCount?: number;
