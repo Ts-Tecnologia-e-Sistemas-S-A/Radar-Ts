@@ -46,7 +46,9 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   const requisicao = useRef(0);
   const requisicaoCenso = useRef(0);
   const cidadeAtual = useRef(municipio.codigoIbge);
+  const crmAtualRef = useRef(crm);
   cidadeAtual.current = municipio.codigoIbge;
+  crmAtualRef.current = crm;
 
   useEffect(() => {
     const codigoIbge = municipio.codigoIbge;
@@ -88,12 +90,19 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   }, [municipio.codigoIbge, revisaoCarga]);
 
   async function salvar(atualizado: MunicipioCrm, otimista = true, registrarAtividade = true) {
-    const crmComAtividade = registrarAtividade ? atualizarUltimaAtividadeMunicipio(crm, atualizado) : atualizado;
+    const baseCrm = crmAtualRef.current;
+    const crmComAtividade = registrarAtividade ? atualizarUltimaAtividadeMunicipio(baseCrm, atualizado) : atualizado;
     setSalvo(false);
-    if (otimista) setCrm(crmComAtividade);
+    if (otimista) {
+      crmAtualRef.current = crmComAtividade;
+      setCrm(crmComAtividade);
+    }
     try {
       await saveMunicipioCrm(crmComAtividade);
-      if (!otimista) setCrm(crmComAtividade);
+      if (!otimista) {
+        crmAtualRef.current = crmComAtividade;
+        setCrm(crmComAtividade);
+      }
       setSalvo(true);
       setErro(null);
       setTimeout(() => setSalvo(false), 2000);
