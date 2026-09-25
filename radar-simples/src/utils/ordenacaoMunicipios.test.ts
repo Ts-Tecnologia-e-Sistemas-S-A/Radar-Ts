@@ -1,0 +1,50 @@
+import { describe, expect, it } from 'bun:test';
+import type { MunicipioCrm, MunicipioIbge } from '../types';
+import { ordenarMunicipiosPorUltimaAtividade } from './ordenacaoMunicipios';
+
+function municipio(codigoIbge: number, nome: string, uf: string): MunicipioIbge {
+  return { codigoIbge, nome, uf };
+}
+
+function crm(codigoIbge: number, ultimaAtividadeEm?: string): MunicipioCrm {
+  return {
+    codigoIbge,
+    prioritario: false,
+    contatos: [],
+    solucoes: [],
+    estagioFunil: 'mapeamento',
+    ultimaAtividadeEm,
+  };
+}
+
+describe('ordenacaoMunicipiosPorUltimaAtividade', () => {
+  it('coloca a cidade mais recente primeiro', () => {
+    const linhas = [
+      { municipio: municipio(1, 'Aparecida', 'SP'), crm: crm(1, '2026-01-01T08:00:00.000Z') },
+      { municipio: municipio(2, 'Bauru', 'SP'), crm: crm(2, '2026-01-10T08:00:00.000Z') },
+      { municipio: municipio(3, 'Campinas', 'SP'), crm: crm(3, '2026-01-03T08:00:00.000Z') },
+    ];
+
+    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Bauru', 'Campinas', 'Aparecida']);
+  });
+
+  it('faz fallback determinístico quando não há ultimaAtividadeEm', () => {
+    const linhas = [
+      { municipio: municipio(2, 'Zé Doca', 'MA'), crm: crm(2) },
+      { municipio: municipio(1, 'Açailândia', 'MA'), crm: crm(1) },
+      { municipio: municipio(3, 'Balsas', 'PI'), crm: crm(3) },
+    ];
+
+    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Açailândia', 'Balsas', 'Zé Doca']);
+  });
+
+  it('mantém a ordenação estável por nome e UF quando o tempo é igual', () => {
+    const linhas = [
+      { municipio: municipio(30, 'São José', 'SP'), crm: crm(30, '2026-01-01T00:00:00.000Z') },
+      { municipio: municipio(10, 'Aparecida', 'SP'), crm: crm(10, '2026-01-01T00:00:00.000Z') },
+      { municipio: municipio(20, 'Belo Horizonte', 'MG'), crm: crm(20, '2026-01-01T00:00:00.000Z') },
+    ];
+
+    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Aparecida', 'Belo Horizonte', 'São José']);
+  });
+});
