@@ -1,5 +1,5 @@
 import { ESTAGIOS_FUNIL_B2G, MOTIVOS_ESPERA, type EstagioFunilB2G, type MunicipioCrm } from '../types';
-import { dataValida, type Tarefa } from './agenda';
+import { dataLocal, dataValida, type Tarefa } from './agenda';
 
 export function validarEntradaStandby(crm: MunicipioCrm): void {
   if (!crm.dataReativacao || !dataValida(crm.dataReativacao)) {
@@ -53,12 +53,24 @@ export function oportunidadeComInteresse(crm: MunicipioCrm): boolean {
   return ordem >= ESTAGIOS_FUNIL_B2G.findIndex((item) => item.value === 'qualificacao');
 }
 
-export function marcarComoVisitada(crm: MunicipioCrm, data?: string): MunicipioCrm {
-  const dataValidaInformada = data && dataValida(data) ? data : undefined;
+export function garantirDataInclusao(crm: MunicipioCrm, data = dataLocal()): MunicipioCrm {
+  const inclusao = crm.dataInclusao || data;
   return {
     ...crm,
     visitada: true,
-    dataPrimeiraVisita: crm.dataPrimeiraVisita || dataValidaInformada,
+    dataInclusao: inclusao,
+    dataPrimeiraVisita: crm.dataPrimeiraVisita || inclusao,
+    dataUltimaVisita: crm.dataUltimaVisita || crm.dataPrimeiraVisita || inclusao,
+  };
+}
+
+export function marcarComoVisitada(crm: MunicipioCrm, data?: string): MunicipioCrm {
+  const dataValidaInformada = data && dataValida(data) ? data : undefined;
+  const primeiraVisita = crm.dataPrimeiraVisita || crm.dataInclusao || dataValidaInformada;
+  return {
+    ...crm,
+    visitada: true,
+    dataPrimeiraVisita: primeiraVisita,
     dataUltimaVisita: dataValidaInformada && (!crm.dataUltimaVisita || dataValidaInformada > crm.dataUltimaVisita)
       ? dataValidaInformada
       : crm.dataUltimaVisita,

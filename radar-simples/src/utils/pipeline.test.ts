@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test';
 import { municipioCrmVazio } from '../types';
-import { entrarEmStandby, marcarComoVisitada, oportunidadeComInteresse, reativarOportunidade, visivelNoFoco } from './pipeline';
+import { entrarEmStandby, garantirDataInclusao, marcarComoVisitada, oportunidadeComInteresse, reativarOportunidade, visivelNoFoco } from './pipeline';
 
 describe('pipeline B2G e standby', () => {
   it('exige data e motivo para entrar em standby', () => {
@@ -31,5 +31,16 @@ describe('pipeline B2G e standby', () => {
     expect(visitada.dataPrimeiraVisita).toBe('2026-09-20');
     expect(oportunidadeComInteresse(visitada)).toBeFalse();
     expect(oportunidadeComInteresse({ ...visitada, estagioFunil: 'qualificacao' })).toBeTrue();
+  });
+
+  it('usa a inclusão como primeira visita e permite alterar essa data', () => {
+    const incluida = garantirDataInclusao(municipioCrmVazio(1), '2026-09-26');
+    const novaVisita = marcarComoVisitada(incluida, '2026-10-03');
+    const corrigida = marcarComoVisitada({ ...novaVisita, dataPrimeiraVisita: '2026-09-24' });
+    expect(novaVisita.dataInclusao).toBe('2026-09-26');
+    expect(novaVisita.dataPrimeiraVisita).toBe('2026-09-26');
+    expect(novaVisita.dataUltimaVisita).toBe('2026-10-03');
+    expect(corrigida.dataInclusao).toBe('2026-09-26');
+    expect(corrigida.dataPrimeiraVisita).toBe('2026-09-24');
   });
 });

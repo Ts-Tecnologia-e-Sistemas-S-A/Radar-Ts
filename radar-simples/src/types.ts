@@ -85,6 +85,7 @@ export interface MunicipioCrm {
   codigoIbge: number;
   prioritario: boolean;
   visitada: boolean;
+  dataInclusao?: string;
   dataPrimeiraVisita?: string;
   dataUltimaVisita?: string;
   macrorregiao?: string;

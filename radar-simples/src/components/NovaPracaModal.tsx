@@ -3,6 +3,7 @@ import { buscarDadosEscolares } from '../api/censoEscolar';
 import { buscarTodosMunicipios } from '../api/ibge';
 import { getMunicipioCrm, saveMunicipioCrm } from '../storage';
 import { MunicipioCrm, MunicipioIbge, municipioCrmVazio } from '../types';
+import { garantirDataInclusao } from '../utils/pipeline';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -132,9 +133,9 @@ export default function NovaPracaModal({ municipiosExistentes, onFechar, onAdici
   async function salvarSeNovo(municipio: MunicipioIbge): Promise<boolean> {
     const existente = await getMunicipioCrm(municipio.codigoIbge);
     if (existente) return false;
-    const crmVazio = municipioCrmVazio(municipio.codigoIbge);
-    await saveMunicipioCrm(crmVazio);
-    await tentarEnriquecerComCensoEscolar(crmVazio);
+    const crmNovo = garantirDataInclusao(municipioCrmVazio(municipio.codigoIbge));
+    await saveMunicipioCrm(crmNovo);
+    await tentarEnriquecerComCensoEscolar(crmNovo);
     return true;
   }
 

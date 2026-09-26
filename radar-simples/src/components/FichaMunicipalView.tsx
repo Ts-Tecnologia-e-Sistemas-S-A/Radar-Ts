@@ -432,7 +432,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             Cidade visitada
           </label>
           <label className="text-label-sm text-on-surface-variant">Data da primeira visita
-            <input type="date" className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.dataPrimeiraVisita || ''} onChange={(e) => salvar(e.target.value ? marcarComoVisitada({ ...crm, dataPrimeiraVisita: e.target.value }, e.target.value) : { ...crm, dataPrimeiraVisita: undefined })} />
+            <input type="date" className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.dataPrimeiraVisita || ''} onChange={(e) => salvar({ ...crm, visitada: Boolean(e.target.value) || crm.visitada, dataPrimeiraVisita: e.target.value || undefined })} />
           </label>
         </div>
         <CampoEditavelMonetario label="Valor anual estimado (R$/ano)" valor={crm.valorAnual} onSalvar={(v) => salvar({ ...crm, valorAnual: v })} />

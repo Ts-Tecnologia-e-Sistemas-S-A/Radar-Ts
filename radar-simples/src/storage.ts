@@ -3,8 +3,8 @@ import { auth, db } from './lib/firebase';
 import { Despesa, EventoTimeline, MunicipioCrm, municipioCrmVazio } from './types';
 import { idHistoricoImportado, validarPacoteHistorico, type PacoteHistorico } from './utils/importarHistorico';
 import type { Diagnostico } from './api/diagnostico';
-import { validarSugestaoTarefa, type Tarefa } from './utils/agenda';
-import { marcarComoVisitada } from './utils/pipeline';
+import { dataLocal, validarSugestaoTarefa, type Tarefa } from './utils/agenda';
+import { garantirDataInclusao, marcarComoVisitada } from './utils/pipeline';
 
 const MUNICIPIOS_COLLECTION = 'radar_simples_municipios';
 const DESPESAS_COLLECTION = 'radar_simples_despesas';
@@ -131,8 +131,11 @@ export async function getMunicipioCrm(codigoIbge: number): Promise<MunicipioCrm 
 }
 
 export async function saveMunicipioCrm(municipio: MunicipioCrm): Promise<void> {
-  const atualizado = municipio.contatos.length > 0 ? marcarComoVisitada(municipio) : municipio;
-  await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge)), semUndefined(atualizado));
+  const referencia = doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge));
+  const existente = await getDoc(referencia);
+  const base = existente.exists() ? municipio : garantirDataInclusao(municipio);
+  const atualizado = base.contatos.length > 0 ? marcarComoVisitada(base) : base;
+  await setDoc(referencia, semUndefined(atualizado));
 }
 
 export async function migratePipelineB2G(): Promise<number> {
@@ -148,9 +151,15 @@ export async function migratePipelineB2G(): Promise<number> {
   let atualizados = 0;
   await Promise.all(municipios.docs.map(async (snapshot) => {
     const crm = snapshot.data() as MunicipioCrm;
-    if (typeof crm.visitada === 'boolean') return;
     const datas = (datasPorMunicipio.get(crm.codigoIbge) || []).sort();
-    const update = semUndefined({ visitada: true, dataPrimeiraVisita: datas[0], dataUltimaVisita: datas.at(-1) });
+    const dataInclusao = crm.dataInclusao || crm.dataPrimeiraVisita || datas[0] || dataLocal();
+    const update = semUndefined({
+      ...(!crm.dataInclusao ? { dataInclusao } : {}),
+      ...(!crm.dataPrimeiraVisita ? { dataPrimeiraVisita: dataInclusao } : {}),
+      ...(!crm.dataUltimaVisita ? { dataUltimaVisita: datas.at(-1) || crm.dataPrimeiraVisita || dataInclusao } : {}),
+      ...(typeof crm.visitada !== 'boolean' || !crm.dataInclusao ? { visitada: true } : {}),
+    });
+    if (!Object.keys(update).length) return;
     await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(crm.codigoIbge)), update, { mergeFields: Object.keys(update) });
     atualizados++;
   }));
