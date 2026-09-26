@@ -81,7 +81,9 @@ describe('importação de histórico', () => {
     const pacote = { versao: 1 as const, fonte: 'Fonte de teste', registros: [{ codigoIbge: 2103000, cidade: 'Caxias / MA', data: '', texto: 'Relato completo\nSegunda visita e contato.', visitaRegistrada: false }] };
     expect(await importarHistorico(pacote)).toEqual({ inseridos: 1, existentes: 0 });
     expect(await importarHistorico(pacote)).toEqual({ inseridos: 0, existentes: 1 });
-    expect(await getMunicipioCrm(2103000)).toEqual({ ...crm, visitada: true });
+    const salvo = await getMunicipioCrm(2103000);
+    expect(salvo).toMatchObject({ ...crm, visitada: true });
+    expect(salvo?.dataPrimeiraVisita).toBe(salvo?.dataInclusao);
     const eventos = await getEventos(2103000);
     expect(eventos).toHaveLength(1); expect(eventos[0].data).toBe(''); expect(eventos[0].resumo).toBe(pacote.registros[0].texto);
   });
@@ -146,7 +148,17 @@ describe('getMunicipioCrm / saveMunicipioCrm', () => {
   it('salva e recupera pelo código IBGE', async () => {
     await saveMunicipioCrm(makeMunicipio(2211001, { prioritario: true }));
     const resultado = await getMunicipioCrm(2211001);
-    expect(resultado).toEqual(makeMunicipio(2211001, { prioritario: true }));
+    expect(resultado).toMatchObject({ ...makeMunicipio(2211001, { prioritario: true }), visitada: true });
+    expect(resultado?.dataPrimeiraVisita).toBe(resultado?.dataInclusao);
+  });
+
+  it('permite corrigir a primeira visita sem alterar a data de inclusão', async () => {
+    await saveMunicipioCrm(makeMunicipio(2211001));
+    const incluido = await getMunicipioCrm(2211001);
+    await saveMunicipioCrm({ ...incluido!, dataPrimeiraVisita: '2026-09-20' });
+    const corrigido = await getMunicipioCrm(2211001);
+    expect(corrigido?.dataInclusao).toBe(incluido?.dataInclusao);
+    expect(corrigido?.dataPrimeiraVisita).toBe('2026-09-20');
   });
 });
 
@@ -163,10 +175,21 @@ describe('getMunicipiosCrm', () => {
   });
   it('migra fichas antigas como cidades visitadas sem sobrescrever o funil', async () => {
     const legado = { codigoIbge: 1, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'juridico' } as unknown as MunicipioCrm;
-    await saveMunicipioCrm(legado);
+    colecao('radar_simples_municipios').set('1', legado);
     expect(await migratePipelineB2G()).toBe(1);
-    expect(await getMunicipioCrm(1)).toMatchObject({ visitada: true, estagioFunil: 'juridico' });
+    const migrado = await getMunicipioCrm(1);
+    expect(migrado).toMatchObject({ visitada: true, estagioFunil: 'juridico' });
+    expect(migrado?.dataPrimeiraVisita).toBe(migrado?.dataInclusao);
     expect(await migratePipelineB2G()).toBe(0);
+  });
+
+  it('preserva a primeira visita corrigida ao migrar a data de inclusão', async () => {
+    const legado = makeMunicipio(2, { visitada: true, dataPrimeiraVisita: '2026-08-15' });
+    colecao('radar_simples_municipios').set('2', legado);
+    expect(await migratePipelineB2G()).toBe(1);
+    const migrado = await getMunicipioCrm(2);
+    expect(migrado?.dataInclusao).toBe('2026-08-15');
+    expect(migrado?.dataPrimeiraVisita).toBe('2026-08-15');
   });
 });
 
@@ -182,9 +205,12 @@ describe('getDespesas / addDespesa', () => {
 describe('getEventos / addEvento', () => {
   it('marca a cidade como visitada ao salvar uma nota', async () => {
     await saveMunicipioCrm(makeMunicipio(10));
-    await addEvento(makeEvento('nota', 10));
-    expect((await getMunicipioCrm(10))?.visitada).toBeTrue();
-    expect((await getMunicipioCrm(10))?.dataPrimeiraVisita).toBe('2026-01-01');
+    const incluida = await getMunicipioCrm(10);
+    await addEvento({ ...makeEvento('nota', 10), data: '2026-10-01' });
+    const atualizada = await getMunicipioCrm(10);
+    expect(atualizada?.visitada).toBeTrue();
+    expect(atualizada?.dataPrimeiraVisita).toBe(incluida?.dataInclusao);
+    expect(atualizada?.dataUltimaVisita).toBe('2026-10-01');
   });
   it('salva relatório e tabela original como documento e recupera por município', async () => {
     const evento: EventoTimeline = {
