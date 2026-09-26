@@ -1,5 +1,6 @@
 import { collection, doc, getDoc, getDocs, runTransaction, setDoc } from 'firebase/firestore';
 import { auth, db } from './lib/firebase';
+import firebaseConfig from '../firebase-applet-config.json';
 import { Despesa, EventoTimeline, MunicipioCrm, municipioCrmVazio } from './types';
 import { idHistoricoImportado, validarPacoteHistorico, type PacoteHistorico } from './utils/importarHistorico';
 import type { Diagnostico } from './api/diagnostico';
@@ -138,10 +139,49 @@ export async function saveMunicipioCrm(municipio: MunicipioCrm): Promise<void> {
   await setDoc(referencia, semUndefined(atualizado));
 }
 
+function dataBrasil(timestamp: string): string {
+  const partes = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(new Date(timestamp));
+  const parte = (tipo: Intl.DateTimeFormatPartTypes) => partes.find((item) => item.type === tipo)?.value || '';
+  return `${parte('year')}-${parte('month')}-${parte('day')}`;
+}
+
+async function getDatasCriacaoFirestore(): Promise<Map<number, string>> {
+  const datas = new Map<number, string>();
+  if (!auth.currentUser?.getIdToken) return datas;
+  try {
+    const token = await auth.currentUser.getIdToken();
+    let pageToken = '';
+    do {
+      const url = new URL(
+        `https://firestore.googleapis.com/v1/projects/${firebaseConfig.projectId}/databases/${firebaseConfig.firestoreDatabaseId}/documents/${MUNICIPIOS_COLLECTION}`
+      );
+      url.searchParams.set('pageSize', '300');
+      if (pageToken) url.searchParams.set('pageToken', pageToken);
+      const response = await fetch(url, { headers: { Authorization: `Bearer ${token}` } });
+      if (!response.ok) throw new Error(`Firestore REST respondeu ${response.status}`);
+      const pagina = await response.json() as { documents?: { name: string; createTime?: string }[]; nextPageToken?: string };
+      for (const documento of pagina.documents || []) {
+        const codigoIbge = Number(documento.name.split('/').at(-1));
+        if (Number.isInteger(codigoIbge) && documento.createTime) datas.set(codigoIbge, dataBrasil(documento.createTime));
+      }
+      pageToken = pagina.nextPageToken || '';
+    } while (pageToken);
+  } catch (error) {
+    console.warn('Não foi possível consultar a data oficial de inclusão no Firestore.', error);
+  }
+  return datas;
+}
+
 export async function migratePipelineB2G(): Promise<number> {
-  const [municipios, eventos] = await Promise.all([
+  const [municipios, eventos, datasCriacao] = await Promise.all([
     getDocs(collection(db, MUNICIPIOS_COLLECTION)),
     getDocs(collection(db, EVENTOS_COLLECTION)),
+    getDatasCriacaoFirestore(),
   ]);
   const datasPorMunicipio = new Map<number, string[]>();
   eventos.docs.forEach((snapshot) => {
@@ -152,13 +192,22 @@ export async function migratePipelineB2G(): Promise<number> {
   await Promise.all(municipios.docs.map(async (snapshot) => {
     const crm = snapshot.data() as MunicipioCrm;
     const datas = (datasPorMunicipio.get(crm.codigoIbge) || []).sort();
-    const dataInclusao = crm.dataInclusao || crm.dataPrimeiraVisita || datas[0] || dataLocal();
-    const update = semUndefined({
-      ...(!crm.dataInclusao ? { dataInclusao } : {}),
-      ...(!crm.dataPrimeiraVisita ? { dataPrimeiraVisita: dataInclusao } : {}),
-      ...(!crm.dataUltimaVisita ? { dataUltimaVisita: datas.at(-1) || crm.dataPrimeiraVisita || dataInclusao } : {}),
-      ...(typeof crm.visitada !== 'boolean' || !crm.dataInclusao ? { visitada: true } : {}),
-    });
+    const dataCriacao = datasCriacao.get(crm.codigoIbge);
+    const dataInclusao = dataCriacao || crm.dataInclusao || crm.dataPrimeiraVisita || datas[0] || dataLocal();
+    const corrigirPelaCriacao = Boolean(dataCriacao && crm.dataInclusao !== dataCriacao);
+    const update = semUndefined(corrigirPelaCriacao
+      ? {
+          visitada: true,
+          dataInclusao,
+          dataPrimeiraVisita: dataInclusao,
+          ...(!crm.dataUltimaVisita ? { dataUltimaVisita: dataInclusao } : {}),
+        }
+      : {
+          ...(!crm.dataInclusao ? { dataInclusao } : {}),
+          ...(!crm.dataPrimeiraVisita ? { dataPrimeiraVisita: dataInclusao } : {}),
+          ...(!crm.dataUltimaVisita ? { dataUltimaVisita: datas.at(-1) || crm.dataPrimeiraVisita || dataInclusao } : {}),
+          ...(typeof crm.visitada !== 'boolean' || !crm.dataInclusao ? { visitada: true } : {}),
+        });
     if (!Object.keys(update).length) return;
     await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(crm.codigoIbge)), update, { mergeFields: Object.keys(update) });
     atualizados++;

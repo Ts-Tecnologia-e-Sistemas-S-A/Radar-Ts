@@ -6,6 +6,7 @@ import type { Despesa, EventoTimeline, MunicipioCrm } from './types';
 // codigoIbge) sem depender de rede.
 const bancos = new Map<string, Map<string, unknown>>();
 let falharGravacao = false;
+let documentosRest: { name: string; createTime: string }[] = [];
 
 function validarFirestore(valor: unknown) {
   if (valor === undefined) throw new Error('Unsupported field value: undefined');
@@ -49,7 +50,7 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-mock.module('./lib/firebase', () => ({ db: {}, auth: { currentUser: { uid: 'teste' } } }));
+mock.module('./lib/firebase', () => ({ db: {}, auth: { currentUser: { uid: 'teste', getIdToken: async () => 'token-teste' } } }));
 
 const {
   getMunicipiosCrm,
@@ -97,6 +98,8 @@ describe('importação de histórico', () => {
 beforeEach(() => {
   bancos.clear();
   falharGravacao = false;
+  documentosRest = [];
+  globalThis.fetch = mock(async () => new Response(JSON.stringify({ documents: documentosRest }), { status: 200 }));
 });
 
 function makeMunicipio(codigoIbge: number, overrides: Partial<MunicipioCrm> = {}): MunicipioCrm {
@@ -190,6 +193,20 @@ describe('getMunicipiosCrm', () => {
     const migrado = await getMunicipioCrm(2);
     expect(migrado?.dataInclusao).toBe('2026-08-15');
     expect(migrado?.dataPrimeiraVisita).toBe('2026-08-15');
+  });
+
+  it('corrige todas as datas pela inclusão oficial e não desfaz ajuste manual posterior', async () => {
+    const crm = makeMunicipio(3, { visitada: true, dataInclusao: '2026-09-26', dataPrimeiraVisita: '2026-09-26' });
+    colecao('radar_simples_municipios').set('3', crm);
+    documentosRest = [{
+      name: 'projects/sicap-radar/databases/banco/documents/radar_simples_municipios/3',
+      createTime: '2026-07-15T01:30:00.000Z',
+    }];
+    expect(await migratePipelineB2G()).toBe(1);
+    expect(await getMunicipioCrm(3)).toMatchObject({ dataInclusao: '2026-07-14', dataPrimeiraVisita: '2026-07-14' });
+    await saveMunicipioCrm({ ...(await getMunicipioCrm(3))!, dataPrimeiraVisita: '2026-07-12' });
+    expect(await migratePipelineB2G()).toBe(0);
+    expect((await getMunicipioCrm(3))?.dataPrimeiraVisita).toBe('2026-07-12');
   });
 });
 
