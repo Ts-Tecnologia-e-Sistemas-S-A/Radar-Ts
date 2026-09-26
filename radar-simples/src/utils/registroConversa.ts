@@ -143,7 +143,9 @@ export class RegistroConversa {
     this.backup(null, true);
   }
   aoSair = () => {
-    if (this.timer) void this.salvarAgora().catch(() => {});
+    if (this.estado.status === 'pendente' || this.estado.status === 'erro') {
+      void this.salvarAgora().catch(() => {});
+    }
   };
   cancelarIA = () => {
     const estavaProcessando = this.estado.processando;

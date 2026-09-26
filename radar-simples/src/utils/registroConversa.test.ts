@@ -39,6 +39,19 @@ describe('relato da conversa com salvamento automático', () => {
     expect([...r.banco.values()][0].resumo).toBe('Relato antes de sair');
     expect(r.backup()?.resumo).toBe('Relato antes de sair');
   });
+  it('a saída do campo tenta novamente após uma falha no banco', async () => {
+    let tentativas = 0;
+    const r = preparar({ salvar: async () => { if (++tentativas === 1) throw new Error('offline'); } });
+    r.controle.editar('Nota preservada no celular');
+    expect(r.backup()?.resumo).toBe('Nota preservada no celular');
+    await r.controle.salvarAgora().catch(() => {});
+    expect(r.controle.snapshot().status).toBe('erro');
+    r.controle.aoSair();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(tentativas).toBe(2);
+    expect([...r.banco.values()][0].resumo).toBe('Nota preservada no celular');
+    expect(r.controle.snapshot().status).toBe('salvo');
+  });
   it('IA indisponível mantém o relato no campo, no backup e no banco', async () => {
     const r = preparar({ gerar: async () => { throw new Error('Serviço indisponível'); } });
     r.controle.editar('Reunião original, sem promessa de compra.');
