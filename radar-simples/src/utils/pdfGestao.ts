@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { dataBr, moeda, type RelatorioGestao } from './relatorioGestao';
+import { dataHoraBr } from './data';
 
 export function gerarPdfGestao(relatorio: RelatorioGestao, responsavel: string, observacoes: string) {
   const doc = new jsPDF();
@@ -25,7 +26,7 @@ export function gerarPdfGestao(relatorio: RelatorioGestao, responsavel: string, 
   }
   cabecalho();
   texto(`Responsável: ${responsavel.trim() || 'Não informado'}`);
-  texto(`Emitido em: ${new Date().toLocaleString('pt-BR')}`);
+  texto(`Emitido em: ${dataHoraBr(new Date())}`);
   texto('Escopo: registros disponíveis no aplicativo, sem filtro por usuário. O responsável identifica quem apresenta o relatório.');
   texto('1. Resumo executivo', true);
   texto(relatorio.resumo);

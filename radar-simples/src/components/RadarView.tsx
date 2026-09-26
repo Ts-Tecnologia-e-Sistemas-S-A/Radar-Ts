@@ -4,6 +4,7 @@ import { dataLocal, proximaTarefa } from '../utils/agenda';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
+import { dataBr } from '../utils/data';
 import { visivelNoFoco } from '../utils/pipeline';
 import Icon from './Icon';
 
@@ -267,7 +268,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className={`text-label-sm font-semibold ${urgente ? 'text-error uppercase tracking-wider' : 'text-secondary'}`}>
-                        {urgente ? `Atrasado desde ${crm.proximaAcao.data.split('-').reverse().join('/')}` : `${crm.proximaAcao.data.split('-').reverse().join('/')}${crm.proximaAcao.hora ? ` às ${crm.proximaAcao.hora}` : ''}${crm.proximaAcao.presencial ? ' (Presencial)' : ''}`}
+                        {urgente ? `Atrasado desde ${dataBr(crm.proximaAcao.data)}` : `${dataBr(crm.proximaAcao.data)}${crm.proximaAcao.hora ? ` às ${crm.proximaAcao.hora}` : ''}${crm.proximaAcao.presencial ? ' (Presencial)' : ''}`}
                       </span>
                       <p className="text-body-sm text-primary font-semibold truncate leading-tight">
                         {crm.proximaAcao.descricao}
@@ -303,7 +304,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
               {ordenacao === 'visita' && (
                 <p className="text-body-sm text-on-surface-variant">
                   {visitasPorCodigo[municipio.codigoIbge]
-                    ? `Visita agendada: ${visitasPorCodigo[municipio.codigoIbge].data.split('-').reverse().join('/')}${visitasPorCodigo[municipio.codigoIbge].hora ? ` às ${visitasPorCodigo[municipio.codigoIbge].hora}` : ''}`
+                    ? `Visita agendada: ${dataBr(visitasPorCodigo[municipio.codigoIbge].data)}${visitasPorCodigo[municipio.codigoIbge].hora ? ` às ${visitasPorCodigo[municipio.codigoIbge].hora}` : ''}`
                     : 'Sem visita agendada.'}
                 </p>
               )}

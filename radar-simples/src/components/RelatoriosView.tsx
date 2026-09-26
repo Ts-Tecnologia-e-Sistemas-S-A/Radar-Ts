@@ -3,6 +3,7 @@ import { gerarRecomendacoesSemana } from '../api/ia';
 import { getDespesas, getEventos, getMunicipiosCrm, getPontosRota, getRecomendacoesSemana, saveRecomendacoesSemana } from '../storage';
 import { CATEGORIAS_DESPESA, CategoriaDespesa, Despesa, EventoTimeline, MunicipioCrm, MunicipioIbge } from '../types';
 import { calcularKmPeriodo } from '../utils/rota';
+import { dataBr } from '../utils/data';
 import { compartilharOuBaixarPdf, gerarPdfRelatorioSemanal } from '../utils/pdf';
 import Icon from './Icon';
 
@@ -78,7 +79,7 @@ export default function RelatoriosView({ municipios, onFechar }: RelatoriosViewP
     setExportando(true);
     try {
       const doc = gerarPdfRelatorioSemanal({
-        periodoLabel: `${inicio.split('-').reverse().join('/')} a ${fim.split('-').reverse().join('/')}`,
+        periodoLabel: `${dataBr(inicio)} a ${dataBr(fim)}`,
         cidadesVisitadas: cidadesVisitadas.map((m) => `${m.nome}/${m.uf}`),
         reunioesRealizadas,
         despesasTotais,
@@ -105,7 +106,7 @@ export default function RelatoriosView({ municipios, onFechar }: RelatoriosViewP
 
       <div className="flex-1 overflow-y-auto p-screen-margin-mobile flex flex-col gap-space-md pb-28">
         <p className="text-body-sm text-on-surface-variant">
-          {inicio.split('-').reverse().join('/')} a {fim.split('-').reverse().join('/')}
+          {dataBr(inicio)} a {dataBr(fim)}
         </p>
         {carregando && <p className="text-body-sm text-on-surface-variant">Carregando…</p>}
         {erro && <p className="text-body-sm text-error">{erro}</p>}

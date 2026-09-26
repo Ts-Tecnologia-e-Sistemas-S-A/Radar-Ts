@@ -1,9 +1,10 @@
 import { CATEGORIAS_DESPESA, ESTAGIOS_FUNIL_B2G, type Despesa, type EventoTimeline, type MunicipioCrm, type MunicipioIbge } from '../types';
 import { dataValida, proximaTarefa, TIPOS_TAREFA, type Tarefa } from './agenda';
+import { dataBr } from './data';
 import { oportunidadeComInteresse } from './pipeline';
 
 export const moeda = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-export const dataBr = (data: string) => data ? data.split('-').reverse().join('/') : 'Data não informada';
+export { dataBr } from './data';
 
 export interface FonteRelatorio {
   municipios: MunicipioIbge[];

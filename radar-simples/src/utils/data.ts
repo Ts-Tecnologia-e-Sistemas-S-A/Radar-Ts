@@ -5,3 +5,10 @@ export function dataBr(data: string | undefined): string {
   const [, ano, mes, dia] = correspondencia;
   return `${dia}/${mes}/${ano.slice(-2)}`;
 }
+
+export function dataHoraBr(valor: string | Date): string {
+  const data = valor instanceof Date ? valor : new Date(valor);
+  if (Number.isNaN(data.getTime())) return String(valor);
+  const doisDigitos = (numero: number) => String(numero).padStart(2, '0');
+  return `${doisDigitos(data.getDate())}/${doisDigitos(data.getMonth() + 1)}/${doisDigitos(data.getFullYear() % 100)} ${doisDigitos(data.getHours())}:${doisDigitos(data.getMinutes())}`;
+}

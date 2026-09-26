@@ -3,6 +3,7 @@ import { getMunicipiosCrm } from '../storage';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { forecastPonderado } from '../utils/forecast';
 import { dataLocal } from '../utils/agenda';
+import { dataBr } from '../utils/data';
 import { visivelNoFoco } from '../utils/pipeline';
 import Icon from './Icon';
 
@@ -144,7 +145,7 @@ export default function PipelineView({ municipios, onAbrirMunicipio, onVerRelato
                       {crm.alunosCount !== undefined && (
                         <span className="text-body-sm text-on-surface-variant">{crm.alunosCount.toLocaleString('pt-BR')} alunos</span>
                       )}
-                      {crm.estagioFunil === 'standby' && <span className="text-body-sm text-secondary">Reativar em: {crm.dataReativacao ? crm.dataReativacao.split('-').reverse().join('/') : 'data pendente'}</span>}
+                      {crm.estagioFunil === 'standby' && <span className="text-body-sm text-secondary">Reativar em: {crm.dataReativacao ? dataBr(crm.dataReativacao) : 'data pendente'}</span>}
                     </div>
                     {crm.valorAnual !== undefined && (
                       <div className="flex flex-col items-end flex-shrink-0">

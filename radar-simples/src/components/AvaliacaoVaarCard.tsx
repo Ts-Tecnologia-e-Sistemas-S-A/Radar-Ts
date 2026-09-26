@@ -1,4 +1,5 @@
 import { CONDICOES_VAAR, type AvaliacaoVaar } from '../types/diagnostico';
+import { dataHoraBr } from '../utils/data';
 
 export default function AvaliacaoVaarCard({ vaar }: { vaar: AvaliacaoVaar }) {
   return <section className="rounded-lg bg-surface-container-low p-3 space-y-2 text-body-sm">
@@ -15,7 +16,7 @@ export default function AvaliacaoVaarCard({ vaar }: { vaar: AvaliacaoVaar }) {
     {vaar.pendencia && <p>Pendência publicada: {vaar.pendencia}</p>}
     {vaar.avisos.map((aviso) => <p key={aviso} className="text-on-surface-variant">{aviso}</p>)}
     <p>{vaar.publicacao}</p>
-    <p>Consultado em {new Date(vaar.consultadoEm).toLocaleString('pt-BR')}. Referência: exercício {vaar.exercicio}.</p>
+    <p>Consultado em {dataHoraBr(vaar.consultadoEm)}. Referência: exercício {vaar.exercicio}.</p>
     <ul>{vaar.fontes.map((fonte) => <li key={fonte.url}><a className="text-secondary underline" href={fonte.url} target="_blank" rel="noreferrer">{fonte.titulo}</a></li>)}</ul>
   </section>;
 }

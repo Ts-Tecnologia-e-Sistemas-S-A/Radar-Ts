@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import { AchadoDiagnostico, Diagnostico, TipoAchado } from '../api/diagnostico';
 import { CONDICOES_VAAR, type ComparativoEstadual } from '../types/diagnostico';
 import { EventoTimeline, MunicipioCrm, MunicipioIbge } from '../types';
+import { dataBr, dataHoraBr } from './data';
 
 function cabecalho(doc: jsPDF, titulo: string, subtitulo: string): number {
   doc.setFontSize(18);
@@ -60,7 +61,7 @@ export function gerarPdfBriefing(municipio: MunicipioIbge, crm: MunicipioCrm, ev
         doc.addPage();
         y = 20;
       }
-      y = paragrafo(doc, `${ev.data.split('-').reverse().join('/')} — ${ev.sinteseIA || ev.resumo}`, y);
+      y = paragrafo(doc, `${dataBr(ev.data)} — ${ev.sinteseIA || ev.resumo}`, y);
     }
   }
 
@@ -181,7 +182,7 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
 
   y = paragrafo(
     doc,
-    `Consulta das fontes oficiais realizada em ${new Date(diagnostico.consultadoEm).toLocaleString('pt-BR')}. Cada base tem seu próprio período de referência. Informações cuja atualização não foi confirmada são apresentadas como pendentes.`,
+    `Consulta das fontes oficiais realizada em ${dataHoraBr(diagnostico.consultadoEm)}. Cada base tem seu próprio período de referência. Informações cuja atualização não foi confirmada são apresentadas como pendentes.`,
     y
   );
 
@@ -275,7 +276,7 @@ export function gerarPdfDiagnostico(municipio: MunicipioIbge, diagnostico: Diagn
   y = paragrafo(doc, `Previsão oficial de repasse: ${vaar.repasseTotalPrevisto === null ? 'pendente de conferência' : vaar.repasseTotalPrevisto.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}.`, y);
   if (vaar.pendencia) y = paragrafo(doc, `Pendência publicada: ${vaar.pendencia}`, y);
   for (const aviso of vaar.avisos) y = paragrafo(doc, aviso, y);
-  y = paragrafo(doc, `Consulta ao FNDE: ${new Date(vaar.consultadoEm).toLocaleString('pt-BR')}. Fontes oficiais (links):`, y);
+  y = paragrafo(doc, `Consulta ao FNDE: ${dataHoraBr(vaar.consultadoEm)}. Fontes oficiais (links):`, y);
   for (const fonte of vaar.fontes) {
     if (y > 270) { doc.addPage(); y = 20; }
     doc.setFontSize(9);
@@ -299,7 +300,7 @@ function adicionarComparativos(doc: jsPDF, diagnostico: Diagnostico) {
     let y = cabecalho(doc, `${c.titulo} / ${c.uf} / ${c.anoReferencia}`, 'Cidade filtrada e maiores resultados do estado');
     y = paragrafo(doc, c.universo, y);
     if (c.periodo) y = paragrafo(doc, `Período: ${c.periodo}.`, y);
-    if (c.atualizadoEm) y = paragrafo(doc, `Base oficial atualizada em ${new Date(c.atualizadoEm).toLocaleString('pt-BR')}.`, y);
+    if (c.atualizadoEm) y = paragrafo(doc, `Base oficial atualizada em ${dataHoraBr(c.atualizadoEm)}.`, y);
     y = paragrafo(doc, `Cinco primeiros do estado, incluindo empates. ${c.totalComNota} municípios com resultado no grupo comparado. A cidade filtrada aparece primeiro.`, y);
     if (!c.cidade) y = paragrafo(doc, 'Cidade filtrada: sem resultado publicado nesta base.', y);
     const linhas = [...(c.cidade ? [c.cidade] : []), ...c.destaques];
@@ -324,7 +325,7 @@ function adicionarComparativos(doc: jsPDF, diagnostico: Diagnostico) {
       y += altura;
     }
     if (c.cidade?.posicao === null) y = paragrafo(doc, 'Sem posição: a cidade não tem nota divulgada ou não participa do grupo elegível desta comparação.', y + 3);
-    y = paragrafo(doc, `Consulta: ${new Date(c.consultadoEm).toLocaleString('pt-BR')}. Referência: ${c.anoReferencia}.`, y + 4);
+    y = paragrafo(doc, `Consulta: ${dataHoraBr(c.consultadoEm)}. Referência: ${c.anoReferencia}.`, y + 4);
     if (y > 270) { doc.addPage(); y = 20; }
     doc.setTextColor(30, 70, 140);
     doc.textWithLink(c.fonte.titulo, 14, y, { url: c.fonte.url });

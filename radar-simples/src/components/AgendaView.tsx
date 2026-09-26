@@ -3,6 +3,7 @@ import { sugerirTarefa } from '../api/ia';
 import { getEventos, getTarefas, saveTarefa, setStatusTarefa } from '../storage';
 import type { MunicipioIbge } from '../types';
 import { dataLocal, tarefaAtrasada, TIPOS_TAREFA, type Tarefa, type TipoTarefa } from '../utils/agenda';
+import { dataBr } from '../utils/data';
 
 function novaTarefa(codigoIbge: number): Tarefa {
   return { id: crypto.randomUUID(), codigoIbge, tipo: 'ligar', descricao: '', data: dataLocal(), hora: '', status: 'pendente', origem: 'manual', criadaEm: new Date().toISOString() };
@@ -120,7 +121,7 @@ export default function AgendaView({ municipios, municipioAtivo }: { municipios:
     {visiveis.map((t) => <article key={t.id} className="rounded-xl bg-surface-container-lowest p-4 shadow-sm space-y-2">
       <p className="text-label-sm text-on-surface-variant">{municipios.find((m) => m.codigoIbge === t.codigoIbge)?.nome || `Município ${t.codigoIbge}`}</p>
       <h3 className="text-label-lg text-primary">{TIPOS_TAREFA[t.tipo]} — {t.descricao}</h3>
-      <p>{t.data.split('-').reverse().join('/')} {t.hora || '• Sem horário definido'}</p>
+      <p>{dataBr(t.data)} {t.hora || '• Sem horário definido'}</p>
       <p className={tarefaAtrasada(t, agora) ? 'text-error' : 'text-secondary'}>{tarefaAtrasada(t, agora) ? 'Atrasada' : t.status === 'pendente' ? 'Pendente' : t.status === 'concluida' ? 'Concluída' : 'Cancelada'}</p>
       <div className="flex flex-wrap gap-3">
         <button disabled={ocupado || gerando || carregando} className="text-primary" onClick={() => { setForm({ ...t }); setContexto(''); setAviso('Tarefa carregada no formulário acima.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar / reagendar</button>

@@ -24,6 +24,7 @@ import ComparativoEstadualCard from './ComparativoEstadualCard';
 import NotaConversa from './NotaConversa';
 import { entrarEmStandby, marcarComoVisitada, reativarOportunidade } from '../utils/pipeline';
 import { dataLocal } from '../utils/agenda';
+import { dataHoraBr } from '../utils/data';
 
 interface FichaMunicipalViewProps {
   municipio: MunicipioIbge;
@@ -311,7 +312,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             {diagnostico.vaar ? <AvaliacaoVaarCard vaar={diagnostico.vaar} /> : (
               <p role="status" className="text-body-sm text-on-surface-variant">VAAR pendente: {diagnostico.avisoVaar || 'Fonte oficial indisponível.'}</p>
             )}
-            <p className="text-label-sm text-on-surface-variant">Consulta realizada em {new Date(diagnostico.consultadoEm!).toLocaleString('pt-BR')}.</p>
+            <p className="text-label-sm text-on-surface-variant">Consulta realizada em {dataHoraBr(diagnostico.consultadoEm!)}.</p>
             <div className="space-y-1.5">
               {diagnostico.avisoCenso ? (
                 <p className="text-body-sm text-on-surface-variant">Censo Escolar: {diagnostico.avisoCenso}</p>
