@@ -1,5 +1,6 @@
 import { CATEGORIAS_DESPESA, ESTAGIOS_FUNIL_B2G, type Despesa, type EventoTimeline, type MunicipioCrm, type MunicipioIbge } from '../types';
 import { dataValida, proximaTarefa, TIPOS_TAREFA, type Tarefa } from './agenda';
+import { oportunidadeComInteresse } from './pipeline';
 
 export const moeda = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 export const dataBr = (data: string) => data ? data.split('-').reverse().join('/') : 'Data não informada';
@@ -45,6 +46,7 @@ export function montarRelatorioGestao(fonte: FonteRelatorio, inicio: string, fim
     ].sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
     return {
       codigo, nome: nomeCidade(codigo),
+      visitada: Boolean(crm?.visitada || crm?.contatos.length || eventos.some((evento) => evento.codigoIbge === codigo)),
       status: ESTAGIOS_FUNIL_B2G.find((e) => e.value === crm?.estagioFunil)?.label || 'Sem status cadastrado',
       prioritario: Boolean(crm?.prioritario),
       visitas: visitas.filter((t) => t.codigoIbge === codigo),
@@ -54,11 +56,8 @@ export function montarRelatorioGestao(fonte: FonteRelatorio, inicio: string, fim
     };
   }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const totalDespesas = somar(despesas);
-  const cidadesVisitadas = cidades.length;
-  const oportunidadesComInteresse = cidades.filter((cidade) => {
-    const crm = fonte.crm[cidade.codigo];
-    return Boolean(crm && crm.estagioFunil !== 'mapeamento');
-  }).length;
+  const cidadesVisitadas = cidades.filter((cidade) => cidade.visitada).length;
+  const oportunidadesComInteresse = cidades.filter((cidade) => fonte.crm[cidade.codigo] && oportunidadeComInteresse(fonte.crm[cidade.codigo])).length;
   const reunioes = eventos.filter((e) => e.tipo === 'reuniao').length;
   return {
     inicio, fim, cidades, cidadesVisitadas, oportunidadesComInteresse, visitas: visitas.length, reunioes, totalDespesas, semData,

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getDespesas, getMunicipiosCrm, getPontosRota, getTarefas } from '../storage';
-import { proximaTarefa } from '../utils/agenda';
+import { dataLocal, proximaTarefa } from '../utils/agenda';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
+import { visivelNoFoco } from '../utils/pipeline';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -32,7 +33,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState<'todos' | 'urgentes'>('todos');
+  const [filtro, setFiltro] = useState<'todos' | 'urgentes' | 'espera'>('todos');
   const [ordenacao, setOrdenacao] = useState('tarefa');
   const [visitasPorCodigo, setVisitasPorCodigo] = useState<Record<number, { data: string; hora?: string }>>({});
 
@@ -76,6 +77,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
       .map((municipio) => ({ municipio, crm: crmPorCodigo[municipio.codigoIbge] }))
       .filter((l): l is LinhaMunicipio => Boolean(l.crm))
       .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
+      .filter((l) => filtro === 'espera' ? l.crm.estagioFunil === 'standby' : visivelNoFoco(l.crm, dataLocal()))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
       .sort((a, b) => {
         if (ordenacao !== 'nome') {
@@ -168,6 +170,15 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
           <span className="px-1.5 py-0.5 rounded-full bg-surface-container-lowest/20 text-label-sm">
             {urgentesCount}
           </span>
+        </button>
+        <button
+          onClick={() => setFiltro('espera')}
+          className={`px-3.5 py-1.5 rounded-full text-label-md whitespace-nowrap shadow-sm flex items-center gap-1.5 shrink-0 ${
+            filtro === 'espera' ? 'bg-primary-container text-on-primary' : 'bg-surface-container-low text-on-surface'
+          }`}
+        >
+          <span>Em espera</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-surface-container-lowest/20 text-label-sm">{Object.values(crmPorCodigo).filter((crm) => crm.estagioFunil === 'standby').length}</span>
         </button>
       </div>
 

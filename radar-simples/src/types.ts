@@ -7,17 +7,50 @@ export interface MunicipioIbge {
 
 export type EstagioFunilB2G =
   | 'mapeamento'
+  | 'rota'
+  | 'visita'
   | 'qualificacao'
+  | 'diagnostico'
   | 'proposta'
   | 'juridico'
-  | 'homologacao';
+  | 'homologacao'
+  | 'contratado'
+  | 'standby';
 
 export const ESTAGIOS_FUNIL_B2G: { value: EstagioFunilB2G; label: string; prazoMedio: string }[] = [
-  { value: 'mapeamento', label: 'Mapeamento & Contato Político', prazoMedio: '~14 dias' },
+  { value: 'mapeamento', label: 'Pesquisa / Mapa', prazoMedio: 'Análise preliminar' },
+  { value: 'rota', label: 'Selecionada para Rota', prazoMedio: 'Próxima viagem' },
+  { value: 'visita', label: 'Visita / Contato Realizado', prazoMedio: 'Contato de campo' },
   { value: 'qualificacao', label: 'Qualificação Técnica & PoC', prazoMedio: '~21 dias' },
+  { value: 'diagnostico', label: 'Diagnóstico Técnico / PoC', prazoMedio: 'Validação da solução' },
   { value: 'proposta', label: 'Apresentação & Minuta Técnica', prazoMedio: '~18 dias' },
   { value: 'juridico', label: 'Trâmite Jurídico & Modalidade', prazoMedio: 'Fase crítica (Lei 14.133)' },
   { value: 'homologacao', label: 'Homologação & Assinatura', prazoMedio: 'Garantia de receita' },
+  { value: 'contratado', label: 'Contratado / Ganho', prazoMedio: 'Implantação e pós-venda' },
+  { value: 'standby', label: 'Em Espera / Nutrição', prazoMedio: 'Retorno programado' },
+];
+
+export type MotivoEspera =
+  | 'loa_ppa'
+  | 'troca_gestao'
+  | 'fim_contrato'
+  | 'prioridade_adiada'
+  | 'sem_orcamento'
+  | 'aguardando_licitacao'
+  | 'decisao_politica'
+  | 'contato_indisponivel'
+  | 'outro';
+
+export const MOTIVOS_ESPERA: { value: MotivoEspera; label: string }[] = [
+  { value: 'loa_ppa', label: 'Aguardando LOA/PPA do próximo exercício' },
+  { value: 'troca_gestao', label: 'Troca de gestão ou eleição' },
+  { value: 'fim_contrato', label: 'Fim do contrato concorrente' },
+  { value: 'prioridade_adiada', label: 'Prioridade pedagógica adiada' },
+  { value: 'sem_orcamento', label: 'Sem orçamento disponível' },
+  { value: 'aguardando_licitacao', label: 'Aguardando publicação ou licitação' },
+  { value: 'decisao_politica', label: 'Aguardando decisão política' },
+  { value: 'contato_indisponivel', label: 'Contato temporariamente indisponível' },
+  { value: 'outro', label: 'Outro' },
 ];
 
 export interface Contato {
@@ -51,7 +84,11 @@ export interface SolucaoOfertada {
 export interface MunicipioCrm {
   codigoIbge: number;
   prioritario: boolean;
+  visitada: boolean;
+  dataPrimeiraVisita?: string;
+  dataUltimaVisita?: string;
   macrorregiao?: string;
+  portePopulacional?: 'pequeno' | 'medio' | 'grande';
   escolasCount?: number;
   alunosCount?: number;
   /** Ano do Censo Escolar (INEP) de onde escolasCount/alunosCount vieram —
@@ -61,6 +98,10 @@ export interface MunicipioCrm {
   contatos: Contato[];
   solucoes: SolucaoOfertada[];
   estagioFunil: EstagioFunilB2G;
+  dataReativacao?: string;
+  motivoEspera?: MotivoEspera;
+  detalhesEspera?: string;
+  estagioAntesStandby?: Exclude<EstagioFunilB2G, 'standby'>;
   valorAnual?: number;
   proximaAcao?: {
     data: string; // YYYY-MM-DD
@@ -75,6 +116,7 @@ export function municipioCrmVazio(codigoIbge: number): MunicipioCrm {
   return {
     codigoIbge,
     prioritario: false,
+    visitada: false,
     contatos: [],
     solucoes: [],
     estagioFunil: 'mapeamento',

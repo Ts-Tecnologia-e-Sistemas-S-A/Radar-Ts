@@ -82,9 +82,11 @@ export default function AgendaView({ municipios, municipioAtivo }: { municipios:
     (filtro === 'atrasadas' && tarefaAtrasada(t, agora)) ||
     (filtro === 'concluidas' && t.status === 'concluida'))
     .sort((a, b) => `${a.data} ${a.hora}`.localeCompare(`${b.data} ${b.hora}`));
+  const reativacoesPendentes = tarefas.filter((t) => t.status === 'pendente' && t.id.startsWith('reativacao-standby-') && t.data <= dataLocal(agora));
 
   return <div className="space-y-4 pt-space-xs pb-28">
     <h2 className="text-headline-md text-primary">Agenda de tarefas</h2>
+    {reativacoesPendentes.length > 0 && <div role="status" className="rounded-xl bg-secondary-container p-4 text-on-secondary-container"><strong>{reativacoesPendentes.length} oportunidade(s) para reativar.</strong><p className="text-body-sm">Os cartões voltaram ao Foco em Campo e aguardam contato.</p></div>}
     {erro && <p role="alert" className="text-error">{erro}</p>}
     {aviso && <p role="status" className="text-secondary">{aviso}</p>}
     <form onSubmit={salvar} className="rounded-xl bg-surface-container-lowest p-4 shadow-sm">

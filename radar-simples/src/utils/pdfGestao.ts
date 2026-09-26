@@ -41,12 +41,12 @@ export function gerarPdfGestao(relatorio: RelatorioGestao, responsavel: string, 
     texto(`${d.descricao || 'Sem descrição'} | Comprovante: ${d.temComprovante ? 'imagem registrada no aplicativo' : 'não anexado'}. Referência: ${d.id}`);
   }
   texto('3. Cidades visitadas, interesse, status e histórico', true);
-  texto('Toda cidade com ficha, contato, nota ou outro registro é considerada visitada. Interesse comercial significa avanço no funil além de Mapeamento & Contato Político.');
+  texto('Toda cidade com ficha, contato, nota ou outro registro é considerada visitada. Interesse comercial significa avanço no funil além de Pesquisa / Mapa.');
   if (!relatorio.cidades.length) texto('Nenhuma cidade com registros no período.');
   for (const cidade of relatorio.cidades) {
     texto(cidade.nome, true);
     texto(`Status atual: ${cidade.status}${cidade.prioritario ? ' | Prioritária' : ''}`);
-    texto(`Cidade visitada | Registros formais de visita com data: ${cidade.visitas.length} | Gastos: ${moeda(cidade.totalDespesas)}`);
+    texto(`${cidade.visitada ? 'Cidade visitada' : 'Pesquisa sem visita'} | Registros formais de visita com data: ${cidade.visitas.length} | Gastos: ${moeda(cidade.totalDespesas)}`);
     texto(`Próxima ação atual: ${cidade.proximaAcao}`);
     if (!cidade.historico.length) texto('Sem histórico de atividades no período; há despesas vinculadas.');
     for (const item of cidade.historico) texto(`${dataBr(item.data)} - ${item.texto}`);

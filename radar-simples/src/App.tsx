@@ -13,7 +13,7 @@ import RadarView from './components/RadarView';
 import RelatorioGestaoView from './components/RelatorioGestaoView';
 import AgendaView from './components/AgendaView';
 import OfflineStatus from './components/OfflineStatus';
-import { getEventos, getMunicipioCrm, getMunicipiosCrm } from './storage';
+import { getEventos, getMunicipioCrm, getMunicipiosCrm, migratePipelineB2G } from './storage';
 import { MunicipioIbge, municipioCrmVazio } from './types';
 import { compartilharOuBaixarPdf, gerarPdfBriefing } from './utils/pdf';
 
@@ -41,6 +41,7 @@ export default function App() {
     setCarregandoMunicipios(true);
     setErroMunicipios(null);
     try {
+      await migratePipelineB2G();
       const crm = await getMunicipiosCrm();
       const codigos = new Set(Object.keys(crm).map(Number));
       let selecionados: MunicipioIbge[];

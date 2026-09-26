@@ -4,6 +4,7 @@ import { Despesa, EventoTimeline, MunicipioCrm, municipioCrmVazio } from './type
 import { idHistoricoImportado, validarPacoteHistorico, type PacoteHistorico } from './utils/importarHistorico';
 import type { Diagnostico } from './api/diagnostico';
 import { validarSugestaoTarefa, type Tarefa } from './utils/agenda';
+import { marcarComoVisitada } from './utils/pipeline';
 
 const MUNICIPIOS_COLLECTION = 'radar_simples_municipios';
 const DESPESAS_COLLECTION = 'radar_simples_despesas';
@@ -25,7 +26,8 @@ export async function importarHistorico(pacote: PacoteHistorico) {
       const crmRef = doc(db, MUNICIPIOS_COLLECTION, String(registro.codigoIbge));
       const [evento, crm] = await Promise.all([transaction.get(eventoRef), transaction.get(crmRef)]);
       if (evento.exists()) return false;
-      if (!crm.exists()) transaction.set(crmRef, municipioCrmVazio(registro.codigoIbge));
+      const crmAtual = crm.exists() ? crm.data() as MunicipioCrm : municipioCrmVazio(registro.codigoIbge);
+      transaction.set(crmRef, semUndefined(marcarComoVisitada(crmAtual, registro.data)));
       transaction.set(eventoRef, {
         id, codigoIbge: registro.codigoIbge, tipo: 'documento', data: registro.data,
         resumo: registro.texto, criadaEm: new Date().toISOString(),
@@ -50,8 +52,26 @@ export async function saveTarefa(tarefa: Tarefa): Promise<void> {
   await setDoc(doc(db, TAREFAS_COLLECTION, tarefa.id), semUndefined(tarefa));
 }
 
+export async function saveStandby(municipio: MunicipioCrm, tarefa: Tarefa): Promise<void> {
+  validarSugestaoTarefa({ ...tarefa, hora: tarefa.hora || null });
+  if (municipio.estagioFunil !== 'standby' || !municipio.dataReativacao || !municipio.motivoEspera) {
+    throw new Error('Data de reativação e motivo são obrigatórios para colocar a oportunidade em espera.');
+  }
+  const atualizado = municipio.contatos.length > 0 ? marcarComoVisitada(municipio) : municipio;
+  await runTransaction(db, async (transaction) => {
+    transaction.set(doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge)), semUndefined(atualizado));
+    transaction.set(doc(db, TAREFAS_COLLECTION, tarefa.id), semUndefined(tarefa));
+  });
+}
+
 export async function setStatusTarefa(id: string, status: Tarefa['status']): Promise<void> {
   await setDoc(doc(db, TAREFAS_COLLECTION, id), { status }, { mergeFields: ['status'] });
+}
+
+export async function cancelarTarefaSeExistir(id: string): Promise<void> {
+  const referencia = doc(db, TAREFAS_COLLECTION, id);
+  const snapshot = await getDoc(referencia);
+  if (snapshot.exists()) await setDoc(referencia, { status: 'cancelada' }, { mergeFields: ['status'] });
 }
 
 // Os modelos usam campos opcionais. Firestore rejeita undefined, inclusive
@@ -111,7 +131,30 @@ export async function getMunicipioCrm(codigoIbge: number): Promise<MunicipioCrm 
 }
 
 export async function saveMunicipioCrm(municipio: MunicipioCrm): Promise<void> {
-  await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge)), semUndefined(municipio));
+  const atualizado = municipio.contatos.length > 0 ? marcarComoVisitada(municipio) : municipio;
+  await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(municipio.codigoIbge)), semUndefined(atualizado));
+}
+
+export async function migratePipelineB2G(): Promise<number> {
+  const [municipios, eventos] = await Promise.all([
+    getDocs(collection(db, MUNICIPIOS_COLLECTION)),
+    getDocs(collection(db, EVENTOS_COLLECTION)),
+  ]);
+  const datasPorMunicipio = new Map<number, string[]>();
+  eventos.docs.forEach((snapshot) => {
+    const evento = snapshot.data() as EventoTimeline;
+    if (evento.data) datasPorMunicipio.set(evento.codigoIbge, [...(datasPorMunicipio.get(evento.codigoIbge) || []), evento.data]);
+  });
+  let atualizados = 0;
+  await Promise.all(municipios.docs.map(async (snapshot) => {
+    const crm = snapshot.data() as MunicipioCrm;
+    if (typeof crm.visitada === 'boolean') return;
+    const datas = (datasPorMunicipio.get(crm.codigoIbge) || []).sort();
+    const update = semUndefined({ visitada: true, dataPrimeiraVisita: datas[0], dataUltimaVisita: datas.at(-1) });
+    await setDoc(doc(db, MUNICIPIOS_COLLECTION, String(crm.codigoIbge)), update, { mergeFields: Object.keys(update) });
+    atualizados++;
+  }));
+  return atualizados;
 }
 
 export async function getDespesas(codigoIbge?: number): Promise<Despesa[]> {
@@ -132,6 +175,8 @@ export async function getEventos(codigoIbge?: number): Promise<EventoTimeline[]>
 
 export async function addEvento(evento: EventoTimeline): Promise<void> {
   await setDoc(doc(db, EVENTOS_COLLECTION, evento.id), semUndefined(evento));
+  const crm = await getMunicipioCrm(evento.codigoIbge);
+  if (crm) await saveMunicipioCrm(marcarComoVisitada(crm, evento.data));
 }
 
 export interface PontoRota {

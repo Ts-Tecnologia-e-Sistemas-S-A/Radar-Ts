@@ -209,11 +209,16 @@ export default function RelatoriosView({ municipios, onFechar }: RelatoriosViewP
 function ESTAGIO_LABEL(estagio: string | undefined): string {
   if (!estagio) return 'sem dados';
   const mapa: Record<string, string> = {
-    mapeamento: 'Mapeamento',
+    mapeamento: 'Pesquisa / Mapa',
+    rota: 'Selecionada para Rota',
+    visita: 'Visita / Contato Realizado',
     qualificacao: 'Qualificação',
+    diagnostico: 'Diagnóstico Técnico / PoC',
     proposta: 'Proposta',
     juridico: 'Jurídico',
     homologacao: 'Homologação',
+    contratado: 'Contratado / Ganho',
+    standby: 'Em Espera / Nutrição',
   };
   return mapa[estagio] || estagio;
 }
