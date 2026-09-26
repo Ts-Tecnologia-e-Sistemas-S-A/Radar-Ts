@@ -162,7 +162,7 @@ describe('getMunicipiosCrm', () => {
     expect(await getMunicipiosCrm()).toEqual({});
   });
   it('migra fichas antigas como cidades visitadas sem sobrescrever o funil', async () => {
-    const legado = { codigoIbge: 1, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'juridico' } as MunicipioCrm;
+    const legado = { codigoIbge: 1, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'juridico' } as unknown as MunicipioCrm;
     await saveMunicipioCrm(legado);
     expect(await migratePipelineB2G()).toBe(1);
     expect(await getMunicipioCrm(1)).toMatchObject({ visitada: true, estagioFunil: 'juridico' });
