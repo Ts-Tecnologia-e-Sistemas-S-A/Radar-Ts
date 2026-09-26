@@ -63,7 +63,7 @@ describe('relato da conversa com salvamento automático', () => {
     expect(r.banco.size).toBe(1);
     expect(r.banco.get(id)?.resumo).toBe(resposta.combinado);
     expect(r.banco.get(id)?.textoOriginal).toBe('Anotação completa\nSecretário pediu demonstração.');
-    expect(r.controle.snapshot().texto).toBe(resposta.combinado);
+    expect(r.controle.snapshot().texto).toBe('Anotação completa\nSecretário pediu demonstração.');
     expect(r.backup()?.resumo).toBe(resposta.combinado);
   });
   it('não chama IA se o relato original não foi confirmado no banco', async () => {
@@ -140,5 +140,15 @@ describe('relato da conversa com salvamento automático', () => {
     const restaurado = new RegistroConversa({ codigoIbge: 2103406, autorId: 'usuario-1', salvar: async (e) => { r.banco.set(e.id, e); }, backup: () => {}, gerar: async () => resposta });
     restaurado.iniciar(backup); await restaurado.salvarAgora();
     expect(restaurado.snapshot().texto).toBe('Recuperar após fechar'); expect(r.banco.size).toBe(1);
+  });
+  it('ao restaurar conversa com síntese, mantém no campo o texto original digitado', async () => {
+    const r = preparar();
+    r.controle.editar('Texto manual que não pode sumir');
+    await r.controle.gerarIA();
+    const backup = r.backup()!;
+    const restaurado = new RegistroConversa({ codigoIbge: 2103406, autorId: 'usuario-1', salvar: async () => {}, backup: () => {}, gerar: async () => resposta });
+    restaurado.iniciar(backup, false);
+    expect(restaurado.snapshot().texto).toBe('Texto manual que não pode sumir');
+    expect(restaurado.snapshot().evento?.sinteseIA).toBe(resposta.combinado);
   });
 });
