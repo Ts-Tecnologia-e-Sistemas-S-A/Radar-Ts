@@ -99,7 +99,7 @@ beforeEach(() => {
   bancos.clear();
   falharGravacao = false;
   documentosRest = [];
-  globalThis.fetch = mock(async () => new Response(JSON.stringify({ documents: documentosRest }), { status: 200 }));
+  globalThis.fetch = mock(async () => new Response(JSON.stringify({ documents: documentosRest }), { status: 200 })) as unknown as typeof fetch;
 });
 
 function makeMunicipio(codigoIbge: number, overrides: Partial<MunicipioCrm> = {}): MunicipioCrm {
