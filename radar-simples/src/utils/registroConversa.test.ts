@@ -56,15 +56,16 @@ describe('relato da conversa com salvamento automático', () => {
       expect(r.controle.snapshot().texto).toBe('Relato verdadeiro');
     }
   });
-  it('sucesso atualiza o mesmo evento e o campo, conservando o original integral', async () => {
+  it('sucesso mantém o texto manual no mesmo evento e salva a síntese separadamente', async () => {
     const r = preparar(); r.controle.editar('Anotação completa\nSecretário pediu demonstração.');
     const id = r.controle.snapshot().evento!.id;
     await r.controle.gerarIA();
     expect(r.banco.size).toBe(1);
-    expect(r.banco.get(id)?.resumo).toBe(resposta.combinado);
+    expect(r.banco.get(id)?.resumo).toBe('Anotação completa\nSecretário pediu demonstração.');
     expect(r.banco.get(id)?.textoOriginal).toBe('Anotação completa\nSecretário pediu demonstração.');
-    expect(r.controle.snapshot().texto).toBe(resposta.combinado);
-    expect(r.backup()?.resumo).toBe(resposta.combinado);
+    expect(r.banco.get(id)?.sinteseIA).toBe(resposta.combinado);
+    expect(r.controle.snapshot().texto).toBe('Anotação completa\nSecretário pediu demonstração.');
+    expect(r.backup()?.resumo).toBe('Anotação completa\nSecretário pediu demonstração.');
   });
   it('não chama IA se o relato original não foi confirmado no banco', async () => {
     let chamadas = 0;
@@ -140,5 +141,25 @@ describe('relato da conversa com salvamento automático', () => {
     const restaurado = new RegistroConversa({ codigoIbge: 2103406, autorId: 'usuario-1', salvar: async (e) => { r.banco.set(e.id, e); }, backup: () => {}, gerar: async () => resposta });
     restaurado.iniciar(backup); await restaurado.salvarAgora();
     expect(restaurado.snapshot().texto).toBe('Recuperar após fechar'); expect(r.banco.size).toBe(1);
+  });
+  it('ao iniciar uma conversa salva, prioriza textoOriginal para evitar perder relato manual', () => {
+    const controle = new RegistroConversa({ codigoIbge: 2103406, autorId: 'usuario-1', salvar: async () => {}, backup: () => {}, gerar: async () => resposta });
+    const evento: ConversaSalva = {
+      id: 'evento-1',
+      codigoIbge: 2103406,
+      tipo: 'reuniao',
+      data: '2026-01-01',
+      criadaEm: '2026-01-01T00:00:00.000Z',
+      resumo: 'Síntese automática',
+      textoOriginal: 'Relato manual preservado',
+      sinteseIA: 'Síntese automática',
+      proximoPassoIA: 'Próximo passo',
+      anexos: [],
+      mandato: 'Atual',
+      mandatoAtivo: true,
+      registroRapido: { autorId: 'usuario-1', atualizadoEm: '2026-01-01T00:00:00.000Z', encerrado: false },
+    };
+    controle.iniciar(evento, false);
+    expect(controle.snapshot().texto).toBe('Relato manual preservado');
   });
 });

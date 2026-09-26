@@ -111,7 +111,7 @@ export default function NotaConversa({ municipio, onContatoDetectado }: {
       value={estado.texto} onChange={(e) => { setAvisoCarga(null); setContato(null); controle.editar(e.target.value); }}
       onBlur={() => controle.aoSair()} />
     <p role="status" aria-live="polite" className="text-label-sm text-on-surface-variant">{mensagem}</p>
-    <p className="text-label-sm text-on-surface-variant">A IA só altera este campo após gerar e salvar uma síntese válida. O relato original continua disponível no histórico.</p>
+    <p className="text-label-sm text-on-surface-variant">A IA gera apenas uma sugestão. O relato digitado manualmente permanece no campo e no histórico.</p>
     <div className="flex flex-wrap gap-2">
       <button disabled={!online || !estado.pronto || estado.processando || nova || !estado.texto.trim()} onClick={gerar}
         className="flex-1 h-12 rounded-lg bg-primary text-on-primary text-label-lg flex items-center justify-center gap-2 disabled:opacity-50">
@@ -122,10 +122,10 @@ export default function NotaConversa({ municipio, onContatoDetectado }: {
         className="px-3 h-12 rounded-lg bg-surface-container text-primary text-label-md disabled:opacity-50">{nova ? 'Salvando…' : 'Nova conversa'}</button>
     </div>
     {estado.processando && <button onClick={controle.cancelarIA} className="text-label-sm text-primary underline">Cancelar IA e manter relato</button>}
-    {estado.status === 'erro' && <button onClick={() => void controle.salvarAgora().catch(() => {})} className="text-label-sm text-primary underline">Tentar salvar novamente</button>}
+    {estado.status === 'erro' && <button onClick={() => void controle.salvarAgora().catch(() => {})} className="text-label-sm text-primary underline">Tentar sincronizar novamente</button>}
     {(estado.erro || avisoCarga) && <p role="alert" className="text-body-sm text-error">{estado.erro || avisoCarga}</p>}
     {estado.evento?.sinteseIA && <div className="rounded-lg bg-secondary-container/30 p-3 space-y-2 text-body-sm">
-      <p className="font-semibold text-primary">Campo atualizado com a síntese da IA.</p>
+      <p className="font-semibold text-primary">Síntese da IA gerada sem alterar o relato original.</p>
       {estado.evento.proximoPassoIA && <p><strong>Próximo passo sugerido:</strong> {estado.evento.proximoPassoIA}</p>}
       <details><summary className="cursor-pointer text-primary">Ver relato original digitado</summary><p className="whitespace-pre-wrap break-words pt-2">{estado.evento.textoOriginal}</p></details>
     </div>}
