@@ -6,6 +6,7 @@ import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
 import { dataBr } from '../utils/data';
 import { visivelNoFoco } from '../utils/pipeline';
+import { compararMunicipios, type LinhaMunicipio } from '../utils/ordenacaoMunicipios';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -13,11 +14,6 @@ function normalizar(texto: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
-}
-
-interface LinhaMunicipio {
-  municipio: MunicipioIbge;
-  crm: MunicipioCrm;
 }
 
 interface RadarViewProps {
@@ -81,16 +77,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
       .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
       .filter((l) => filtro === 'espera' ? l.crm.estagioFunil === 'standby' : visivelNoFoco(l.crm, dataLocal()))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
-      .sort((a, b) => {
-        if (ordenacao !== 'nome') {
-          const dataA = ordenacao === 'visita' ? visitasPorCodigo[a.municipio.codigoIbge] : a.crm.proximaAcao;
-          const dataB = ordenacao === 'visita' ? visitasPorCodigo[b.municipio.codigoIbge] : b.crm.proximaAcao;
-          const chave = (acao?: { data: string; hora?: string }) => acao?.data ? `${acao.data} ${acao.hora || '23:59'}` : '9999-12-31 23:59';
-          const diferenca = chave(dataA).localeCompare(chave(dataB));
-          if (diferenca) return diferenca;
-        }
-        return a.municipio.nome.localeCompare(b.municipio.nome, 'pt-BR') || a.municipio.uf.localeCompare(b.municipio.uf);
-      });
+      .sort((a, b) => compararMunicipios(a, b, ordenacao, visitasPorCodigo));
   }, [municipios, crmPorCodigo, busca, filtro, ordenacao, visitasPorCodigo]);
 
   const urgentesCount = useMemo(
