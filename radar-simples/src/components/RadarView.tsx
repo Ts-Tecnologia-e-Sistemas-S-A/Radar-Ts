@@ -48,9 +48,10 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
         if (cancelado) return;
         const visitas: Record<number, { data: string; hora?: string }> = {};
         for (const municipio of Object.values(crm)) {
-          const visita = proximaTarefa(tarefas.filter((t) => t.tipo === 'visitar'), municipio.codigoIbge);
-          if (visita) visitas[municipio.codigoIbge] = visita;
-          else if (municipio.proximaAcao?.presencial) visitas[municipio.codigoIbge] = municipio.proximaAcao;
+          const dataVisita = municipio.dataUltimaVisita;
+          if (dataVisita) {
+            visitas[municipio.codigoIbge] = { data: dataVisita };
+          }
           const proxima = proximaTarefa(tarefas, municipio.codigoIbge);
           if (proxima) municipio.proximaAcao = { data: proxima.data, hora: proxima.hora, descricao: proxima.descricao, presencial: proxima.tipo === 'visitar' };
         }
