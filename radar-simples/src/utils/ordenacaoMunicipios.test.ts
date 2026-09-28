@@ -1,50 +1,44 @@
 import { describe, expect, it } from 'bun:test';
-import type { MunicipioCrm, MunicipioIbge } from '../types';
-import { ordenarMunicipiosPorUltimaAtividade } from './ordenacaoMunicipios';
+import { municipioCrmVazio } from '../types';
+import { compararMunicipios, type LinhaMunicipio } from './ordenacaoMunicipios';
 
-function municipio(codigoIbge: number, nome: string, uf: string): MunicipioIbge {
-  return { codigoIbge, nome, uf };
+function linha(codigoIbge: number, nome: string, uf = 'MA'): LinhaMunicipio {
+  return { municipio: { codigoIbge, nome, uf }, crm: municipioCrmVazio(codigoIbge) };
 }
 
-function crm(codigoIbge: number, ultimaAtividadeEm?: string): MunicipioCrm {
-  return {
-    codigoIbge,
-    prioritario: false,
-    contatos: [],
-    solucoes: [],
-    estagioFunil: 'mapeamento',
-    ultimaAtividadeEm,
-  };
-}
-
-describe('ordenacaoMunicipiosPorUltimaAtividade', () => {
-  it('coloca a cidade mais recente primeiro', () => {
-    const linhas = [
-      { municipio: municipio(1, 'Aparecida', 'SP'), crm: crm(1, '2026-01-01T08:00:00.000Z') },
-      { municipio: municipio(2, 'Bauru', 'SP'), crm: crm(2, '2026-01-10T08:00:00.000Z') },
-      { municipio: municipio(3, 'Campinas', 'SP'), crm: crm(3, '2026-01-03T08:00:00.000Z') },
-    ];
-
-    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Bauru', 'Campinas', 'Aparecida']);
+describe('ordenação do Radar', () => {
+  it('ordena visitas mais antigas primeiro, independentemente da próxima tarefa', () => {
+    const a = linha(1, 'Alfa'), z = linha(2, 'Zeta');
+    a.crm.proximaAcao = { data: '2026-01-01', descricao: 'Ligar', presencial: false };
+    z.crm.proximaAcao = { data: '2026-12-01', descricao: 'Visitar', presencial: true };
+    const visitas = { 1: { data: '2026-09-25' }, 2: { data: '2026-09-10' } };
+    expect([a, z].sort((x, y) => compararMunicipios(x, y, 'visita', visitas)).map(l => l.municipio.nome)).toEqual(['Zeta', 'Alfa']);
   });
 
-  it('faz fallback determinístico quando não há ultimaAtividadeEm', () => {
-    const linhas = [
-      { municipio: municipio(2, 'Zé Doca', 'MA'), crm: crm(2) },
-      { municipio: municipio(1, 'Açailândia', 'MA'), crm: crm(1) },
-      { municipio: municipio(3, 'Balsas', 'PI'), crm: crm(3) },
-    ];
-
-    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Açailândia', 'Balsas', 'Zé Doca']);
+  it('mantém cidades sem data ao final, sem usar a próxima ação como visita', () => {
+    const a = linha(1, 'Alfa'), z = linha(2, 'Zeta'), b = linha(3, 'Beta');
+    a.crm.proximaAcao = { data: '2026-01-01', descricao: 'Visitar', presencial: true };
+    const visitas = { 2: { data: '2026-09-10' } };
+    expect([b, a, z].sort((x, y) => compararMunicipios(x, y, 'visita', visitas)).map(l => l.municipio.nome)).toEqual(['Zeta', 'Alfa', 'Beta']);
   });
 
-  it('mantém a ordenação estável por nome e UF quando o tempo é igual', () => {
-    const linhas = [
-      { municipio: municipio(30, 'São José', 'SP'), crm: crm(30, '2026-01-01T00:00:00.000Z') },
-      { municipio: municipio(10, 'Aparecida', 'SP'), crm: crm(10, '2026-01-01T00:00:00.000Z') },
-      { municipio: municipio(20, 'Belo Horizonte', 'MG'), crm: crm(20, '2026-01-01T00:00:00.000Z') },
-    ];
+  it('ordena por nome mesmo quando as datas indicam outra ordem', () => {
+    const a = linha(1, 'Açailândia'), z = linha(2, 'Zé Doca');
+    const visitas = { 1: { data: '2026-09-25' }, 2: { data: '2026-09-10' } };
+    expect([z, a].sort((x, y) => compararMunicipios(x, y, 'nome', visitas)).map(l => l.municipio.nome)).toEqual(['Açailândia', 'Zé Doca']);
+  });
 
-    expect(ordenarMunicipiosPorUltimaAtividade(linhas).map((item) => item.municipio.nome)).toEqual(['Aparecida', 'Belo Horizonte', 'São José']);
+  it('desempata visitas de mesma data por nome e UF', () => {
+    const a = linha(1, 'São José', 'SP'), b = linha(2, 'São José', 'MA'), c = linha(3, 'Açailândia');
+    const visitas = { 1: { data: '2026-09-10' }, 2: { data: '2026-09-10' }, 3: { data: '2026-09-10' } };
+    expect([a, b, c].sort((x, y) => compararMunicipios(x, y, 'visita', visitas)).map(l => l.municipio.codigoIbge)).toEqual([3, 2, 1]);
+  });
+
+  it('ordena tarefas por data e hora, colocando tarefas sem horário por último no dia', () => {
+    const linhas = [linha(1, 'Alfa'), linha(2, 'Beta'), linha(3, 'Gama'), linha(4, 'Delta')];
+    linhas[0].crm.proximaAcao = { data: '2026-09-11', hora: '08:00', descricao: 'Ligar', presencial: false };
+    linhas[1].crm.proximaAcao = { data: '2026-09-10', descricao: 'Ligar', presencial: false };
+    linhas[2].crm.proximaAcao = { data: '2026-09-10', hora: '09:00', descricao: 'Ligar', presencial: false };
+    expect(linhas.sort((x, y) => compararMunicipios(x, y, 'tarefa', {})).map(l => l.municipio.codigoIbge)).toEqual([3, 2, 1, 4]);
   });
 });
