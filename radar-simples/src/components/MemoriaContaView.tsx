@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { gerarBriefing } from '../api/ia';
 import { getEventos, getMunicipioCrm, getResultadosMunicipio, saveResultadosMunicipio } from '../storage';
 import { EventoTimeline, MunicipioCrm, MunicipioIbge, TipoEventoTimeline, municipioCrmVazio } from '../types';
+import { dataBr } from '../utils/data';
 import Icon from './Icon';
 import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
 
@@ -161,7 +162,7 @@ export default function MemoriaContaView({ municipio, onGravarReuniao, onExporta
                       <div className="flex items-start justify-between gap-space-xs">
                         <div>
                           <div className="flex items-center gap-1.5 text-on-surface-variant text-label-sm">
-                            <span className="font-bold text-primary">{ev.data ? ev.data.split('-').reverse().join('/') : 'Data não informada'}</span>
+                            <span className="font-bold text-primary">{dataBr(ev.data)}</span>
                             {ev.local && (
                               <>
                                 <span>•</span>

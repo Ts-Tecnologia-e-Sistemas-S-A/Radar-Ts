@@ -1,14 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import { buscarDadosEscolares, type DadosEscolares } from '../api/censoEscolar';
 import { buscarDiagnostico, Diagnostico } from '../api/diagnostico';
-import { analisarPlanilha, ContatoDetectado } from '../api/ia';
-import { prepararTextoPlanilha, type RelatorioPlanilha } from '../utils/relatorioPlanilha';
-import RelatorioPlanilhaCard from './RelatorioPlanilhaCard';
-import { addEvento, getEventos, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio } from '../storage';
+import { cancelarTarefaSeExistir, getMunicipioCrm, saveMunicipioCrm, saveResultadosMunicipio, saveStandby } from '../storage';
 import {
   Contato,
   ESTAGIOS_FUNIL_B2G,
   EstagioFunilB2G,
+  MOTIVOS_ESPERA,
   MunicipioCrm,
   MunicipioIbge,
   SolucaoOfertada,
@@ -21,6 +19,9 @@ import Icon from './Icon';
 import AvaliacaoVaarCard from './AvaliacaoVaarCard';
 import ComparativoEstadualCard from './ComparativoEstadualCard';
 import NotaConversa from './NotaConversa';
+import { entrarEmStandby, marcarComoVisitada, reativarOportunidade } from '../utils/pipeline';
+import { dataLocal } from '../utils/agenda';
+import { dataHoraBr } from '../utils/data';
 
 interface FichaMunicipalViewProps {
   municipio: MunicipioIbge;
@@ -87,6 +88,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
   }, [municipio.codigoIbge, revisaoCarga]);
 
   async function salvar(atualizado: MunicipioCrm, otimista = true) {
+    atualizado = atualizado.contatos.length > 0 ? marcarComoVisitada(atualizado) : atualizado;
     setSalvo(false);
     if (otimista) setCrm(atualizado);
     try {
@@ -161,19 +163,6 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
     salvar({ ...crm, contatos: [...crm.contatos, novo] });
   }
 
-  // Confirmado pelo vendedor a partir de um contato que a IA detectou numa
-  // nota/gravação — nunca grava sozinho, sempre passa pela revisão humana
-  // primeiro (ver RegistroRapidoIA).
-  async function adicionarContatoDetectado(dados: ContatoDetectado) {
-    const novo: Contato = {
-      id: crypto.randomUUID(),
-      nome: dados.nome || 'Novo contato',
-      cargo: dados.cargo || '',
-      telefone: dados.telefone || undefined,
-    };
-    return await salvar({ ...crm, contatos: [...crm.contatos, novo] }, false);
-  }
-
   function atualizarContato(id: string, campos: Partial<Contato>) {
     salvar({ ...crm, contatos: crm.contatos.map((c) => (c.id === id ? { ...c, ...campos } : c)) });
   }
@@ -185,6 +174,26 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
 
   function atualizarSolucao(id: string, campos: Partial<SolucaoOfertada>) {
     salvar({ ...crm, solucoes: crm.solucoes.map((s) => (s.id === id ? { ...s, ...campos } : s)) });
+  }
+
+  async function alterarEstagio(estagio: EstagioFunilB2G) {
+    if (estagio === 'standby') {
+      try {
+        const entrada = crm.contatos.length > 0 ? marcarComoVisitada(crm) : crm;
+        const resultado = entrarEmStandby(entrada, municipio.nome);
+        await saveStandby(resultado.crm, resultado.tarefa);
+        setCrm(resultado.crm); setErro(null); setSalvo(true);
+      } catch (e: any) { setErro(e.message); }
+      return;
+    }
+    const estavaEmStandby = crm.estagioFunil === 'standby';
+    const base = estavaEmStandby ? reativarOportunidade(crm) : crm;
+    const visitada = ['visita', 'qualificacao', 'diagnostico', 'proposta', 'juridico', 'homologacao', 'contratado'].includes(estagio)
+      ? marcarComoVisitada(base, dataLocal())
+      : base;
+    if (await salvar({ ...visitada, estagioFunil: estagio }) && estavaEmStandby) {
+      await cancelarTarefaSeExistir(`reativacao-standby-${crm.codigoIbge}`);
+    }
   }
 
   if (falhaCarga && !carregando) return <div className="pt-space-xs space-y-3">
@@ -287,7 +296,7 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             {diagnostico.vaar ? <AvaliacaoVaarCard vaar={diagnostico.vaar} /> : (
               <p role="status" className="text-body-sm text-on-surface-variant">VAAR pendente: {diagnostico.avisoVaar || 'Fonte oficial indisponível.'}</p>
             )}
-            <p className="text-label-sm text-on-surface-variant">Consulta realizada em {new Date(diagnostico.consultadoEm!).toLocaleString('pt-BR')}.</p>
+            <p className="text-label-sm text-on-surface-variant">Consulta realizada em {dataHoraBr(diagnostico.consultadoEm!)}.</p>
             <div className="space-y-1.5">
               {diagnostico.avisoCenso ? (
                 <p className="text-body-sm text-on-surface-variant">Censo Escolar: {diagnostico.avisoCenso}</p>
@@ -385,45 +394,51 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
             <h3 className="text-label-lg">Funil da Oportunidade B2G</h3>
           </div>
         </div>
-        <div className="relative flex items-center justify-between px-2 pt-1">
-          <div className="absolute left-6 right-6 top-4 h-1 bg-surface-container -z-0" />
-          <div
-            className="absolute left-6 top-4 h-1 bg-secondary -z-0 transition-all duration-300"
-            style={{ width: `${(ESTAGIOS_FUNIL_B2G.findIndex((e) => e.value === crm.estagioFunil) / (ESTAGIOS_FUNIL_B2G.length - 1)) * 100}%` }}
-          />
-          {ESTAGIOS_FUNIL_B2G.map((estagio, idx) => {
-            const idxAtual = ESTAGIOS_FUNIL_B2G.findIndex((e) => e.value === crm.estagioFunil);
-            const concluido = idx < idxAtual;
-            const atual = idx === idxAtual;
-            return (
-              <button
-                key={estagio.value}
-                type="button"
-                onClick={() => salvar({ ...crm, estagioFunil: estagio.value as EstagioFunilB2G })}
-                className="relative z-10 flex flex-col items-center gap-1"
-              >
-                <div
-                  className={`w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-bold shadow-sm ${
-                    concluido
-                      ? 'bg-secondary text-on-secondary'
-                      : atual
-                        ? 'bg-primary text-on-primary ring-4 ring-secondary-container'
-                        : 'bg-surface-container text-on-surface-variant border border-outline-variant'
-                  }`}
-                >
-                  {concluido ? <Icon name="check" size={14} /> : idx + 1}
-                </div>
-                <span className={`text-[11px] text-center leading-tight whitespace-nowrap ${atual ? 'text-secondary font-bold' : 'text-on-surface-variant font-medium'}`}>
-                  {idx + 1}. {estagio.label.split(' ')[0]}
-                </span>
-              </button>
-            );
-          })}
+        <label className="block text-label-sm text-on-surface-variant">Etapa atual
+          <select
+            className="mt-1 w-full h-11 px-3 rounded-lg bg-surface-container-low text-primary"
+            value={crm.estagioFunil}
+            onChange={(e) => void alterarEstagio(e.target.value as EstagioFunilB2G)}
+          >
+            {ESTAGIOS_FUNIL_B2G.map((estagio) => <option key={estagio.value} value={estagio.value}>{estagio.label}</option>)}
+          </select>
+        </label>
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <label className="text-label-sm text-on-surface-variant">Porte populacional
+            <select className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.portePopulacional || ''} onChange={(e) => salvar({ ...crm, portePopulacional: e.target.value as MunicipioCrm['portePopulacional'] || undefined })}>
+              <option value="">Não informado</option><option value="pequeno">Pequeno</option><option value="medio">Médio</option><option value="grande">Grande</option>
+            </select>
+          </label>
+          <CampoEditavelNumero label="Estimativa de alunos" valor={crm.alunosCount} onSalvar={(v) => salvar({ ...crm, alunosCount: v })} />
         </div>
-        <div className="p-2 rounded-lg bg-surface-container-low text-on-surface-variant text-body-sm">
-          Etapa atual: <strong className="text-primary">{ESTAGIOS_FUNIL_B2G.find((e) => e.value === crm.estagioFunil)?.label}</strong>
+        <div className="grid grid-cols-1 min-[420px]:grid-cols-2 gap-2">
+          <label className="flex items-center gap-2 rounded-lg bg-surface-container-low p-3 text-label-md text-primary">
+            <input type="checkbox" checked={crm.visitada} onChange={(e) => salvar(e.target.checked ? marcarComoVisitada(crm, dataLocal()) : { ...crm, visitada: false, dataPrimeiraVisita: undefined, dataUltimaVisita: undefined })} />
+            Cidade visitada
+          </label>
+          <label className="text-label-sm text-on-surface-variant">Data da primeira visita
+            <input type="date" className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.dataPrimeiraVisita || ''} onChange={(e) => salvar({ ...crm, visitada: Boolean(e.target.value) || crm.visitada, dataPrimeiraVisita: e.target.value || undefined })} />
+          </label>
         </div>
         <CampoEditavelMonetario label="Valor anual estimado (R$/ano)" valor={crm.valorAnual} onSalvar={(v) => salvar({ ...crm, valorAnual: v })} />
+        <div className="border-t border-surface-container pt-3 space-y-2">
+          <h4 className="text-label-lg text-primary">Em Espera / Nutrição</h4>
+          <label className="block text-label-sm text-on-surface-variant">Data de reativação
+            <input type="date" className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.dataReativacao || ''} onChange={(e) => setCrm({ ...crm, dataReativacao: e.target.value || undefined })} />
+          </label>
+          <label className="block text-label-sm text-on-surface-variant">Motivo da espera
+            <select className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={crm.motivoEspera || ''} onChange={(e) => setCrm({ ...crm, motivoEspera: e.target.value as MunicipioCrm['motivoEspera'] || undefined })}>
+              <option value="">Selecione</option>{MOTIVOS_ESPERA.map((motivo) => <option key={motivo.value} value={motivo.value}>{motivo.label}</option>)}
+            </select>
+          </label>
+          <label className="block text-label-sm text-on-surface-variant">Detalhes para a retomada
+            <textarea rows={2} className="mt-1 w-full rounded-lg bg-surface-container-low p-2 text-primary" value={crm.detalhesEspera || ''} onChange={(e) => setCrm({ ...crm, detalhesEspera: e.target.value || undefined })} />
+          </label>
+          <button type="button" onClick={() => void alterarEstagio('standby')} className="w-full min-h-11 rounded-lg bg-secondary text-on-secondary px-3">
+            {crm.estagioFunil === 'standby' ? 'Atualizar espera e lembrete' : 'Colocar em espera'}
+          </button>
+          {crm.estagioFunil === 'standby' && <button type="button" onClick={() => void alterarEstagio(crm.estagioAntesStandby || 'qualificacao')} className="w-full min-h-11 rounded-lg border border-primary text-primary px-3">Reativar agora</button>}
+        </div>
       </div>
 
       <div className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3">
@@ -478,12 +493,13 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
         </div>
       </div>
 
-      <RegistroRapidoIA
-        key={municipio.codigoIbge}
-        municipio={municipio}
-        onEventoSalvo={() => setSalvo(true)}
-        onContatoDetectado={adicionarContatoDetectado}
-      />
+      <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3.5">
+        <div className="flex items-center gap-1.5 text-primary">
+          <Icon name="edit_note" size={20} className="text-secondary" />
+          <h3 className="text-label-lg">Notas da reunião</h3>
+        </div>
+        <NotaConversa key={municipio.codigoIbge} municipio={municipio} />
+      </section>
 
       {salvo && <p className="text-label-sm text-green-600 text-center">Salvo.</p>}
     </div>
@@ -525,83 +541,7 @@ function CampoEditavelMonetario({ label, valor, onSalvar }: { label: string; val
   );
 }
 
-function RegistroRapidoIA({ municipio, onEventoSalvo, onContatoDetectado }: {
-  municipio: MunicipioIbge;
-  onEventoSalvo: () => void;
-  onContatoDetectado: (contato: ContatoDetectado) => Promise<boolean>;
-}) {
-  const [modo, setModo] = useState<'nota' | 'planilha'>('nota');
-  return <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3.5">
-    <div className="flex items-center gap-1.5 text-primary">
-      <Icon name="smart_toy" size={20} className="text-secondary" />
-      <h3 className="text-label-lg">Registro Rápido de Campo</h3>
-    </div>
-    <label className="text-label-sm text-on-surface-variant block" htmlFor="tipo-registro">Tipo de registro</label>
-    <select id="tipo-registro" value={modo} onChange={(e) => setModo(e.target.value as 'nota' | 'planilha')}
-      className="w-full rounded-lg bg-surface-container-low p-2 text-primary">
-      <option value="nota">Nota de reunião</option>
-      <option value="planilha">Dados de planilha — gerar relatório</option>
-    </select>
-    {modo === 'nota'
-      ? <NotaConversa municipio={municipio} onContatoDetectado={onContatoDetectado} />
-      : <RegistroPlanilha municipio={municipio} onEventoSalvo={onEventoSalvo} />}
-  </section>;
+function CampoEditavelNumero({ label, valor, onSalvar }: { label: string; valor: number | undefined; onSalvar: (v: number | undefined) => void }) {
+  return <label className="text-label-sm text-on-surface-variant">{label}<input type="number" min={0} className="mt-1 w-full h-10 px-2 rounded-lg bg-surface-container-low text-primary" value={valor ?? ''} onChange={(e) => onSalvar(e.target.value ? Number(e.target.value) : undefined)} /></label>;
 }
 
-function RegistroPlanilha({ municipio, onEventoSalvo }: { municipio: MunicipioIbge; onEventoSalvo: () => void }) {
-  const chave = `radar_ts_planilha_${municipio.codigoIbge}`;
-  const [nota, setNota] = useState(() => {
-    try {
-      const atual = localStorage.getItem(chave);
-      if (atual !== null) return atual;
-      const antigo = JSON.parse(localStorage.getItem(`radar_ts_registro_rapido_${municipio.codigoIbge}`) || 'null');
-      return antigo?.modo === 'planilha' && typeof antigo.nota === 'string' ? antigo.nota : '';
-    } catch { return ''; }
-  });
-  const [relatorio, setRelatorio] = useState<RelatorioPlanilha | null>(null);
-  const [processando, setProcessando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
-  useEffect(() => {
-    let cancelado = false;
-    getEventos(municipio.codigoIbge).then((eventos) => {
-      if (cancelado) return;
-      const ultimo = eventos.filter((e) => e.relatorioPlanilha)
-        .sort((a, b) => (b.criadaEm || b.data).localeCompare(a.criadaEm || a.data))[0];
-      if (ultimo?.relatorioPlanilha) setRelatorio(ultimo.relatorioPlanilha);
-    }).catch((e) => { if (!cancelado) setErro(e.message || 'Falha ao recuperar relatório.'); });
-    return () => { cancelado = true; };
-  }, [municipio.codigoIbge]);
-  function editar(texto: string) {
-    setNota(texto);
-    try { localStorage.setItem(chave, texto); }
-    catch { setErro('Não foi possível guardar o rascunho neste aparelho.'); }
-  }
-  async function processar() {
-    if (!nota.trim() || processando) return;
-    setProcessando(true); setErro(null);
-    try {
-      const texto = prepararTextoPlanilha(nota);
-      const analise = navigator.onLine ? await analisarPlanilha(texto) : null;
-      await addEvento({
-        id: crypto.randomUUID(), codigoIbge: municipio.codigoIbge, tipo: 'documento',
-        data: new Date().toISOString().slice(0, 10), criadaEm: new Date().toISOString(),
-        resumo: analise?.titulo || 'Planilha registrada offline — análise pendente',
-        textoPlanilha: texto, relatorioPlanilha: analise || undefined,
-        anexos: [], mandato: 'Atual', mandatoAtivo: true,
-      });
-      setRelatorio(analise); onEventoSalvo(); editar('');
-    } catch (e: any) { setErro(e.message || 'Falha ao processar a planilha.'); }
-    finally { setProcessando(false); }
-  }
-  return <div className="space-y-3">
-    <label htmlFor="texto-planilha" className="text-label-sm text-on-surface-variant block">Cole os cabeçalhos e as linhas da planilha</label>
-    <textarea id="texto-planilha" rows={7} disabled={processando} value={nota} onChange={(e) => editar(e.target.value)}
-      className="w-full rounded-lg bg-surface-container-low p-3 text-body-md text-primary resize-y"
-      placeholder={'Escola\tMatrículas\nEscola A\t120\nEscola B\t85'} />
-    <p className="text-label-sm text-on-surface-variant">Inclua unidades e período nos cabeçalhos. O relatório ficará salvo na Memória da Conta.</p>
-    <button disabled={processando || !nota.trim()} onClick={processar}
-      className="w-full h-12 rounded-lg bg-primary text-on-primary text-label-lg disabled:opacity-50">{processando ? 'Processando e salvando…' : 'Gerar e salvar relatório com IA'}</button>
-    {erro && <p className="text-body-sm text-error">{erro}</p>}
-    {relatorio && <RelatorioPlanilhaCard relatorio={relatorio} />}
-  </div>;
-}

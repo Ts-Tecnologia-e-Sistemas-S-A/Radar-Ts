@@ -3,6 +3,7 @@ import { sugerirTarefa } from '../api/ia';
 import { getEventos, getTarefas, saveTarefa, setStatusTarefa } from '../storage';
 import type { MunicipioIbge } from '../types';
 import { dataLocal, tarefaAtrasada, TIPOS_TAREFA, type Tarefa, type TipoTarefa } from '../utils/agenda';
+import { dataBr } from '../utils/data';
 
 function novaTarefa(codigoIbge: number): Tarefa {
   return { id: crypto.randomUUID(), codigoIbge, tipo: 'ligar', descricao: '', data: dataLocal(), hora: '', status: 'pendente', origem: 'manual', criadaEm: new Date().toISOString() };
@@ -82,9 +83,11 @@ export default function AgendaView({ municipios, municipioAtivo }: { municipios:
     (filtro === 'atrasadas' && tarefaAtrasada(t, agora)) ||
     (filtro === 'concluidas' && t.status === 'concluida'))
     .sort((a, b) => `${a.data} ${a.hora}`.localeCompare(`${b.data} ${b.hora}`));
+  const reativacoesPendentes = tarefas.filter((t) => t.status === 'pendente' && t.id.startsWith('reativacao-standby-') && t.data <= dataLocal(agora));
 
   return <div className="space-y-4 pt-space-xs pb-28">
     <h2 className="text-headline-md text-primary">Agenda de tarefas</h2>
+    {reativacoesPendentes.length > 0 && <div role="status" className="rounded-xl bg-secondary-container p-4 text-on-secondary-container"><strong>{reativacoesPendentes.length} oportunidade(s) para reativar.</strong><p className="text-body-sm">Os cartões voltaram ao Foco em Campo e aguardam contato.</p></div>}
     {erro && <p role="alert" className="text-error">{erro}</p>}
     {aviso && <p role="status" className="text-secondary">{aviso}</p>}
     <form onSubmit={salvar} className="rounded-xl bg-surface-container-lowest p-4 shadow-sm">
@@ -118,7 +121,7 @@ export default function AgendaView({ municipios, municipioAtivo }: { municipios:
     {visiveis.map((t) => <article key={t.id} className="rounded-xl bg-surface-container-lowest p-4 shadow-sm space-y-2">
       <p className="text-label-sm text-on-surface-variant">{municipios.find((m) => m.codigoIbge === t.codigoIbge)?.nome || `Município ${t.codigoIbge}`}</p>
       <h3 className="text-label-lg text-primary">{TIPOS_TAREFA[t.tipo]} — {t.descricao}</h3>
-      <p>{t.data.split('-').reverse().join('/')} {t.hora || '• Sem horário definido'}</p>
+      <p>{dataBr(t.data)} {t.hora || '• Sem horário definido'}</p>
       <p className={tarefaAtrasada(t, agora) ? 'text-error' : 'text-secondary'}>{tarefaAtrasada(t, agora) ? 'Atrasada' : t.status === 'pendente' ? 'Pendente' : t.status === 'concluida' ? 'Concluída' : 'Cancelada'}</p>
       <div className="flex flex-wrap gap-3">
         <button disabled={ocupado || gerando || carregando} className="text-primary" onClick={() => { setForm({ ...t }); setContexto(''); setAviso('Tarefa carregada no formulário acima.'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>Editar / reagendar</button>

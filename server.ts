@@ -643,6 +643,13 @@ DIRETRIZ DE VERACIDADE ZERO-ALUCINAÇÃO:
 3. REGRA PRINCIPAL: Nunca pare na licitação. Pesquise até a fase mais avançada (Homologado, Contrato Assinado, Implantação, Execução).
 4. REGRA TIMON (Falsos Alertas): Se houver licitação aberta antiga mas contrato mais recente já em execução, prevalece O CONTRATO ATUAL EM EXECUÇÃO.
 5. VALOR CONTRATADO: Use EXCLUSIVAMENTE o valor homologado/contratado real, nunca o estimado do edital.
+6. RECÊNCIA OBRIGATÓRIA: compare o ano de referência de todas as publicações e apresente como atual somente o maior ano disponível. A data de publicação serve apenas como desempate dentro do mesmo ano de referência.
+7. CENSO ESCOLAR: use exclusivamente o INEP. Se houver Censo Escolar 2025 publicado em 2026, não apresente 2024 como atual.
+8. IBGE: use apenas para código do município, identificação territorial e população. Não atribua matrículas ou rede escolar ao IBGE.
+9. EVIDÊNCIA: cada dado anual deve informar ano de referência, data de publicação, data da consulta e URL oficial. Não liste uma fonte que não tenha sido efetivamente encontrada.
+10. AUSÊNCIA DE DADO: use null, lista vazia ou "Não localizado em fonte oficial". Nunca complete campos com estimativas ou exemplos do formato.
+
+DATA DA CONSULTA: ${new Date().toISOString().slice(0, 10)}
 
 DADOS DO MUNICÍPIO SOLICITADO:
 ${JSON.stringify(municipality, null, 2)}
@@ -652,16 +659,18 @@ RETORNE APENAS UM JSON VÁLIDO no seguinte formato:
   "municipalityName": "${municipality.name}",
   "state": "${municipality.state}",
   "dataVerificationStatus": "100% VERIFICADO (PNCP/TRANSPARÊNCIA/INEP)" | "PARCIALMENTE VERIFICADO" | "PENDENTE VERIFICAÇÃO PRESENCIAL",
-  "verifiedSources": [
-    "Portal da Transparência de ${municipality.name}",
-    "PNCP - Portal Nacional de Contratações Públicas",
-    "INEP - Censo Escolar",
-    "TCE-${municipality.state}"
-  ],
+  "verifiedSources": ["Nome da fonte oficial - URL oficial efetivamente consultada"],
   "auditSummary": "Resumo objetivo da auditoria e verificação dos dados contratuais e do sistema de gestão escolar.",
   "population": number_or_existing,
+  "populationReferenceYear": number_or_null,
+  "populationSource": "IBGE ou Não localizado em fonte oficial",
+  "populationSourceUrl": "URL oficial ou null",
   "studentCount": number_or_existing,
   "schoolCount": number_or_existing,
+  "censusReferenceYear": number_or_null,
+  "censusPublishedAt": "AAAA-MM-DD ou null",
+  "censusSource": "INEP ou Não localizado em fonte oficial",
+  "censusSourceUrl": "URL oficial ou null",
   "secretaria": {
     "secretaryName": "Nome do Secretário(a) Real ou Não localizado em fonte oficial",
     "phone": "Telefone oficial ou Não localizado em fonte oficial",
@@ -726,64 +735,10 @@ RETORNE APENAS UM JSON VÁLIDO no seguinte formato:
     const parsedData = JSON.parse(text);
     return res.json({ success: true, enrichedData: parsedData });
   } catch (err: any) {
-    console.warn("Aviso no enriquecimento do CRM (retornando perfil regional auditado):", err.message);
-    const mName = municipality?.name || "Município";
-    const mUF = municipality?.state || "MA";
-    return res.json({
-      success: true,
-      enrichedData: {
-        municipalityName: mName,
-        state: mUF,
-        dataVerificationStatus: "PARCIALMENTE VERIFICADO (BASE REGIONAL SICAP)",
-        verifiedSources: ["PNCP - Consulta Pública Regional", "INEP / Censo Escolar"],
-        auditSummary: `Auditoria regional concluída para ${mName}-${mUF}. Contrato vigente mapeado com prioridade de repactuação.`,
-        population: municipality?.population || 45000,
-        studentCount: municipality?.studentsCount || 8500,
-        schoolCount: municipality?.schoolsCount || 42,
-        secretaria: {
-          secretaryName: "Secretaria Municipal de Educação",
-          phone: "(99) 3661-0000",
-          whatsapp: "(99) 98800-0000",
-          email: `semec@${mName.toLowerCase().replace(/\s+/g, '')}.${mUF.toLowerCase()}.gov.br`
-        },
-        currentSystem: {
-          name: municipality?.currentSystem || "Sistema Legado Local",
-          company: "Empresa Local Contratada",
-          website: "http://transparencia.gov.br",
-          implementationYear: "2023"
-        },
-        contract: {
-          number: "CT-2023/042",
-          process: "PE-2023/012",
-          modality: "Pregão Eletrônico",
-          contractedValue: municipality?.currentContractValue || 1450000,
-          signatureDate: "2023-04-10",
-          validity: "12 meses (Aditivado)",
-          endDate: "2025-04-10",
-          renewable: false
-        },
-        situation: "Produção",
-        commercialIntelligence: {
-          mayorChange: "Gestão Atual Mantida",
-          secretaryChange: "Secretário de Educação Confirmado",
-          investments: "Aumento de verbas do FUNDEB para tecnologia educacional em 2025",
-          works: "Modernização das escolas da rede municipal",
-          news: "Prefeitura prioriza contratação de softwares de gestão escolar integrados",
-          agreements: "Convênio Ativo com FNDE/MEC"
-        },
-        pains: [
-          "Erros recorrentes na exportação do Educacenso para o MEC",
-          "Falta de diário de classe off-line para professores de povoados distantes",
-          "Dificuldade de prestação de contas no Tribunal de Contas (TCE)"
-        ],
-        scoreCalculation: {
-          calculatedScore: municipality?.ioScore || 88,
-          classification: "80–94 🟢 Muito Quente",
-          scoreJustification: "Proximidade do encerramento do aditivo contratual e alto potencial de adesão ao SICAP"
-        },
-        lastUpdateDate: new Date().toISOString().slice(0, 10),
-        sourceUsed: "PNCP / Censo Escolar INEP"
-      }
+    console.error("Erro no enriquecimento do CRM:", err);
+    return res.status(502).json({
+      success: false,
+      error: "Não foi possível consultar as fontes oficiais. Os dados existentes foram preservados e nenhuma estimativa foi gerada."
     });
   }
 });
@@ -811,12 +766,18 @@ ESTADO (UF): ${cleanState}
 
 REGRAS RÍGIDAS DE AUDITORIA E FACT-CHECKING:
 1. PESQUISA EM TEMPO REAL: Realize consultas nas fontes públicas oficiais (PNCP, Portal da Transparência de ${cleanCity}-${cleanState}, TCE-${cleanState}, INEP Censo Escolar, IBGE).
-2. ZERO ALUCINAÇÃO: Nunca invente números ou nomes fictícios. Se o e-mail ou telefone direto do Secretário não for localizado no site oficial, informe "semec@${cleanCity.toLowerCase().replace(/\s+/g, '')}.${cleanState.toLowerCase()}.gov.br (Pendente verificação)".
+2. ZERO ALUCINAÇÃO: Nunca invente números, nomes, contatos ou endereços. Para dados não encontrados use null, lista vazia ou "Não localizado em fonte oficial".
 3. FASE MAIS AVANÇADA DO PROCESSO: Verifique se a licitação se desdobrou em Homologação ou Contrato Ativo. Se existir contrato vigente em implantação, NUNCA grave como "Licitação aberta".
 4. REGRA DE TIMON: Prevalece o contrato vigente em execução sobre editais antigos de licitação.
 5. VALOR REAL: Grave apenas o VALOR HOMOLOGADO ou CONTRATADO do contrato vigente de software escolar/tecnologia.
 6. SELO DE VERIFICAÇÃO: Indique as fontes consultadas e o nível de confirmação dos dados.
 7. DATA DO CONTRATO: Localize e grave a data de assinatura/homologação do contrato vigente (buyingHistory[0].contractDate) junto com o nome da empresa vencedora.
+8. RECÊNCIA OBRIGATÓRIA: compare os anos de referência encontrados e retorne em buyingHistory somente o maior ano. A data de publicação desempata apenas registros do mesmo ano.
+9. CENSO ESCOLAR: escolas, matrículas, docentes e IDEB devem vir do INEP. Se existir 2025 publicado em 2026, não use 2024 como atual.
+10. IBGE: use somente para identificação, código territorial e população.
+11. EVIDÊNCIA: informe ano de referência, publicação, consulta e URL oficial. Não declare uma fonte sem URL efetivamente localizada.
+
+DATA DA CONSULTA: ${new Date().toISOString().slice(0, 10)}
 
 Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
 
@@ -826,24 +787,22 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
   "state": "${cleanState}",
   "region": "Nordeste",
   "dataVerificationStatus": "VERIFICADO_PORTAIS_OFICIAIS" | "PARCIALMENTE_VERIFICADO" | "PENDENTE_CONFIRMACAO",
-  "verifiedSources": [
-    "PNCP - Portal Nacional de Contratações Públicas",
-    "Portal da Transparência de ${cleanCity}",
-    "INEP / Censo Escolar",
-    "IBGE"
-  ],
+  "verifiedSources": ["Nome da fonte oficial - URL oficial efetivamente consultada"],
   "auditNotes": "Sintese da verificação auditada dos dados oficiais do município.",
-  "population": 125000,
+  "population": null,
+  "populationReferenceYear": null,
+  "populationSource": "IBGE ou Não localizado em fonte oficial",
+  "populationSourceUrl": null,
   "status": "oportunidade",
   "funnelStage": "prospectado",
   "currentSystem": "Nome da Empresa / Sistema Contratado Atual",
-  "currentContractValue": 1850000,
-  "contractDaysRemaining": 75,
+  "currentContractValue": 0,
+  "contractDaysRemaining": 0,
   "renewalProbability": "Média",
-  "tenderProbability": 85,
-  "estimatedNewContractValue": 2200000,
+  "tenderProbability": 0,
+  "estimatedNewContractValue": 0,
   "probableModality": "Pregão Eletrônico",
-  "ioScore": 88,
+  "ioScore": 0,
   "ioFactors": {
     "contractExpiringDays": 85,
     "lowIdebScore": 75,
@@ -854,18 +813,19 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
     "existingRelationship": 60
   },
   "educationalMetrics": {
-    "ideb": 4.2,
-    "idebTarget": 5.4,
-    "dropoutRate": 4.5,
-    "schoolsCount": 130,
-    "studentsCount": 26000,
-    "teachersCount": 1350,
-    "fundebBudget": 75000000,
-    "mainPains": [
-      "Erros no fechamento do Educacenso do MEC gerando perda de verbas do FUNDEB",
-      "Falta de sistema com diário eletrônico offline nas escolas rurais",
-      "Dificuldade na prestação de contas dos aditivos e contratos junto ao TCE"
-    ]
+    "ideb": 0,
+    "idebTarget": 0,
+    "dropoutRate": 0,
+    "schoolsCount": 0,
+    "studentsCount": 0,
+    "teachersCount": 0,
+    "fundebBudget": 0,
+    "mainPains": [],
+    "referenceYear": null,
+    "publishedAt": null,
+    "retrievedAt": "${new Date().toISOString().slice(0, 10)}",
+    "source": "INEP ou Não localizado em fonte oficial",
+    "sourceUrl": null
   },
   "keyContacts": [
     {
@@ -877,13 +837,17 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
   ],
   "buyingHistory": [
     {
-      "year": 2024,
+      "year": 0,
       "company": "Empresa Prestadora do Contrato Atual",
-      "value": 1850000,
+      "value": 0,
       "objectStr": "Locação/Licenciamento de software de gestão pública escolar e suporte ao Educacenso",
       "modality": "Pregão Eletrônico",
       "addendumsCount": 1,
-      "contractDate": "Data de assinatura/homologação do contrato (AAAA-MM-DD) ou Não localizado em fonte oficial"
+      "contractDate": "Data de assinatura/homologação do contrato (AAAA-MM-DD) ou Não localizado em fonte oficial",
+      "publishedAt": "AAAA-MM-DD ou null",
+      "retrievedAt": "${new Date().toISOString().slice(0, 10)}",
+      "source": "Nome da fonte oficial",
+      "sourceUrl": "URL oficial"
     }
   ],
   "lastActivityDate": "${new Date().toISOString().slice(0, 10)}",
@@ -913,78 +877,9 @@ Retorne EXATAMENTE UM JSON VÁLIDO com a seguinte estrutura:
     return res.json({ success: true, municipality: analyzedMuni });
   } catch (err: any) {
     console.error("Erro na análise da cidade:", err);
-    // Fallback in case of API error
-    const fallbackCityName = req.body.cityName || "Codó";
-    const fallbackState = (req.body.state || "MA").toUpperCase();
-    return res.json({
-      success: true,
-      municipality: {
-        id: `mun-${fallbackCityName.toLowerCase().replace(/\s+/g, '-')}-${fallbackState.toLowerCase()}`,
-        name: fallbackCityName,
-        state: fallbackState,
-        region: "Nordeste",
-        dataVerificationStatus: "PENDENTE_CONFIRMACAO_PRESENCIAL",
-        verifiedSources: ["Base de Dados Regional SICAP"],
-        auditNotes: "Atenção: Consulta temporária offline. Dados pendentes de confirmação em visita presencial.",
-        population: 123000,
-        status: "oportunidade",
-        funnelStage: "prospectado",
-        currentSystem: "Sistema Local Legado",
-        currentContractValue: 1950000,
-        contractDaysRemaining: 65,
-        renewalProbability: "Baixa",
-        tenderProbability: 90,
-        estimatedNewContractValue: 2300000,
-        probableModality: "Pregão Eletrônico / Adesão à Ata",
-        ioScore: 91,
-        ioFactors: {
-          contractExpiringDays: 90,
-          lowIdebScore: 80,
-          techInvestmentHistory: 85,
-          budgetAvailability: 95,
-          managementChange: 80,
-          federalFundsAvailable: 90,
-          existingRelationship: 65
-        },
-        educationalMetrics: {
-          ideb: 4.1,
-          idebTarget: 5.3,
-          dropoutRate: 4.2,
-          schoolsCount: 142,
-          studentsCount: 28500,
-          teachersCount: 1410,
-          fundebBudget: 82000000,
-          mainPains: [
-            "Dificuldade na sincronização dos dados de frequência com o Educacenso do MEC",
-            "Falta de funcionamento offline em diários escolares de povoados distantes",
-            "Ausência de relatórios em tempo real para a Secretaria de Educação"
-          ]
-        },
-        keyContacts: [
-          {
-            name: "Secretário(a) de Educação (Pendente Verificação)",
-            role: "Secretário Municipal de Educação",
-            phone: "(99) 3661-2200",
-            email: `semec@${fallbackCityName.toLowerCase().replace(/\s+/g, '')}.${fallbackState.toLowerCase()}.gov.br`
-          }
-        ],
-        buyingHistory: [
-          {
-            year: 2023,
-            company: "Empresa do Contrato Vigente",
-            value: 1950000,
-            objectStr: "Locação de software de gestão pública escolar",
-            modality: "Pregão Eletrônico",
-            addendumsCount: 1,
-            contractDate: "Não localizado em fonte oficial (Pendente de verificação presencial)"
-          }
-        ],
-        lastActivityDate: new Date().toISOString().slice(0, 10),
-        dealOwner: "José Badotti",
-        latitude: -4.4553,
-        longitude: -43.8864,
-        notes: "Cidade cadastrada via motor de inteligência comercial SICAP."
-      }
+    return res.status(502).json({
+      success: false,
+      error: "Não foi possível consultar as fontes oficiais. Nenhum dado estimado foi gerado."
     });
   }
 });

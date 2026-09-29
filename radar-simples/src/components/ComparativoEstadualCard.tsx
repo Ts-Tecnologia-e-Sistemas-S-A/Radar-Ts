@@ -1,4 +1,5 @@
 import type { ComparativoEstadual } from '../types/diagnostico';
+import { dataHoraBr } from '../utils/data';
 
 export default function ComparativoEstadualCard({ comparativo: c }: { comparativo: ComparativoEstadual }) {
   const nota = (valor: number | null) => valor === null ? 'Não divulgado' : valor.toLocaleString('pt-BR', { ...(c.formato === 'moeda' ? { style: 'currency', currency: 'BRL' } : {}), minimumFractionDigits: c.casasDecimais, maximumFractionDigits: c.casasDecimais });
@@ -7,7 +8,7 @@ export default function ComparativoEstadualCard({ comparativo: c }: { comparativ
     <h4 className="text-label-lg text-primary">{c.titulo} · {c.uf} · {c.anoReferencia}</h4>
     <p>{c.universo}</p>
     {c.periodo && <p className="font-semibold">Período: {c.periodo}</p>}
-    {c.atualizadoEm && <p>Base oficial atualizada em {new Date(c.atualizadoEm).toLocaleString('pt-BR')}.</p>}
+    {c.atualizadoEm && <p>Base oficial atualizada em {dataHoraBr(c.atualizadoEm)}.</p>}
     <p className="text-on-surface-variant">Cidade filtrada e cinco primeiros do estado, incluindo empates. {c.totalComNota} municípios com resultado no grupo comparado.</p>
     {!c.cidade && <p>Cidade filtrada: sem resultado publicado nesta base.</p>}
     <table className="w-full text-left">
@@ -19,6 +20,6 @@ export default function ComparativoEstadualCard({ comparativo: c }: { comparativ
       </tr>)}</tbody>
     </table>
     {c.cidade?.posicao === null && <p className="text-on-surface-variant">Sem posição: a cidade não tem nota divulgada ou não participa do grupo elegível desta comparação.</p>}
-    <p className="text-label-sm">Consultado em {new Date(c.consultadoEm).toLocaleString('pt-BR')}. <a href={c.fonte.url} target="_blank" rel="noreferrer" className="text-secondary underline">{c.fonte.titulo}</a></p>
+    <p className="text-label-sm">Consultado em {dataHoraBr(c.consultadoEm)}. <a href={c.fonte.url} target="_blank" rel="noreferrer" className="text-secondary underline">{c.fonte.titulo}</a></p>
   </section>;
 }

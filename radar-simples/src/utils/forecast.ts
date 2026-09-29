@@ -7,11 +7,16 @@ import { EstagioFunilB2G } from '../types';
  * time comercial tiver uma taxa de conversão histórica real por etapa.
  */
 export const PESO_FORECAST: Record<EstagioFunilB2G, number> = {
-  mapeamento: 0.1,
+  mapeamento: 0.05,
+  rota: 0.1,
+  visita: 0.15,
   qualificacao: 0.25,
+  diagnostico: 0.35,
   proposta: 0.45,
   juridico: 0.65,
   homologacao: 0.9,
+  contratado: 1,
+  standby: 0,
 };
 
 export function forecastPonderado(valorAnual: number | undefined, estagio: EstagioFunilB2G): number {

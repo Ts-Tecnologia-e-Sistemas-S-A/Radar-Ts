@@ -1,5 +1,6 @@
 import { jsPDF } from 'jspdf';
 import { dataBr, moeda, type RelatorioGestao } from './relatorioGestao';
+import { dataHoraBr } from './data';
 
 export function gerarPdfGestao(relatorio: RelatorioGestao, responsavel: string, observacoes: string) {
   const doc = new jsPDF();
@@ -25,11 +26,11 @@ export function gerarPdfGestao(relatorio: RelatorioGestao, responsavel: string, 
   }
   cabecalho();
   texto(`Responsável: ${responsavel.trim() || 'Não informado'}`);
-  texto(`Emitido em: ${new Date().toLocaleString('pt-BR')}`);
+  texto(`Emitido em: ${dataHoraBr(new Date())}`);
   texto('Escopo: registros disponíveis no aplicativo, sem filtro por usuário. O responsável identifica quem apresenta o relatório.');
   texto('1. Resumo executivo', true);
   texto(relatorio.resumo);
-  if (relatorio.semData) texto(`${relatorio.semData} relatos importados sem data são apresentados como histórico complementar. Não entram na contagem de visitas do período.`);
+  if (relatorio.semData) texto(`${relatorio.semData} relatos importados sem data confirmam o histórico das cidades visitadas, mas não recebem uma data no período.`);
   texto('2. Gastos e solicitação de reembolso', true);
   texto(`Total de despesas para conferência: ${moeda(relatorio.totalDespesas)}`);
   texto('O sistema não registra aprovação, pagamento ou adiantamentos. Este total não representa saldo de reembolso já aprovado.');
@@ -40,13 +41,13 @@ export function gerarPdfGestao(relatorio: RelatorioGestao, responsavel: string, 
     texto(`${index + 1}. ${dataBr(d.data)} | ${d.cidade} | ${d.categoriaLabel} | ${moeda(d.valor)}`, true);
     texto(`${d.descricao || 'Sem descrição'} | Comprovante: ${d.temComprovante ? 'imagem registrada no aplicativo' : 'não anexado'}. Referência: ${d.id}`);
   }
-  texto('3. Cidades, visitas, status e histórico', true);
-  texto('Visitas: tarefas Visitar concluídas (pela data agendada) e visitas datadas na fonte importada. Status e próxima ação refletem o cadastro atual. Relatos sem data são identificados e não atribuídos ao período selecionado.');
+  texto('3. Cidades visitadas, interesse, status e histórico', true);
+  texto('Toda cidade com ficha, contato, nota ou outro registro é considerada visitada. Interesse comercial significa avanço no funil além de Pesquisa / Mapa.');
   if (!relatorio.cidades.length) texto('Nenhuma cidade com registros no período.');
   for (const cidade of relatorio.cidades) {
     texto(cidade.nome, true);
     texto(`Status atual: ${cidade.status}${cidade.prioritario ? ' | Prioritária' : ''}`);
-    texto(`Visitas concluídas: ${cidade.visitas.length} | Gastos: ${moeda(cidade.totalDespesas)}`);
+    texto(`${cidade.visitada ? 'Cidade visitada' : 'Pesquisa sem visita'} | Registros formais de visita com data: ${cidade.visitas.length} | Gastos: ${moeda(cidade.totalDespesas)}`);
     texto(`Próxima ação atual: ${cidade.proximaAcao}`);
     if (!cidade.historico.length) texto('Sem histórico de atividades no período; há despesas vinculadas.');
     for (const item of cidade.historico) texto(`${dataBr(item.data)} - ${item.texto}`);

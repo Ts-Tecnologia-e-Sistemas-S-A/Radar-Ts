@@ -1,9 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { getDespesas, getMunicipiosCrm, getPontosRota, getTarefas } from '../storage';
-import { proximaTarefa } from '../utils/agenda';
+import { dataLocal, proximaTarefa } from '../utils/agenda';
 import { ESTAGIOS_FUNIL_B2G, MunicipioCrm, MunicipioIbge } from '../types';
 import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
+import { dataBr } from '../utils/data';
+import { visivelNoFoco } from '../utils/pipeline';
+import { compararMunicipios, type LinhaMunicipio } from '../utils/ordenacaoMunicipios';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -11,11 +14,6 @@ function normalizar(texto: string): string {
     .toLowerCase()
     .normalize('NFD')
     .replace(/[̀-ͯ]/g, '');
-}
-
-interface LinhaMunicipio {
-  municipio: MunicipioIbge;
-  crm: MunicipioCrm;
 }
 
 interface RadarViewProps {
@@ -32,7 +30,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
-  const [filtro, setFiltro] = useState<'todos' | 'urgentes'>('todos');
+  const [filtro, setFiltro] = useState<'todos' | 'urgentes' | 'espera'>('todos');
   const [ordenacao, setOrdenacao] = useState('tarefa');
   const [visitasPorCodigo, setVisitasPorCodigo] = useState<Record<number, { data: string; hora?: string }>>({});
 
@@ -46,9 +44,10 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
         if (cancelado) return;
         const visitas: Record<number, { data: string; hora?: string }> = {};
         for (const municipio of Object.values(crm)) {
-          const visita = proximaTarefa(tarefas.filter((t) => t.tipo === 'visitar'), municipio.codigoIbge);
-          if (visita) visitas[municipio.codigoIbge] = visita;
-          else if (municipio.proximaAcao?.presencial) visitas[municipio.codigoIbge] = municipio.proximaAcao;
+          const dataVisita = municipio.dataUltimaVisita;
+          if (dataVisita) {
+            visitas[municipio.codigoIbge] = { data: dataVisita };
+          }
           const proxima = proximaTarefa(tarefas, municipio.codigoIbge);
           if (proxima) municipio.proximaAcao = { data: proxima.data, hora: proxima.hora, descricao: proxima.descricao, presencial: proxima.tipo === 'visitar' };
         }
@@ -76,17 +75,9 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
       .map((municipio) => ({ municipio, crm: crmPorCodigo[municipio.codigoIbge] }))
       .filter((l): l is LinhaMunicipio => Boolean(l.crm))
       .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
+      .filter((l) => filtro === 'espera' ? l.crm.estagioFunil === 'standby' : visivelNoFoco(l.crm, dataLocal()))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
-      .sort((a, b) => {
-        if (ordenacao !== 'nome') {
-          const dataA = ordenacao === 'visita' ? visitasPorCodigo[a.municipio.codigoIbge] : a.crm.proximaAcao;
-          const dataB = ordenacao === 'visita' ? visitasPorCodigo[b.municipio.codigoIbge] : b.crm.proximaAcao;
-          const chave = (acao?: { data: string; hora?: string }) => acao?.data ? `${acao.data} ${acao.hora || '23:59'}` : '9999-12-31 23:59';
-          const diferenca = chave(dataA).localeCompare(chave(dataB));
-          if (diferenca) return diferenca;
-        }
-        return a.municipio.nome.localeCompare(b.municipio.nome, 'pt-BR') || a.municipio.uf.localeCompare(b.municipio.uf);
-      });
+      .sort((a, b) => compararMunicipios(a, b, ordenacao, visitasPorCodigo));
   }, [municipios, crmPorCodigo, busca, filtro, ordenacao, visitasPorCodigo]);
 
   const urgentesCount = useMemo(
@@ -168,6 +159,15 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
           <span className="px-1.5 py-0.5 rounded-full bg-surface-container-lowest/20 text-label-sm">
             {urgentesCount}
           </span>
+        </button>
+        <button
+          onClick={() => setFiltro('espera')}
+          className={`px-3.5 py-1.5 rounded-full text-label-md whitespace-nowrap shadow-sm flex items-center gap-1.5 shrink-0 ${
+            filtro === 'espera' ? 'bg-primary-container text-on-primary' : 'bg-surface-container-low text-on-surface'
+          }`}
+        >
+          <span>Em espera</span>
+          <span className="px-1.5 py-0.5 rounded-full bg-surface-container-lowest/20 text-label-sm">{Object.values(crmPorCodigo).filter((crm) => crm.estagioFunil === 'standby').length}</span>
         </button>
       </div>
 
@@ -256,7 +256,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
                     </div>
                     <div className="flex flex-col min-w-0">
                       <span className={`text-label-sm font-semibold ${urgente ? 'text-error uppercase tracking-wider' : 'text-secondary'}`}>
-                        {urgente ? `Atrasado desde ${crm.proximaAcao.data.split('-').reverse().join('/')}` : `${crm.proximaAcao.data.split('-').reverse().join('/')}${crm.proximaAcao.hora ? ` às ${crm.proximaAcao.hora}` : ''}${crm.proximaAcao.presencial ? ' (Presencial)' : ''}`}
+                        {urgente ? `Atrasado desde ${dataBr(crm.proximaAcao.data)}` : `${dataBr(crm.proximaAcao.data)}${crm.proximaAcao.hora ? ` às ${crm.proximaAcao.hora}` : ''}${crm.proximaAcao.presencial ? ' (Presencial)' : ''}`}
                       </span>
                       <p className="text-body-sm text-primary font-semibold truncate leading-tight">
                         {crm.proximaAcao.descricao}
@@ -292,7 +292,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
               {ordenacao === 'visita' && (
                 <p className="text-body-sm text-on-surface-variant">
                   {visitasPorCodigo[municipio.codigoIbge]
-                    ? `Visita agendada: ${visitasPorCodigo[municipio.codigoIbge].data.split('-').reverse().join('/')}${visitasPorCodigo[municipio.codigoIbge].hora ? ` às ${visitasPorCodigo[municipio.codigoIbge].hora}` : ''}`
+                    ? `Visita agendada: ${dataBr(visitasPorCodigo[municipio.codigoIbge].data)}${visitasPorCodigo[municipio.codigoIbge].hora ? ` às ${visitasPorCodigo[municipio.codigoIbge].hora}` : ''}`
                     : 'Sem visita agendada.'}
                 </p>
               )}

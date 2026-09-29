@@ -1,8 +1,10 @@
 import { CATEGORIAS_DESPESA, ESTAGIOS_FUNIL_B2G, type Despesa, type EventoTimeline, type MunicipioCrm, type MunicipioIbge } from '../types';
 import { dataValida, proximaTarefa, TIPOS_TAREFA, type Tarefa } from './agenda';
+import { dataBr } from './data';
+import { oportunidadeComInteresse } from './pipeline';
 
 export const moeda = (valor: number) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-export const dataBr = (data: string) => data ? data.split('-').reverse().join('/') : 'Data não informada';
+export { dataBr } from './data';
 
 export interface FonteRelatorio {
   municipios: MunicipioIbge[];
@@ -28,7 +30,10 @@ export function montarRelatorioGestao(fonte: FonteRelatorio, inicio: string, fim
     const m = fonte.municipios.find((item) => item.codigoIbge === codigo);
     return m ? `${m.nome} / ${m.uf}` : `Município IBGE ${codigo}`;
   };
-  const codigos = new Set([...eventos, ...despesas, ...tarefas].map((item) => item.codigoIbge).filter((c): c is number => Boolean(c)));
+  const codigos = new Set([
+    ...Object.keys(fonte.crm).map(Number),
+    ...[...eventos, ...despesas, ...tarefas].map((item) => item.codigoIbge).filter((c): c is number => Boolean(c)),
+  ]);
   const cidades = [...codigos].map((codigo) => {
     const crm = fonte.crm[codigo];
     const tarefa = proximaTarefa(fonte.tarefas, codigo);
@@ -42,6 +47,7 @@ export function montarRelatorioGestao(fonte: FonteRelatorio, inicio: string, fim
     ].sort((a, b) => a.data.localeCompare(b.data) || a.id.localeCompare(b.id));
     return {
       codigo, nome: nomeCidade(codigo),
+      visitada: Boolean(crm?.visitada || crm?.contatos.length || eventos.some((evento) => evento.codigoIbge === codigo)),
       status: ESTAGIOS_FUNIL_B2G.find((e) => e.value === crm?.estagioFunil)?.label || 'Sem status cadastrado',
       prioritario: Boolean(crm?.prioritario),
       visitas: visitas.filter((t) => t.codigoIbge === codigo),
@@ -51,12 +57,13 @@ export function montarRelatorioGestao(fonte: FonteRelatorio, inicio: string, fim
     };
   }).sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
   const totalDespesas = somar(despesas);
-  const cidadesVisitadas = new Set(visitas.map((t) => t.codigoIbge)).size;
+  const cidadesVisitadas = cidades.filter((cidade) => cidade.visitada).length;
+  const oportunidadesComInteresse = cidades.filter((cidade) => fonte.crm[cidade.codigo] && oportunidadeComInteresse(fonte.crm[cidade.codigo])).length;
   const reunioes = eventos.filter((e) => e.tipo === 'reuniao').length;
   return {
-    inicio, fim, cidades, cidadesVisitadas, visitas: visitas.length, reunioes, totalDespesas, semData,
+    inicio, fim, cidades, cidadesVisitadas, oportunidadesComInteresse, visitas: visitas.length, reunioes, totalDespesas, semData,
     semMunicipio: somar(despesas.filter((d) => !d.codigoIbge)),
-    resumo: `No período de ${dataBr(inicio)} a ${dataBr(fim)}, foram registrados ${moeda(totalDespesas)} em ${despesas.length} despesas, ${visitas.length} registros de visitas realizadas em ${cidadesVisitadas} cidades e ${reunioes} reuniões/notas de campo. O relatório reúne ${cidades.length} cidades, incluindo aquelas com histórico sem data. O valor de ${moeda(totalDespesas)} é a base para solicitação de reembolso, sujeita à conferência da gestão.`,
+    resumo: `No período de ${dataBr(inicio)} a ${dataBr(fim)}, foram registrados ${moeda(totalDespesas)} em ${despesas.length} despesas e ${reunioes} reuniões/notas de campo. O sistema reúne ${cidadesVisitadas} cidades visitadas e cadastradas; ${oportunidadesComInteresse} prefeituras têm interesse comercial indicado pelo avanço no funil. O valor de ${moeda(totalDespesas)} é a base para solicitação de reembolso, sujeita à conferência da gestão.`,
     despesas: despesas.map((d) => ({ ...d, valor: centavos(d) / 100, cidade: nomeCidade(d.codigoIbge), categoriaLabel: CATEGORIAS_DESPESA.find((c) => c.value === d.categoria)?.label || 'Outros', temComprovante: Boolean(d.comprovante?.base64) })),
     categorias: CATEGORIAS_DESPESA.map((c) => ({ nome: c.label, valor: somar(despesas.filter((d) => (CATEGORIAS_DESPESA.some((item) => item.value === d.categoria) ? d.categoria : 'outros') === c.value)) })),
   };

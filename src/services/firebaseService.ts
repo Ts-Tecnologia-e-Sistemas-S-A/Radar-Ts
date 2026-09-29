@@ -11,6 +11,7 @@ import {
 import { db } from '../lib/firebase';
 import { Municipality, CRMInteraction } from '../types';
 import { MOCK_MUNICIPALITIES, MOCK_CRM_INTERACTIONS } from '../data/mockData';
+import { normalizeMunicipalityRecency } from '../utils/dataRecency';
 
 const MUNICIPALITIES_COLLECTION = 'municipalities';
 const INTERACTIONS_COLLECTION = 'crm_interactions';
@@ -47,7 +48,7 @@ export function subscribeToMunicipalities(
         const nameStateSet = new Set<string>();
 
         snapshot.docs.forEach((d) => {
-          const m = d.data() as Municipality;
+          const m = normalizeMunicipalityRecency(d.data() as Municipality);
           if (m && m.id && m.name && m.state) {
             const nameKey = `${m.name.trim().toLowerCase()}-${m.state.trim().toLowerCase()}`;
             if (!uniqueMap.has(m.id) && !nameStateSet.has(nameKey)) {

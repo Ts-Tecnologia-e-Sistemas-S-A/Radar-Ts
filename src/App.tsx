@@ -24,6 +24,12 @@ import { MobileScrollNav } from './components/MobileScrollNav';
 import { DossierExportModal } from './components/DossierExportModal';
 import { SicapRadarCrmEnricherModal } from './components/SicapRadarCrmEnricherModal';
 import { AICitySearchModal } from './components/AICitySearchModal';
+import {
+  EMPTY_EDUCATIONAL_METRICS,
+  normalizeMunicipalityRecency,
+  selectNewestBuyingHistory,
+  selectNewestEducationalMetrics,
+} from './utils/dataRecency';
 import { DataBackupModal } from './components/DataBackupModal';
 import { SelectedCityBar } from './components/SelectedCityBar';
 import { 
@@ -47,7 +53,7 @@ function deduplicateMunicipalities(list: Municipality[]): Municipality[] {
     if (m && m.id && m.name && m.state) {
       const nameKey = `${m.name.trim().toLowerCase()}-${m.state.trim().toLowerCase()}`;
       if (!map.has(m.id) && !nameStateSet.has(nameKey)) {
-        map.set(m.id, m);
+        map.set(m.id, normalizeMunicipalityRecency(m));
         nameStateSet.add(nameKey);
       }
     }
@@ -475,18 +481,16 @@ export default function App() {
     if (existingIndex >= 0) {
       const existing = municipalities[existingIndex];
 
-      // Combine buyingHistory without duplicate entries
-      const combinedHistory = [...(existing.buyingHistory || [])];
-      if (newMuni.buyingHistory) {
-        newMuni.buyingHistory.forEach((bh) => {
-          const isDupBH = combinedHistory.some(
-            (item) => item.year === bh.year && item.company === bh.company
-          );
-          if (!isDupBH) {
-            combinedHistory.push(bh);
-          }
-        });
-      }
+      const normalizedHistory = selectNewestBuyingHistory(
+        [...(existing.buyingHistory || []), ...(newMuni.buyingHistory || [])],
+        [...(existing.buyingHistoryArchive || []), ...(newMuni.buyingHistoryArchive || [])]
+      );
+      const normalizedEducation = selectNewestEducationalMetrics([
+        existing.educationalMetrics,
+        newMuni.educationalMetrics,
+        ...(existing.educationalMetricsArchive || []),
+        ...(newMuni.educationalMetricsArchive || []),
+      ]);
 
       // Combine keyContacts without duplicate names
       const combinedContacts = [...(existing.keyContacts || [])];
@@ -520,18 +524,11 @@ export default function App() {
         probableModality: newMuni.probableModality || existing.probableModality,
         ioScore: newMuni.ioScore || existing.ioScore,
         ioFactors: newMuni.ioFactors || existing.ioFactors,
-        educationalMetrics: {
-          ...existing.educationalMetrics,
-          ...newMuni.educationalMetrics,
-          mainPains: Array.from(
-            new Set([
-              ...(existing.educationalMetrics?.mainPains || []),
-              ...(newMuni.educationalMetrics?.mainPains || []),
-            ])
-          ),
-        },
+        educationalMetrics: normalizedEducation.current || EMPTY_EDUCATIONAL_METRICS,
+        educationalMetricsArchive: normalizedEducation.archived,
         keyContacts: combinedContacts,
-        buyingHistory: combinedHistory,
+        buyingHistory: normalizedHistory.current,
+        buyingHistoryArchive: normalizedHistory.archived,
         lastActivityDate: new Date().toISOString().slice(0, 10),
         notes: updatedNotes,
       };

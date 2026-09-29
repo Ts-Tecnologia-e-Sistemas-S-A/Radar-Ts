@@ -10,7 +10,8 @@
     "preview": "vite preview",
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
-    "test": "bun test --path-ignore-patterns='radar-simples/**'"
+    "test": "bun test --path-ignore-patterns='radar-simples/**'",
+    "migrate:data-recency": "tsx scripts/migrateDataRecency.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",

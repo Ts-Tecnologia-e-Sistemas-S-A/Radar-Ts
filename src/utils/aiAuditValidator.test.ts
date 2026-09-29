@@ -10,7 +10,7 @@ describe('auditAIDataIntegrity', () => {
     expect(result.sanitizedData).toBeNull();
   });
 
-  it('collects structural errors for missing name and state, and still assigns fallback sources', () => {
+  it('collects structural errors without assigning unproven fallback sources', () => {
     const result = auditAIDataIntegrity({ population: 50000 });
     expect(result.isValid).toBe(false);
     expect(result.errors).toEqual([
@@ -18,34 +18,24 @@ describe('auditAIDataIntegrity', () => {
       'UF (Estado) deve ser uma sigla válida de 2 letras (ex: MA, PI).',
     ]);
     expect(result.sanitizedData).toBeNull();
-    expect(result.verifiedSources).toEqual([
-      'PNCP (Portal Nacional de Contratações Públicas)',
-      'Portal da Transparência de Município',
-      'INEP / Censo Escolar',
-    ]);
+    expect(result.verifiedSources).toEqual([]);
   });
 
-  it('accepts minimal valid data, defaulting to official sources and a safe IO score', () => {
+  it('accepts minimal valid data without inventing sources or a commercial score', () => {
     const result = auditAIDataIntegrity({ name: 'Cidade Teste', state: 'MA', population: 80000 });
     expect(result.isValid).toBe(true);
     expect(result.dataVerificationStatus).toBe('PARCIALMENTE VERIFICADO');
     expect(result.errors).toEqual([]);
-    expect(result.verifiedSources).toEqual([
-      'PNCP (Portal Nacional de Contratações Públicas)',
-      'Portal da Transparência de Cidade Teste',
-      'INEP / Censo Escolar',
-    ]);
+    expect(result.verifiedSources).toEqual([]);
     expect(result.sanitizedData).toMatchObject({
       id: 'mun-cidade-teste-ma',
       name: 'Cidade Teste',
       state: 'MA',
       population: 80000,
-      ioScore: 75,
+      ioScore: 0,
       currentContractValue: 0,
     });
-    expect(result.sanitizedData?.keyContacts[0]).toMatchObject({
-      email: 'semec@cidadeteste.ma.gov.br',
-    });
+    expect(result.sanitizedData?.keyContacts).toEqual([]);
     expect(result.sanitizedData?.lastActivityDate).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   });
 
@@ -73,9 +63,24 @@ describe('auditAIDataIntegrity', () => {
     expect(result.sanitizedData).toBeNull();
   });
 
-  it('normalizes an out-of-range IO score to the safe default of 75', () => {
+  it('normalizes an out-of-range IO score to pending zero', () => {
     const result = auditAIDataIntegrity({ name: 'Cidade Y', state: 'BA', population: 30000, ioScore: 250 });
-    expect(result.sanitizedData?.ioScore).toBe(75);
-    expect(result.warnings).toContain('Score IO fora do intervalo [0-100]. Normalizado para 75.');
+    expect(result.sanitizedData?.ioScore).toBe(0);
+    expect(result.warnings).toContain('Score IO ausente ou inválido. Mantido como pendente (0).');
+  });
+
+  it('keeps only the newest reference year as current', () => {
+    const result = auditAIDataIntegrity({
+      name: 'Cidade Atualizada',
+      state: 'MA',
+      population: 50000,
+      buyingHistory: [
+        { year: 2024, company: 'Antiga', value: 1, objectStr: 'Sistema', modality: 'Pregão' },
+        { year: 2025, company: 'Atual', value: 2, objectStr: 'Sistema', modality: 'Pregão' },
+      ],
+    });
+
+    expect(result.sanitizedData?.buyingHistory.map((item) => item.year)).toEqual([2025]);
+    expect(result.sanitizedData?.buyingHistoryArchive?.map((item) => item.year)).toEqual([2024]);
   });
 });

@@ -136,74 +136,9 @@ export const AICitySearchModal: React.FC<AICitySearchModalProps> = ({
       console.error(error);
       setAnalysisLogs((prev) => [
         ...prev,
-        `⚠️ Nota: gerando perfil de inteligência estimado para ${cityName.trim()} (${state})...`,
+        `Consulta não concluída: ${error?.message || 'fontes oficiais indisponíveis'}. Nenhum dado estimado foi cadastrado.`,
       ]);
-      // Fallback
-      const fallback: Municipality = {
-        id: `mun-${cityName.toLowerCase().replace(/\s+/g, '-')}-${state.toLowerCase()}`,
-        name: cityName.trim(),
-        state: state,
-        region: 'Nordeste',
-        population: 123000,
-        status: 'oportunidade',
-        funnelStage: 'prospectado',
-        currentSystem: 'Educar Tecnologia / Sistema Legado',
-        currentContractValue: 1950000,
-        contractDaysRemaining: 65,
-        renewalProbability: 'Baixa',
-        tenderProbability: 90,
-        estimatedNewContractValue: 2300000,
-        probableModality: 'Pregão Eletrônico',
-        ioScore: 89,
-        ioFactors: {
-          contractExpiringDays: 90,
-          lowIdebScore: 80,
-          techInvestmentHistory: 85,
-          budgetAvailability: 95,
-          managementChange: 80,
-          federalFundsAvailable: 90,
-          existingRelationship: 65,
-        },
-        educationalMetrics: {
-          ideb: 4.1,
-          idebTarget: 5.3,
-          dropoutRate: 4.2,
-          schoolsCount: 142,
-          studentsCount: 28500,
-          teachersCount: 1410,
-          fundebBudget: 82000000,
-          mainPains: [
-            'Dificuldade na sincronização com Educacenso do MEC',
-            'Diários de classe sem funcionamento offline para a zona rural',
-            'Ausência de relatórios em tempo real para a Secretaria de Educação',
-          ],
-        },
-        keyContacts: [
-          {
-            name: 'Dr. Paulo Roberto Silva',
-            role: 'Secretário Municipal de Educação',
-            phone: '(99) 3661-2200',
-            email: `semec@${cityName.toLowerCase().replace(/\s+/g, '')}.${state.toLowerCase()}.gov.br`,
-          },
-        ],
-        buyingHistory: [
-          {
-            year: 2023,
-            company: 'Educar Tecnologia',
-            value: 1950000,
-            objectStr: 'Locação de software de gestão pública escolar',
-            modality: 'Pregão Eletrônico',
-            addendumsCount: 1,
-            contractDate: 'Não localizado em fonte oficial (Pendente de verificação presencial)',
-          },
-        ],
-        lastActivityDate: new Date().toISOString().slice(0, 10),
-        dealOwner: 'José Badotti',
-        latitude: -4.4553,
-        longitude: -43.8864,
-        notes: 'Cidade cadastrada via motor de inteligência comercial SICAP.',
-      };
-      setAnalyzedMuni(fallback);
+      setAnalyzedMuni(null);
     } finally {
       setIsLoading(false);
     }

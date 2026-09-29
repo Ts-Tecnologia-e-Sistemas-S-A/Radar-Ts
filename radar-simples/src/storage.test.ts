@@ -6,6 +6,7 @@ import type { Despesa, EventoTimeline, MunicipioCrm } from './types';
 // codigoIbge) sem depender de rede.
 const bancos = new Map<string, Map<string, unknown>>();
 let falharGravacao = false;
+let documentosRest: { name: string; createTime: string }[] = [];
 
 function validarFirestore(valor: unknown) {
   if (valor === undefined) throw new Error('Unsupported field value: undefined');
@@ -49,7 +50,7 @@ mock.module('firebase/firestore', () => ({
   },
 }));
 
-mock.module('./lib/firebase', () => ({ db: {}, auth: { currentUser: { uid: 'teste' } } }));
+mock.module('./lib/firebase', () => ({ db: {}, auth: { currentUser: { uid: 'teste', getIdToken: async () => 'token-teste' } } }));
 
 const {
   getMunicipiosCrm,
@@ -67,7 +68,10 @@ const {
   saveRecomendacoesSemana,
   getTarefas,
   saveTarefa,
+  saveStandby,
+  cancelarTarefaSeExistir,
   setStatusTarefa,
+  migratePipelineB2G,
   importarHistorico,
 } = await import('./storage');
 
@@ -78,7 +82,9 @@ describe('importação de histórico', () => {
     const pacote = { versao: 1 as const, fonte: 'Fonte de teste', registros: [{ codigoIbge: 2103000, cidade: 'Caxias / MA', data: '', texto: 'Relato completo\nSegunda visita e contato.', visitaRegistrada: false }] };
     expect(await importarHistorico(pacote)).toEqual({ inseridos: 1, existentes: 0 });
     expect(await importarHistorico(pacote)).toEqual({ inseridos: 0, existentes: 1 });
-    expect(await getMunicipioCrm(2103000)).toEqual(crm);
+    const salvo = await getMunicipioCrm(2103000);
+    expect(salvo).toMatchObject({ ...crm, visitada: true });
+    expect(salvo?.dataPrimeiraVisita).toBe(salvo?.dataInclusao);
     const eventos = await getEventos(2103000);
     expect(eventos).toHaveLength(1); expect(eventos[0].data).toBe(''); expect(eventos[0].resumo).toBe(pacote.registros[0].texto);
   });
@@ -92,10 +98,12 @@ describe('importação de histórico', () => {
 beforeEach(() => {
   bancos.clear();
   falharGravacao = false;
+  documentosRest = [];
+  globalThis.fetch = mock(async () => new Response(JSON.stringify({ documents: documentosRest }), { status: 200 })) as unknown as typeof fetch;
 });
 
 function makeMunicipio(codigoIbge: number, overrides: Partial<MunicipioCrm> = {}): MunicipioCrm {
-  return { codigoIbge, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'mapeamento', ...overrides };
+  return { codigoIbge, prioritario: false, visitada: false, contatos: [], solucoes: [], estagioFunil: 'mapeamento', ...overrides };
 }
 
 function makeDespesa(id: string, codigoIbge: number, overrides: Partial<Despesa> = {}): Despesa {
@@ -132,6 +140,7 @@ describe('getMunicipioCrm / saveMunicipioCrm', () => {
     await saveMunicipioCrm(makeMunicipio(1, { contatos: [contato], alunosCount: undefined }));
     const salvo = await getMunicipioCrm(1);
     expect(salvo?.contatos).toEqual([{ id: 'ia', nome: 'Maria', cargo: 'Secretária' }]);
+    expect(salvo?.visitada).toBeTrue();
     expect(salvo).not.toHaveProperty('alunosCount');
     expect(contato).toHaveProperty('telefone');
   });
@@ -142,7 +151,17 @@ describe('getMunicipioCrm / saveMunicipioCrm', () => {
   it('salva e recupera pelo código IBGE', async () => {
     await saveMunicipioCrm(makeMunicipio(2211001, { prioritario: true }));
     const resultado = await getMunicipioCrm(2211001);
-    expect(resultado).toEqual(makeMunicipio(2211001, { prioritario: true }));
+    expect(resultado).toMatchObject({ ...makeMunicipio(2211001, { prioritario: true }), visitada: true });
+    expect(resultado?.dataPrimeiraVisita).toBe(resultado?.dataInclusao);
+  });
+
+  it('permite corrigir a primeira visita sem alterar a data de inclusão', async () => {
+    await saveMunicipioCrm(makeMunicipio(2211001));
+    const incluido = await getMunicipioCrm(2211001);
+    await saveMunicipioCrm({ ...incluido!, dataPrimeiraVisita: '2026-09-20' });
+    const corrigido = await getMunicipioCrm(2211001);
+    expect(corrigido?.dataInclusao).toBe(incluido?.dataInclusao);
+    expect(corrigido?.dataPrimeiraVisita).toBe('2026-09-20');
   });
 });
 
@@ -157,6 +176,38 @@ describe('getMunicipiosCrm', () => {
   it('retorna objeto vazio quando nada foi salvo', async () => {
     expect(await getMunicipiosCrm()).toEqual({});
   });
+  it('migra fichas antigas como cidades visitadas sem sobrescrever o funil', async () => {
+    const legado = { codigoIbge: 1, prioritario: false, contatos: [], solucoes: [], estagioFunil: 'juridico' } as unknown as MunicipioCrm;
+    colecao('radar_simples_municipios').set('1', legado);
+    expect(await migratePipelineB2G()).toBe(1);
+    const migrado = await getMunicipioCrm(1);
+    expect(migrado).toMatchObject({ visitada: true, estagioFunil: 'juridico' });
+    expect(migrado?.dataPrimeiraVisita).toBe(migrado?.dataInclusao);
+    expect(await migratePipelineB2G()).toBe(0);
+  });
+
+  it('preserva a primeira visita corrigida ao migrar a data de inclusão', async () => {
+    const legado = makeMunicipio(2, { visitada: true, dataPrimeiraVisita: '2026-08-15' });
+    colecao('radar_simples_municipios').set('2', legado);
+    expect(await migratePipelineB2G()).toBe(1);
+    const migrado = await getMunicipioCrm(2);
+    expect(migrado?.dataInclusao).toBe('2026-08-15');
+    expect(migrado?.dataPrimeiraVisita).toBe('2026-08-15');
+  });
+
+  it('corrige todas as datas pela inclusão oficial e não desfaz ajuste manual posterior', async () => {
+    const crm = makeMunicipio(3, { visitada: true, dataInclusao: '2026-09-26', dataPrimeiraVisita: '2026-09-26' });
+    colecao('radar_simples_municipios').set('3', crm);
+    documentosRest = [{
+      name: 'projects/sicap-radar/databases/banco/documents/radar_simples_municipios/3',
+      createTime: '2026-07-15T01:30:00.000Z',
+    }];
+    expect(await migratePipelineB2G()).toBe(1);
+    expect(await getMunicipioCrm(3)).toMatchObject({ dataInclusao: '2026-07-14', dataPrimeiraVisita: '2026-07-14' });
+    await saveMunicipioCrm({ ...(await getMunicipioCrm(3))!, dataPrimeiraVisita: '2026-07-12' });
+    expect(await migratePipelineB2G()).toBe(0);
+    expect((await getMunicipioCrm(3))?.dataPrimeiraVisita).toBe('2026-07-12');
+  });
 });
 
 describe('getDespesas / addDespesa', () => {
@@ -169,6 +220,15 @@ describe('getDespesas / addDespesa', () => {
 });
 
 describe('getEventos / addEvento', () => {
+  it('marca a cidade como visitada ao salvar uma nota', async () => {
+    await saveMunicipioCrm(makeMunicipio(10));
+    const incluida = await getMunicipioCrm(10);
+    await addEvento({ ...makeEvento('nota', 10), data: '2026-10-01' });
+    const atualizada = await getMunicipioCrm(10);
+    expect(atualizada?.visitada).toBeTrue();
+    expect(atualizada?.dataPrimeiraVisita).toBe(incluida?.dataInclusao);
+    expect(atualizada?.dataUltimaVisita).toBe('2026-10-01');
+  });
   it('salva relatório e tabela original como documento e recupera por município', async () => {
     const evento: EventoTimeline = {
       ...makeEvento('planilha', 10), tipo: 'documento', textoPlanilha: 'Escola\tAlunos\nA\t120',
@@ -196,6 +256,16 @@ describe('getEventos / addEvento', () => {
 });
 
 describe('tarefas da agenda', () => {
+  it('salva standby e lembrete juntos', async () => {
+    const crm = makeMunicipio(10, { estagioFunil: 'standby', estagioAntesStandby: 'qualificacao', dataReativacao: '2027-01-10', motivoEspera: 'loa_ppa' });
+    const tarefa = { id: 'reativacao-standby-10', codigoIbge: 10, tipo: 'ligar' as const, descricao: 'Reativar contato', data: '2027-01-10', hora: '', status: 'pendente' as const, origem: 'manual' as const, criadaEm: '2026-09-25T12:00:00Z' };
+    await saveStandby(crm, tarefa);
+    expect((await getMunicipioCrm(10))?.estagioFunil).toBe('standby');
+    expect(await getTarefas()).toContainEqual(tarefa);
+    await cancelarTarefaSeExistir(tarefa.id);
+    expect((await getTarefas())[0].status).toBe('cancelada');
+    await cancelarTarefaSeExistir('inexistente');
+  });
   const tarefa = { id: 't1', codigoIbge: 10, tipo: 'ligar' as const, descricao: 'Confirmar visita', data: '2026-09-18', hora: '10:00', status: 'pendente' as const, origem: 'ia' as const, criadaEm: '2026-09-17T12:00:00Z' };
   it('recupera tarefa, permite reagendar e concluir sem perder descrição', async () => {
     await saveTarefa(tarefa);
