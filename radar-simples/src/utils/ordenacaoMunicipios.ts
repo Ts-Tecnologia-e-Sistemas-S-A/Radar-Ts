@@ -5,19 +5,27 @@ export interface LinhaMunicipio {
   crm: MunicipioCrm;
 }
 
-type DataOrdenacao = { data: string; hora?: string };
+export type OrdenacaoMunicipios = 'nome' | 'visita' | 'tarefa';
+
+const SEM_DATA = '9999-12-31 23:59';
+
+function chaveData(data?: string, hora?: string): string {
+  return data ? `${data} ${hora || '23:59'}` : SEM_DATA;
+}
+
+function chaveMunicipio(crm: MunicipioCrm, ordenacao: Exclude<OrdenacaoMunicipios, 'nome'>): string {
+  return ordenacao === 'visita'
+    ? chaveData(crm.dataUltimaVisita)
+    : chaveData(crm.proximaAcao?.data, crm.proximaAcao?.hora);
+}
 
 export function compararMunicipios(
   a: LinhaMunicipio,
   b: LinhaMunicipio,
-  ordenacao: string,
-  visitasPorCodigo: Record<number, DataOrdenacao>,
+  ordenacao: OrdenacaoMunicipios,
 ): number {
   if (ordenacao !== 'nome') {
-    const dataA = ordenacao === 'visita' ? visitasPorCodigo[a.municipio.codigoIbge] : a.crm.proximaAcao;
-    const dataB = ordenacao === 'visita' ? visitasPorCodigo[b.municipio.codigoIbge] : b.crm.proximaAcao;
-    const chave = (acao?: DataOrdenacao) => acao?.data ? `${acao.data} ${acao.hora || '23:59'}` : '9999-12-31 23:59';
-    const diferenca = chave(dataA).localeCompare(chave(dataB));
+    const diferenca = chaveMunicipio(a.crm, ordenacao).localeCompare(chaveMunicipio(b.crm, ordenacao));
     if (diferenca) return diferenca;
   }
   return a.municipio.nome.localeCompare(b.municipio.nome, 'pt-BR') || a.municipio.uf.localeCompare(b.municipio.uf);

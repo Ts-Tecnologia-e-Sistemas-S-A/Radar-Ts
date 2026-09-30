@@ -6,7 +6,7 @@ import { isUrgente } from '../utils/urgencia';
 import { calcularKmHoje } from '../utils/rota';
 import { dataBr } from '../utils/data';
 import { visivelNoFoco } from '../utils/pipeline';
-import { compararMunicipios, type LinhaMunicipio } from '../utils/ordenacaoMunicipios';
+import { compararMunicipios, type LinhaMunicipio, type OrdenacaoMunicipios } from '../utils/ordenacaoMunicipios';
 import Icon from './Icon';
 
 function normalizar(texto: string): string {
@@ -31,8 +31,7 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
   const [erro, setErro] = useState<string | null>(null);
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<'todos' | 'urgentes' | 'espera'>('todos');
-  const [ordenacao, setOrdenacao] = useState('tarefa');
-  const [visitasPorCodigo, setVisitasPorCodigo] = useState<Record<number, { data: string; hora?: string }>>({});
+  const [ordenacao, setOrdenacao] = useState<OrdenacaoMunicipios>('tarefa');
 
   useEffect(() => {
     let cancelado = false;
@@ -42,16 +41,10 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
     Promise.all([getMunicipiosCrm(), getDespesas(), getPontosRota(), getTarefas()])
       .then(([crm, despesas, pontos, tarefas]) => {
         if (cancelado) return;
-        const visitas: Record<number, { data: string; hora?: string }> = {};
         for (const municipio of Object.values(crm)) {
-          const dataVisita = municipio.dataUltimaVisita;
-          if (dataVisita) {
-            visitas[municipio.codigoIbge] = { data: dataVisita };
-          }
           const proxima = proximaTarefa(tarefas, municipio.codigoIbge);
           if (proxima) municipio.proximaAcao = { data: proxima.data, hora: proxima.hora, descricao: proxima.descricao, presencial: proxima.tipo === 'visitar' };
         }
-        setVisitasPorCodigo(visitas);
         setCrmPorCodigo(crm);
         const hojeISO = new Date().toISOString().slice(0, 10);
         setDespesasHoje(despesas.filter((d) => d.data === hojeISO).reduce((soma, d) => soma + d.valor, 0));
@@ -77,8 +70,8 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
       .filter((l) => !alvo || normalizar(l.municipio.nome).includes(alvo) || normalizar(l.municipio.uf).includes(alvo))
       .filter((l) => filtro === 'espera' ? l.crm.estagioFunil === 'standby' : visivelNoFoco(l.crm, dataLocal()))
       .filter((l) => filtro !== 'urgentes' || isUrgente(l.crm))
-      .sort((a, b) => compararMunicipios(a, b, ordenacao, visitasPorCodigo));
-  }, [municipios, crmPorCodigo, busca, filtro, ordenacao, visitasPorCodigo]);
+      .sort((a, b) => compararMunicipios(a, b, ordenacao));
+  }, [municipios, crmPorCodigo, busca, filtro, ordenacao]);
 
   const urgentesCount = useMemo(
     () => municipios.filter((m) => crmPorCodigo[m.codigoIbge] && isUrgente(crmPorCodigo[m.codigoIbge])).length,
@@ -115,14 +108,23 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
         Ordenar cidades por
         <select
           value={ordenacao}
-          onChange={(e) => setOrdenacao(e.target.value)}
+          onChange={(e) => {
+            const valor = e.target.value;
+            if (valor === 'nome' || valor === 'visita' || valor === 'tarefa') setOrdenacao(valor);
+          }}
           className="w-full h-12 px-3 rounded-xl bg-surface-container-lowest text-on-surface shadow-sm"
         >
           <option value="tarefa">Data da tarefa</option>
-          <option value="visita">Data da visita</option>
+          <option value="visita">Última visita realizada</option>
           <option value="nome">Nome (A–Z)</option>
         </select>
-        {ordenacao !== 'nome' && <span className="text-label-sm">Pendências mais antigas primeiro; cidades sem data ao final.</span>}
+        {ordenacao !== 'nome' && (
+          <span className="text-label-sm">
+            {ordenacao === 'visita'
+              ? 'Visitas mais antigas primeiro; cidades sem data ao final.'
+              : 'Pendências mais antigas primeiro; cidades sem data ao final.'}
+          </span>
+        )}
       </label>
 
       <button onClick={onVerRelatorio} className="w-full min-h-12 rounded-xl bg-primary text-on-primary flex items-center justify-center gap-2 px-3">
@@ -291,9 +293,9 @@ export default function RadarView({ municipios, onAbrirMunicipio, onNovaDespesa,
               )}
               {ordenacao === 'visita' && (
                 <p className="text-body-sm text-on-surface-variant">
-                  {visitasPorCodigo[municipio.codigoIbge]
-                    ? `Visita agendada: ${dataBr(visitasPorCodigo[municipio.codigoIbge].data)}${visitasPorCodigo[municipio.codigoIbge].hora ? ` às ${visitasPorCodigo[municipio.codigoIbge].hora}` : ''}`
-                    : 'Sem visita agendada.'}
+                  {crm.dataUltimaVisita
+                    ? `Última visita realizada: ${dataBr(crm.dataUltimaVisita)}`
+                    : 'Sem data de visita registrada.'}
                 </p>
               )}
             </article>
