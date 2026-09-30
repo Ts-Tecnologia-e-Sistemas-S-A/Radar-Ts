@@ -494,10 +494,6 @@ export default function FichaMunicipalView({ municipio, onDespesaCliqueAnexar }:
       </div>
 
       <section className="bg-surface-container-lowest rounded-xl p-3.5 shadow-sm space-y-3.5">
-        <div className="flex items-center gap-1.5 text-primary">
-          <Icon name="edit_note" size={20} className="text-secondary" />
-          <h3 className="text-label-lg">Notas da reunião</h3>
-        </div>
         <NotaConversa key={municipio.codigoIbge} municipio={municipio} />
       </section>
 
